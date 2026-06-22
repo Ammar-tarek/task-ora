@@ -1,6 +1,6 @@
-# task_ora
+# GP-Group-23 - Task Ora
 
-A new Flutter project.
+A Flutter project for CSE Graduation Project Group 23.
 
 ## Getting Started
 
