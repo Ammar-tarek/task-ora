@@ -1,0 +1,44 @@
+name: task_ora
+description: "TaskOra Operations Dashboard"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  fl_chart: ^0.68.0
+  intl: ^0.20.2
+  device_preview: ^1.2.0
+
+  # Navigation
+  go_router: ^14.0.0
+
+  # Backend
+  supabase_flutter: ^2.8.0
+
+  # State management
+  provider: ^6.1.2
+
+  # n8n / webhook integration
+  http: ^1.2.2
+  shared_preferences: ^2.3.2
+
+  # WiFi auto-attendance
+  connectivity_plus: ^6.0.5
+  network_info_plus: ^6.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
