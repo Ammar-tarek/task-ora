@@ -95,7 +95,7 @@ class _TaskOraAppState extends State<TaskOraApp> with WidgetsBindingObserver {
     }
 
     return MaterialApp.router(
-      title: 'TaskOra',
+      title: 'CB-TO DO',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.build(),
       routerConfig: makeRouter(auth),

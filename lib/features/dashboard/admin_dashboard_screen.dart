@@ -67,11 +67,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     } catch (_) { /* stats stays null — cards show 0 */ }
 
     try {
-      tasks = await TaskRepository.fetchTasks(
-        // Non-admins see only tasks they created (created_by = their id).
-        // Admins receive null → see all tasks.
-        userId: profile.isAdmin ? null : profile.id,
-      );
+      // Role-aware: admin=all, manager=their team, employee=assigned tasks.
+      tasks = await TaskRepository.fetchTasksForProfile(profile);
     } catch (_) { /* tasks stays empty — shows "No data" */ }
 
     try {
