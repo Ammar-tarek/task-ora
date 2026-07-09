@@ -33,7 +33,7 @@ class TaskStatusOption {
       case 'not_started':     return 'To Do';
       case 'in_progress':     return 'In Progress';
       case 'employee_done':   return 'Employee Done';
-      case 'client_approve':  return 'Client Approved';
+      case 'client_approved':  return 'Client Approved';
       case 'client_rejected': return 'Client Rejected';
       case 'completed':       return 'Completed';
       case 'on_hold':         return 'On Hold';

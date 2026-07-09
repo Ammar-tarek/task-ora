@@ -300,7 +300,7 @@ class _ExpenseBreakdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const colors = [
+    final colors = [
       AppColors.gold,
       AppColors.statusInProgress,
       AppColors.primary,
@@ -376,7 +376,7 @@ class _ClientRow extends StatelessWidget {
           Text('${client['tasks']} task(s)',
               style: AppTextStyles.bodySm),
         ])),
-        Text('${_fmtAmount(client['revenue'] as double)} SAR',
+        Text('${_fmtAmount(client['revenue'] as double)} EGP',
             style: AppTextStyles.dataMd),
       ]),
     );

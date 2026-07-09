@@ -3,6 +3,7 @@
 // No user data is fetched until the admin types and searches a valid email.
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/models/profile_model.dart';
 import '../../core/repositories/team_repository.dart';
 import '../../core/repositories/profile_repository.dart';
@@ -229,7 +230,7 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
             child: Row(children: [
-              const Icon(Icons.people_outline, size: 16, color: AppColors.onSurfaceVariant),
+              Icon(Icons.people_outline, size: 16, color: AppColors.onSurfaceVariant),
               const SizedBox(width: 6),
               Text('Current Members', style: AppTextStyles.labelMd),
             ]),
@@ -266,7 +267,7 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.person_search_outlined,
               size: 48,
               color: AppColors.outlineVariant,
@@ -362,7 +363,7 @@ class _EmailSearchPanel extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 6, left: 4),
               child: Row(children: [
-                const Icon(Icons.info_outline, size: 13, color: AppColors.onSurfaceVariant),
+                Icon(Icons.info_outline, size: 13, color: AppColors.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
                   'Enter a valid email address (e.g. name@company.com)',
@@ -405,6 +406,7 @@ class _SearchResult extends StatelessWidget {
   Color get _roleColor {
     switch (user?.role) {
       case 'admin':    return AppColors.primary;
+      case 'manager':  return AppColors.gold;
       case 'employee': return AppColors.statusInProgress;
       case 'client':   return AppColors.statusMedium;
       default:         return AppColors.onSurfaceVariant;
@@ -570,6 +572,7 @@ class _MemberCard extends StatelessWidget {
   Color get _roleColor {
     switch (user.role) {
       case 'admin':    return AppColors.primary;
+      case 'manager':  return AppColors.gold;
       case 'employee': return AppColors.statusInProgress;
       case 'client':   return AppColors.statusMedium;
       default:         return AppColors.onSurfaceVariant;
@@ -603,11 +606,38 @@ class _MemberCard extends StatelessWidget {
             ]),
           ]),
         ),
-        IconButton(
-          onPressed: onRemove,
-          icon: const Icon(Icons.person_remove_outlined, size: 20),
-          color: AppColors.error,
-          tooltip: 'Remove from team',
+        PopupMenuButton<String>(
+          tooltip: 'Options',
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          icon: Icon(Icons.more_vert, color: AppColors.onSurfaceVariant),
+          onSelected: (val) {
+            if (val == 'privileges') {
+              context.push('/users/${user.id}/privileges', extra: {
+                'userName': user.fullName,
+                'role':     user.role,
+              });
+            } else if (val == 'remove') {
+              onRemove();
+            }
+          },
+          itemBuilder: (_) => [
+            const PopupMenuItem(
+              value: 'privileges',
+              child: Row(children: [
+                Icon(Icons.tune_outlined, size: 16, color: AppColors.gold),
+                SizedBox(width: 10),
+                Text('Edit Privileges'),
+              ]),
+            ),
+            const PopupMenuItem(
+              value: 'remove',
+              child: Row(children: [
+                Icon(Icons.person_remove_outlined, size: 16, color: AppColors.error),
+                SizedBox(width: 10),
+                Text('Remove from team'),
+              ]),
+            ),
+          ],
         ),
       ]),
     );

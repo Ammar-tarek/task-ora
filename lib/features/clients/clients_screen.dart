@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/models/client_model.dart';
+import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/repositories/client_repository.dart';
+import '../../core/repositories/team_repository.dart';
 import '../../core/theme/app_theme.dart';
 
 class ClientsScreen extends StatefulWidget {
@@ -18,6 +20,7 @@ class ClientsScreen extends StatefulWidget {
 class _ClientsScreenState extends State<ClientsScreen> {
   List<ClientModel> _clients = [];
   bool _loading = true;
+  String? _managerDepartment; // null = admin — show all clients
 
   @override
   void initState() {
@@ -27,21 +30,34 @@ class _ClientsScreenState extends State<ClientsScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final clients = await ClientRepository.fetchClients();
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile?.isManager == true && profile?.teamId != null) {
+      final team = await TeamRepository.fetchById(profile!.teamId!);
+      _managerDepartment = team?.department?.toLowerCase();
+    }
+    final clients = await ClientRepository.fetchClients(clientType: _managerDepartment);
     if (mounted) setState(() { _clients = clients; _loading = false; });
   }
 
   @override
   Widget build(BuildContext context) {
-    final profile = context.watch<AuthNotifier>().profile;
-    final isAdmin = profile?.isAdmin ?? false;
+    final profile  = context.watch<AuthNotifier>().profile;
+    final privs    = context.watch<TeamPrivilegesNotifier>();
+    final isAdmin  = profile?.isAdmin   ?? false;
+    // Admin, a manager with the privilege, or an employee explicitly granted it.
+    final canCreate = isAdmin || privs.canManageClients;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Clients'),
         actions: [
-          if (isAdmin)
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: _load,
+          ),
+          if (canCreate)
             IconButton(
               icon: const Icon(Icons.person_add_outlined),
               tooltip: 'Create client',
@@ -53,7 +69,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _clients.isEmpty
-              ? _EmptyClients(isAdmin: isAdmin, onCreate: () => _showCreateSheet(context))
+              ? _EmptyClients(canCreate: canCreate, onCreate: () => _showCreateSheet(context))
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.separated(
@@ -67,7 +83,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                     ),
                   ),
                 ),
-      floatingActionButton: isAdmin
+      floatingActionButton: canCreate
           ? FloatingActionButton.extended(
               onPressed: () => _showCreateSheet(context),
               backgroundColor: AppColors.primary,
@@ -86,7 +102,10 @@ class _ClientsScreenState extends State<ClientsScreen> {
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => _CreateClientSheet(onCreated: _load),
+      builder: (_) => _CreateClientSheet(
+        onCreated: _load,
+        presetClientType: _managerDepartment,
+      ),
     );
   }
 
@@ -104,8 +123,8 @@ class _ClientsScreenState extends State<ClientsScreen> {
 
 // ── Empty state ────────────────────────────────────────────────────────────────
 class _EmptyClients extends StatelessWidget {
-  const _EmptyClients({required this.isAdmin, required this.onCreate});
-  final bool isAdmin;
+  const _EmptyClients({required this.canCreate, required this.onCreate});
+  final bool canCreate;
   final VoidCallback onCreate;
 
   @override
@@ -114,20 +133,20 @@ class _EmptyClients extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.business_outlined, size: 64, color: AppColors.outlineVariant),
+          Icon(Icons.business_outlined, size: 64, color: AppColors.outlineVariant),
           const SizedBox(height: 16),
           Text('No clients yet',
               style: AppTextStyles.headlineSm
                   .copyWith(color: AppColors.onSurfaceVariant)),
           const SizedBox(height: 8),
           Text(
-            isAdmin
+            canCreate
                 ? 'Create your first client to link tasks, meetings, and invoices.'
                 : 'An admin must create clients before they appear here.',
             style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
-          if (isAdmin) ...[
+          if (canCreate) ...[
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: onCreate,
@@ -164,7 +183,7 @@ class _ClientCard extends StatelessWidget {
         child: Row(children: [
           Container(
             width: 46, height: 46,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.primary,
               shape: BoxShape.circle,
             ),
@@ -176,7 +195,25 @@ class _ClientCard extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(client.companyName, style: AppTextStyles.labelMd),
+              Row(children: [
+                Flexible(child: Text(client.companyName, style: AppTextStyles.labelMd)),
+                if (client.clientType.isNotEmpty && client.clientType != 'general') ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
+                    ),
+                    child: Text(
+                      client.clientType,
+                      style: AppTextStyles.labelCaps.copyWith(
+                          color: AppColors.gold, fontSize: 9),
+                    ),
+                  ),
+                ],
+              ]),
               Text(client.contactPerson,
                   style: AppTextStyles.bodySm
                       .copyWith(color: AppColors.onSurfaceVariant)),
@@ -186,12 +223,12 @@ class _ClientCard extends StatelessWidget {
             ]),
           ),
           IconButton(
-            icon: const Icon(Icons.edit_outlined, size: 18,
+            icon: Icon(Icons.edit_outlined, size: 18,
                 color: AppColors.onSurfaceVariant),
             tooltip: 'Edit client',
             onPressed: onEdit,
           ),
-          const Icon(Icons.chevron_right, color: AppColors.outlineVariant),
+          Icon(Icons.chevron_right, color: AppColors.outlineVariant),
         ]),
       ),
     );
@@ -200,8 +237,9 @@ class _ClientCard extends StatelessWidget {
 
 // ── Create client bottom sheet ─────────────────────────────────────────────────
 class _CreateClientSheet extends StatefulWidget {
-  const _CreateClientSheet({required this.onCreated});
+  const _CreateClientSheet({required this.onCreated, this.presetClientType});
   final VoidCallback onCreated;
+  final String? presetClientType;
 
   @override
   State<_CreateClientSheet> createState() => _CreateClientSheetState();
@@ -217,9 +255,26 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
   final _whatsappCtrl  = TextEditingController();
   final _addressCtrl   = TextEditingController();
   final _notesCtrl     = TextEditingController();
-
   bool _obscurePassword = true;
   bool _saving = false;
+  List<String> _departments = [];
+  String? _selectedType;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedType = widget.presetClientType?.toLowerCase();
+    // Seed with the current value so the dropdown always has a matching item.
+    if (_selectedType != null && _selectedType!.isNotEmpty) {
+      _departments = [_selectedType!];
+    }
+    loadClientDepartments().then((d) {
+      if (!mounted) return;
+      setState(() {
+        _departments = {..._departments, ...d}.toList()..sort();
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -264,6 +319,7 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
       whatsappNumber: _whatsappCtrl.text.trim().isEmpty ? null : _whatsappCtrl.text.trim(),
       address:       _addressCtrl.text.trim().isEmpty  ? null : _addressCtrl.text.trim(),
       notes:         _notesCtrl.text.trim().isEmpty    ? null : _notesCtrl.text.trim(),
+      clientType:    _selectedType,
     );
 
     if (!mounted) return;
@@ -357,6 +413,18 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
           const SizedBox(height: 12),
           _Field(controller: _notesCtrl, label: 'Notes',
               icon: Icons.notes_outlined, maxLines: 3),
+          const SizedBox(height: 20),
+
+          // ── Client type section ──────────────────────────────────
+          _SectionLabel(label: 'DEPARTMENT'),
+          const SizedBox(height: 10),
+          _DepartmentDropdown(
+            departments: _departments,
+            value: _selectedType,
+            // Managers create clients only within their own department.
+            enabled: widget.presetClientType == null,
+            onChanged: (v) => setState(() => _selectedType = v),
+          ),
           const SizedBox(height: 24),
 
           SizedBox(
@@ -405,6 +473,8 @@ class _EditClientSheetState extends State<_EditClientSheet> {
 
   bool _obscurePassword = true;
   bool _saving = false;
+  List<String> _departments = [];
+  String? _selectedType;
 
   @override
   void initState() {
@@ -419,6 +489,16 @@ class _EditClientSheetState extends State<_EditClientSheet> {
     _whatsappCtrl.text = c.whatsappNumber ?? '';
     _addressCtrl.text  = c.address ?? '';
     _notesCtrl.text    = c.notes ?? '';
+    final existing = c.clientType.toLowerCase();
+    _selectedType = (existing.isEmpty || existing == 'general') ? null : existing;
+    // Seed with the current value so the dropdown always has a matching item.
+    if (_selectedType != null) _departments = [_selectedType!];
+    loadClientDepartments().then((d) {
+      if (!mounted) return;
+      setState(() {
+        _departments = {..._departments, ...d}.toList()..sort();
+      });
+    });
   }
 
   Future<void> _loadFullName() async {
@@ -477,6 +557,7 @@ class _EditClientSheetState extends State<_EditClientSheet> {
       whatsappNumber: _whatsappCtrl.text.trim().isEmpty ? null : _whatsappCtrl.text.trim(),
       address:       _addressCtrl.text.trim().isEmpty  ? null : _addressCtrl.text.trim(),
       notes:         _notesCtrl.text.trim().isEmpty    ? null : _notesCtrl.text.trim(),
+      clientType:    _selectedType,
     );
 
     if (!mounted) return;
@@ -566,6 +647,16 @@ class _EditClientSheetState extends State<_EditClientSheet> {
           const SizedBox(height: 12),
           _Field(controller: _notesCtrl, label: 'Notes',
               icon: Icons.notes_outlined, maxLines: 3),
+          const SizedBox(height: 20),
+
+          // ── Client type section ──────────────────────────────────
+          _SectionLabel(label: 'DEPARTMENT'),
+          const SizedBox(height: 10),
+          _DepartmentDropdown(
+            departments: _departments,
+            value: _selectedType,
+            onChanged: (v) => setState(() => _selectedType = v),
+          ),
           const SizedBox(height: 24),
 
           SizedBox(
@@ -630,6 +721,66 @@ class _Field extends StatelessWidget {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       ),
+    );
+  }
+}
+
+// ── Department helpers ────────────────────────────────────────────────────────
+
+/// Distinct team departments (lowercased), used as the client "department" /
+/// client_type options so clients map to the same departments as teams.
+Future<List<String>> loadClientDepartments() async {
+  try {
+    final teams = await TeamRepository.fetchAll();
+    final set = <String>{};
+    for (final t in teams) {
+      final d = t.department?.trim();
+      if (d != null && d.isNotEmpty) set.add(d.toLowerCase());
+    }
+    final list = set.toList()..sort();
+    return list;
+  } catch (_) {
+    return [];
+  }
+}
+
+String _titleCase(String s) =>
+    s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+/// Dropdown of departments for selecting a client's department (client_type).
+class _DepartmentDropdown extends StatelessWidget {
+  const _DepartmentDropdown({
+    required this.departments,
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+  });
+  final List<String> departments;
+  final String? value;
+  final ValueChanged<String?> onChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Department',
+        prefixIcon: const Icon(Icons.apartment_outlined, size: 20),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        filled: !enabled,
+        fillColor: !enabled ? AppColors.outlineVariant.withValues(alpha: 0.12) : null,
+      ),
+      hint: const Text('Select department'),
+      items: [
+        ...departments
+            .where((d) => d != 'both')
+            .map((d) => DropdownMenuItem(value: d, child: Text(_titleCase(d)))),
+        const DropdownMenuItem(value: 'both', child: Text('Both Departments')),
+      ],
+      onChanged: enabled ? onChanged : null,
     );
   }
 }

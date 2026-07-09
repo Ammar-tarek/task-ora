@@ -112,8 +112,13 @@ class FinanceRepository {
   }
 
   // ── Aggregated summary (tasks + events + expenses + CRM) ──────────────────
+  // Pass [teamId] to scope to one team (manager view).
+  // Pass [clientType] to scope CRM invoices to a department's clients.
 
-  static Future<FinanceSummary> fetchSummary() async {
+  static Future<FinanceSummary> fetchSummary({
+    String? teamId,
+    String? clientType,
+  }) async {
     double taskRevenue    = 0;
     double meetingRevenue = 0;
     double totalExpenses  = 0;
@@ -122,33 +127,63 @@ class FinanceRepository {
     int    pendingInvoices = 0;
     int    overdueCount    = 0;
 
+    // If scoped to a department, resolve client IDs for CRM filtering
+    List<String>? scopedClientIds;
+    if (clientType != null) {
+      try {
+        final rows = await _admin
+            .from('client_profiles')
+            .select('id')
+            .or('client_type.eq.$clientType,client_type.eq.both');
+        scopedClientIds = (rows as List)
+            .map((r) => r['id'] as String)
+            .toList();
+      } catch (_) {
+        scopedClientIds = [];
+      }
+    }
+
+    // Only `tasks` and `profiles` carry team_id. Events/expenses are scoped
+    // through the team's members (created_by / recorded_by).
+    List<String>? memberIds;
+    if (teamId != null) {
+      try {
+        final rows = await _admin.from('profiles').select('id').eq('team_id', teamId);
+        memberIds = (rows as List).map((r) => r['id'] as String).toList();
+      } catch (_) {
+        memberIds = [];
+      }
+    }
+
     await Future.wait([
-      // Task costs
+      // Task costs (tasks have team_id)
       () async {
         try {
-          final rows = await _admin
-              .from('tasks')
-              .select('cost')
-              .not('cost', 'is', null);
+          var q = _admin.from('tasks').select('cost').not('cost', 'is', null);
+          if (teamId != null) q = q.eq('team_id', teamId);
+          final rows = await q;
           taskRevenue = (rows as List)
               .fold(0.0, (s, r) => s + ((r['cost'] as num?)?.toDouble() ?? 0));
         } catch (_) {}
       }(),
-      // Event / meeting costs
+      // Event / meeting costs (scoped by creator's team membership)
       () async {
         try {
-          final rows = await _admin
-              .from('events')
-              .select('cost')
-              .not('cost', 'is', null);
+          if (memberIds != null && memberIds.isEmpty) return;
+          var q = _admin.from('events').select('cost').not('cost', 'is', null);
+          if (memberIds != null) q = q.inFilter('created_by', memberIds);
+          final rows = await q;
           meetingRevenue = (rows as List)
               .fold(0.0, (s, r) => s + ((r['cost'] as num?)?.toDouble() ?? 0));
         } catch (_) {}
       }(),
-      // Expenses
+      // Expenses (scoped by recorder's team membership)
       () async {
         try {
-          final rows = await _admin.from('expenses').select('amount');
+          if (memberIds != null && memberIds.isEmpty) return;
+          var q = _admin.from('expenses').select('amount');
+          if (memberIds != null) q = q.inFilter('recorded_by', memberIds);
+          final rows = await q;
           totalExpenses = (rows as List)
               .fold(0.0, (s, r) => s + ((r['amount'] as num?)?.toDouble() ?? 0));
         } catch (_) {}
@@ -156,9 +191,12 @@ class FinanceRepository {
       // CRM invoices
       () async {
         try {
-          final rows = await _admin
-              .from('crm_entries')
-              .select('amount, paid_amount, status');
+          var q = _admin.from('crm_entries').select('amount, paid_amount, status');
+          if (scopedClientIds != null) {
+            if (scopedClientIds.isEmpty) return; // no clients → no invoices
+            q = q.inFilter('client_id', scopedClientIds);
+          }
+          final rows = await q;
           for (final r in rows as List) {
             totalInvoiced += (r['amount'] as num?)?.toDouble() ?? 0;
             totalPaid     += (r['paid_amount'] as num?)?.toDouble() ?? 0;
@@ -182,8 +220,11 @@ class FinanceRepository {
   }
 
   // ── Monthly revenue breakdown (last 6 months, tasks + events) ────────────
+  // Pass [teamId] to scope to one team (manager view).
 
-  static Future<List<Map<String, dynamic>>> fetchMonthlyBreakdown() async {
+  static Future<List<Map<String, dynamic>>> fetchMonthlyBreakdown({
+    String? teamId,
+  }) async {
     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun',
                         'Jul','Aug','Sep','Oct','Nov','Dec'];
     final now = DateTime.now();
@@ -198,22 +239,32 @@ class FinanceRepository {
       months[key] = 0;
     }
 
-    String _key(String? isoDate) {
+    String keyFor(String? isoDate) {
       if (isoDate == null) return '';
       final dt = DateTime.tryParse(isoDate);
       if (dt == null) return '';
       return '${monthNames[dt.month - 1]} ${dt.year}';
     }
 
+    // Resolve team members for scoping events (events have no team_id).
+    List<String>? memberIds;
+    if (teamId != null) {
+      try {
+        final rows = await _admin.from('profiles').select('id').eq('team_id', teamId);
+        memberIds = (rows as List).map((r) => r['id'] as String).toList();
+      } catch (_) {
+        memberIds = [];
+      }
+    }
+
     await Future.wait([
       () async {
         try {
-          final rows = await _admin
-              .from('tasks')
-              .select('cost, created_at')
-              .not('cost', 'is', null);
+          var q = _admin.from('tasks').select('cost, created_at').not('cost', 'is', null);
+          if (teamId != null) q = q.eq('team_id', teamId);
+          final rows = await q;
           for (final r in rows as List) {
-            final k = _key(r['created_at'] as String?);
+            final k = keyFor(r['created_at'] as String?);
             if (months.containsKey(k)) {
               months[k] = months[k]! + ((r['cost'] as num?)?.toDouble() ?? 0);
             }
@@ -222,12 +273,12 @@ class FinanceRepository {
       }(),
       () async {
         try {
-          final rows = await _admin
-              .from('events')
-              .select('cost, start_time')
-              .not('cost', 'is', null);
+          if (memberIds != null && memberIds.isEmpty) return;
+          var q = _admin.from('events').select('cost, start_time').not('cost', 'is', null);
+          if (memberIds != null) q = q.inFilter('created_by', memberIds);
+          final rows = await q;
           for (final r in rows as List) {
-            final k = _key(r['start_time'] as String?);
+            final k = keyFor(r['start_time'] as String?);
             if (months.containsKey(k)) {
               months[k] = months[k]! + ((r['cost'] as num?)?.toDouble() ?? 0);
             }

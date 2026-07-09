@@ -163,7 +163,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         GestureDetector(
           onTap: () => context.go('/login'),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.arrow_back_ios_new, size: 16, color: AppColors.onSurfaceVariant),
+            Icon(Icons.arrow_back_ios_new, size: 16, color: AppColors.onSurfaceVariant),
             const SizedBox(width: 4),
             Text('Back to Sign In',
               style: AppTextStyles.labelMd.copyWith(color: AppColors.onSurfaceVariant)),

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/repositories/penalty_repository.dart';
+import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_theme.dart';
 
 class PenaltyManagementScreen extends StatefulWidget {
@@ -21,14 +23,31 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
   void initState() {
     super.initState();
     _load();
+    // Live refresh when penalties change.
+    RealtimeService.instance.listen(const ['penalties'], _onRealtime);
+  }
+
+  void _onRealtime() {
+    if (mounted) _load();
+  }
+
+  @override
+  void dispose() {
+    RealtimeService.instance.unlisten(_onRealtime);
+    super.dispose();
   }
 
   Future<void> _load() async {
     setState(() => _loading = true);
     final profile = context.read<AuthNotifier>().profile;
+    await context.read<TeamPrivilegesNotifier>().reload();
+    final canManage = profile?.isAdmin == true ||
+        context.read<TeamPrivilegesNotifier>().canManagePenalties;
+    // Admin sees everyone; a manager (or granted staff) sees only their team.
+    final scopeTeamId = profile?.isAdmin == true ? null : profile?.teamId;
     List<PenaltyItem> data;
-    if (profile?.isAdminOrManager == true) {
-      data = await PenaltyRepository.fetchAll();
+    if (canManage) {
+      data = await PenaltyRepository.fetchAll(teamId: scopeTeamId);
     } else {
       data = await PenaltyRepository.fetchForEmployee(profile?.id ?? '');
     }
@@ -38,7 +57,10 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final profile   = context.watch<AuthNotifier>().profile;
-    final isManager = profile?.isAdminOrManager == true;
+    final privs     = context.watch<TeamPrivilegesNotifier>();
+    // "Manager view" = admin, a manager with the privilege, or a granted employee.
+    final isManager = profile?.isAdmin == true || privs.canManagePenalties;
+    final canManagePenalties = isManager;
     final applied   = _penalties.where((p) => p.isApplied).length;
     final pending   = _penalties.length - applied;
 
@@ -50,7 +72,7 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
-      floatingActionButton: isManager
+      floatingActionButton: (isManager && canManagePenalties)
           ? FloatingActionButton(
               backgroundColor: AppColors.primary,
               onPressed: () => _showAddDialog(profile!.id),
@@ -93,7 +115,7 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
               : _penalties.isEmpty
                   ? Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.gavel_outlined, size: 64, color: AppColors.outlineVariant),
+                        Icon(Icons.gavel_outlined, size: 64, color: AppColors.outlineVariant),
                         const SizedBox(height: 16),
                         Text(
                           isManager ? 'No penalties recorded' : 'No penalties on your record',
@@ -150,10 +172,14 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
     List<Map<String, dynamic>> types     = [];
     List<Map<String, dynamic>> employees = [];
 
+    // Manager: restrict the employee picker to their own team. Admin: everyone.
+    final profile = context.read<AuthNotifier>().profile;
+    final scopeTeamId = profile?.isAdmin == true ? null : profile?.teamId;
+
     // Load data before opening dialog
     final results = await Future.wait([
       PenaltyRepository.fetchTypes(),
-      PenaltyRepository.fetchEmployees(),
+      PenaltyRepository.fetchEmployees(teamId: scopeTeamId),
     ]);
     types     = results[0];
     employees = results[1];
@@ -283,7 +309,7 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
               TextFormField(
                 controller: _amountCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Amount (SAR)', prefixText: 'SAR '),
+                decoration: const InputDecoration(labelText: 'Amount (EGP)', prefixText: 'EGP '),
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Required';
                   if (double.tryParse(v) == null) return 'Enter a valid number';
@@ -392,12 +418,12 @@ class _PenaltyCard extends StatelessWidget {
             Text(penalty.penaltyType,
               style: AppTextStyles.bodySm.copyWith(color: AppColors.error)),
           ])),
-          Text('SAR ${penalty.amount.toStringAsFixed(0)}',
+          Text('EGP ${penalty.amount.toStringAsFixed(0)}',
             style: AppTextStyles.dataLg.copyWith(color: AppColors.error, fontSize: 18)),
           if (isManager && onDelete != null) ...[
             const SizedBox(width: 8),
             IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.onSurfaceVariant),
+              icon: Icon(Icons.delete_outline, size: 18, color: AppColors.onSurfaceVariant),
               onPressed: onDelete,
               tooltip: 'Delete',
             ),

@@ -58,8 +58,23 @@ class PenaltyRepository {
   ''';
 
   /// All penalties — for admin / manager views.
-  static Future<List<PenaltyItem>> fetchAll() async {
+  /// Pass [teamId] to scope to a specific team's employees.
+  static Future<List<PenaltyItem>> fetchAll({String? teamId}) async {
     try {
+      if (teamId != null) {
+        final members = await _admin
+            .from('profiles')
+            .select('id')
+            .eq('team_id', teamId);
+        final ids = (members as List).map((m) => m['id'] as String).toList();
+        if (ids.isEmpty) return [];
+        final data = await _admin
+            .from('penalties')
+            .select(_select)
+            .inFilter('employee_id', ids)
+            .order('penalty_date', ascending: false);
+        return (data as List).map((m) => PenaltyItem.fromMap(m)).toList();
+      }
       final data = await _admin
           .from('penalties')
           .select(_select)
@@ -86,7 +101,9 @@ class PenaltyRepository {
 
   static Future<List<Map<String, dynamic>>> fetchTypes() async {
     try {
-      final data = await _client
+      // adminClient: penalty_types is shared reference data; manager RLS on the
+      // regular client returns zero rows.
+      final data = await _admin
           .from('penalty_types')
           .select()
           .eq('is_active', true)
@@ -97,15 +114,21 @@ class PenaltyRepository {
     }
   }
 
-  /// Fetch all active employees for the "assign penalty" dropdown.
-  static Future<List<Map<String, dynamic>>> fetchEmployees() async {
+  /// Fetch active employees for the "assign penalty" dropdown.
+  /// Pass [teamId] to restrict to one team (manager view).
+  static Future<List<Map<String, dynamic>>> fetchEmployees({
+    String? teamId,
+  }) async {
     try {
-      final data = await _admin
+      var query = _admin
           .from('profiles')
           .select('id, full_name, role')
           .neq('role', 'client')
-          .eq('status', 'active')
-          .order('full_name');
+          .eq('status', 'active');
+      if (teamId != null) {
+        query = query.eq('team_id', teamId);
+      }
+      final data = await query.order('full_name');
       return List<Map<String, dynamic>>.from(data as List);
     } catch (_) {
       return [];

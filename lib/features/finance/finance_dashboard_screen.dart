@@ -4,10 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/models/client_model.dart';
+import '../../core/providers/team_filter_notifier.dart';
 import '../../core/repositories/client_repository.dart';
 import '../../core/repositories/expense_repository.dart';
 import '../../core/repositories/finance_repository.dart';
+import '../../core/repositories/team_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/team_filter_chip.dart';
 
 class FinanceDashboardScreen extends StatefulWidget {
   const FinanceDashboardScreen({super.key});
@@ -23,28 +26,67 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   List<Map<String, dynamic>> _monthly     = [];
   bool _loading = true;
 
+  TeamFilterNotifier? _teamFilter;
+  String? _filterClientType; // department name → client_type filter
+  String? _filterTeamId;     // for expense scoping
+
   @override
   void initState() {
     super.initState();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final profile = context.read<AuthNotifier>().profile;
+      if (profile?.isAdmin == true) {
+        _teamFilter = context.read<TeamFilterNotifier>()
+          ..loadTeams()
+          ..addListener(_onTeamChange);
+      } else if (profile?.isManager == true && profile?.teamId != null) {
+        // Manager: scope to their department automatically
+        final team = await TeamRepository.fetchById(profile!.teamId!);
+        if (mounted) {
+          _filterClientType = team?.department?.toLowerCase();
+          _filterTeamId     = team?.id;
+        }
+      }
+      if (mounted) _load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _teamFilter?.removeListener(_onTeamChange);
+    super.dispose();
+  }
+
+  void _onTeamChange() {
+    final selected = _teamFilter?.selectedTeam;
+    _filterClientType = selected?.department?.toLowerCase();
+    _filterTeamId     = selected?.id;
+    if (mounted) _load();
   }
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final results = await Future.wait([
-      ClientRepository.fetchClients(),
-      FinanceRepository.fetchSummary(),
-      ExpenseRepository.fetchAll(limit: 5),
-      FinanceRepository.fetchMonthlyBreakdown(),
-    ]);
-    if (mounted) {
-      setState(() {
-        _clients  = results[0] as List<ClientModel>;
-        _summary  = results[1] as FinanceSummary;
-        _expenses = results[2] as List<ExpenseItem>;
-        _monthly  = results[3] as List<Map<String, dynamic>>;
-        _loading  = false;
-      });
+    try {
+      final results = await Future.wait([
+        ClientRepository.fetchClients(clientType: _filterClientType),
+        FinanceRepository.fetchSummary(
+          teamId:     _filterTeamId,
+          clientType: _filterClientType,
+        ),
+        ExpenseRepository.fetchAll(limit: 5, teamId: _filterTeamId),
+        FinanceRepository.fetchMonthlyBreakdown(teamId: _filterTeamId),
+      ]);
+      if (mounted) {
+        setState(() {
+          _clients  = results[0] as List<ClientModel>;
+          _summary  = results[1] as FinanceSummary;
+          _expenses = results[2] as List<ExpenseItem>;
+          _monthly  = results[3] as List<Map<String, dynamic>>;
+          _loading  = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -52,11 +94,14 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   Widget build(BuildContext context) {
     final profile = context.watch<AuthNotifier>().profile;
     final isAdmin = profile?.isAdmin ?? false;
+    final title   = (profile?.isManager == true && _filterClientType != null)
+        ? 'Finance — ${_filterClientType![0].toUpperCase()}${_filterClientType!.substring(1)}'
+        : 'Finance';
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Finance'),
+        title: Text(title),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -69,10 +114,14 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
-          : RefreshIndicator(
-              onRefresh: _load,
+      body: Column(
+        children: [
+          const TeamFilterChip(),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+                : RefreshIndicator(
+                    onRefresh: _load,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
@@ -210,6 +259,9 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                 ]),
               ),
             ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -360,7 +412,7 @@ class _ExpenseRow extends StatelessWidget {
           Text('${expense.categoryName} · ${expense.date}',
               style: AppTextStyles.bodySm),
         ])),
-        Text('${_fmtAmount(expense.amount)} SAR',
+        Text('${_fmtAmount(expense.amount)} EGP',
             style: AppTextStyles.dataMd.copyWith(color: AppColors.statusHigh)),
       ]),
     );
@@ -387,7 +439,7 @@ class _ClientFinanceRow extends StatelessWidget {
         child: Row(children: [
           Container(
             width: 36, height: 36,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
                 color: AppColors.primary, shape: BoxShape.circle),
             alignment: Alignment.center,
             child: Text(client.initials,
@@ -402,7 +454,7 @@ class _ClientFinanceRow extends StatelessWidget {
                   style: AppTextStyles.bodySm
                       .copyWith(color: AppColors.onSurfaceVariant)),
           ])),
-          const Icon(Icons.chevron_right, color: AppColors.outlineVariant),
+          Icon(Icons.chevron_right, color: AppColors.outlineVariant),
         ]),
       ),
     );

@@ -21,7 +21,7 @@ class TaskStatusOptionsRepository {
     ['not_started',     '#6D4C41'],
     ['in_progress',     '#1565C0'],
     ['employee_done',   '#755B00'],
-    ['client_approve',  '#2E7D32'],
+    ['client_approved',  '#2E7D32'],
     ['client_rejected', '#BA1A1A'],
     ['completed',       '#2E7D32'],
     ['on_hold',         '#747878'],
@@ -231,7 +231,7 @@ class TaskStatusOptionsRepository {
     switch (value) {
       case 'in_progress':     return const Color(0xFF1565C0);
       case 'employee_done':   return const Color(0xFF755B00);
-      case 'client_approve':  return const Color(0xFF2E7D32);
+      case 'client_approved':  return const Color(0xFF2E7D32);
       case 'client_rejected': return const Color(0xFFBA1A1A);
       case 'completed':       return const Color(0xFF2E7D32);
       case 'on_hold':         return const Color(0xFF747878);

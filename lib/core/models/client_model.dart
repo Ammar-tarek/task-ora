@@ -14,6 +14,7 @@ class ClientModel {
   final String? contractEndDate;
   final bool isArchived;
   final String createdAt;
+  final String clientType;
 
   const ClientModel({
     required this.id,
@@ -28,6 +29,7 @@ class ClientModel {
     this.contractEndDate,
     this.isArchived = false,
     required this.createdAt,
+    this.clientType = 'general',
   });
 
   factory ClientModel.fromMap(Map<String, dynamic> m) => ClientModel(
@@ -43,6 +45,7 @@ class ClientModel {
         contractEndDate:   m['contract_end_date'] as String?,
         isArchived:        m['is_archived'] as bool? ?? false,
         createdAt:         m['created_at'] as String? ?? '',
+        clientType:        m['client_type'] as String? ?? 'general',
       );
 
   String get initials {

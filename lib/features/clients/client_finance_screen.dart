@@ -7,6 +7,7 @@ import '../../core/models/task_model.dart';
 import '../../core/repositories/client_repository.dart';
 import '../../core/repositories/finance_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/app_time.dart';
 
 class ClientFinanceScreen extends StatefulWidget {
   const ClientFinanceScreen({super.key, required this.clientId});
@@ -95,7 +96,7 @@ class _ClientFinanceScreenState extends State<ClientFinanceScreen>
                   child: Padding(
                     padding: const EdgeInsets.all(32),
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.link_off, size: 48, color: AppColors.outlineVariant),
+                      Icon(Icons.link_off, size: 48, color: AppColors.outlineVariant),
                       const SizedBox(height: 16),
                       Text('Account not linked',
                           style: AppTextStyles.headlineSm
@@ -166,7 +167,7 @@ class _FinanceTab extends StatelessWidget {
             Text('TOTAL REVENUE',
                 style: AppTextStyles.labelCaps.copyWith(color: Colors.white54)),
             const SizedBox(height: 6),
-            Text('\$${_totalRevenue.toStringAsFixed(2)}',
+            Text('EGP ${_totalRevenue.toStringAsFixed(2)}',
                 style: AppTextStyles.dataLg.copyWith(
                     color: AppColors.gold, fontSize: 32,
                     fontWeight: FontWeight.w700)),
@@ -174,13 +175,13 @@ class _FinanceTab extends StatelessWidget {
             Row(children: [
               Expanded(child: _SummaryItem(
                   label: 'Task Services',
-                  value: '\$${totalTaskCost.toStringAsFixed(0)}')),
+                  value: 'EGP ${totalTaskCost.toStringAsFixed(0)}')),
               Expanded(child: _SummaryItem(
                   label: 'Meetings',
-                  value: '\$${totalMeetingCost.toStringAsFixed(0)}')),
+                  value: 'EGP ${totalMeetingCost.toStringAsFixed(0)}')),
               Expanded(child: _SummaryItem(
                   label: 'Invoiced',
-                  value: '\$${totalInvoiced.toStringAsFixed(0)}')),
+                  value: 'EGP ${totalInvoiced.toStringAsFixed(0)}')),
             ]),
           ]),
         ),
@@ -189,11 +190,11 @@ class _FinanceTab extends StatelessWidget {
         // ── Invoice status strip ────────────────────────────────────
         Row(children: [
           Expanded(child: _StatCard(
-              label: 'Paid', value: '\$${totalPaid.toStringAsFixed(0)}',
+              label: 'Paid', value: 'EGP ${totalPaid.toStringAsFixed(0)}',
               color: const Color(0xFF81C784))),
           const SizedBox(width: 10),
           Expanded(child: _StatCard(
-              label: 'Outstanding', value: '\$${_outstanding.toStringAsFixed(0)}',
+              label: 'Outstanding', value: 'EGP ${_outstanding.toStringAsFixed(0)}',
               color: _outstanding > 0 ? AppColors.error : AppColors.onSurfaceVariant)),
         ]),
         const SizedBox(height: 24),
@@ -269,7 +270,7 @@ class _TaskCostRow extends StatelessWidget {
               style: AppTextStyles.bodySm
                   .copyWith(color: AppColors.onSurfaceVariant, fontSize: 10)),
         ])),
-        Text('\$${task.cost!.toStringAsFixed(2)}',
+        Text('EGP ${task.cost!.toStringAsFixed(2)}',
             style: AppTextStyles.dataMd.copyWith(color: AppColors.gold)),
       ]),
     );
@@ -326,7 +327,7 @@ class _CrmRow extends StatelessWidget {
                 style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('\$${entry.amount.toStringAsFixed(0)}', style: AppTextStyles.dataMd),
+          Text('EGP ${entry.amount.toStringAsFixed(0)}', style: AppTextStyles.dataMd),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
@@ -398,7 +399,7 @@ class _TaskRow extends StatelessWidget {
           ]),
         ])),
         if (task.cost != null && task.cost! > 0)
-          Text('\$${task.cost!.toStringAsFixed(0)}',
+          Text('EGP ${task.cost!.toStringAsFixed(0)}',
               style: AppTextStyles.dataMd.copyWith(color: AppColors.gold)),
       ]),
     );
@@ -448,7 +449,7 @@ class _MeetingRow extends StatelessWidget {
   final CalEventData event;
 
   String _fmt(DateTime d) =>
-      '${d.day}/${d.month}/${d.year}  ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+      '${d.day}/${d.month}/${d.year}  ${AppTime.hm(d)}';
 
   @override
   Widget build(BuildContext context) {
@@ -463,12 +464,12 @@ class _MeetingRow extends StatelessWidget {
         Row(children: [
           Expanded(child: Text(event.title, style: AppTextStyles.labelMd)),
           if (event.cost != null && event.cost! > 0)
-            Text('\$${event.cost!.toStringAsFixed(0)}',
+            Text('EGP ${event.cost!.toStringAsFixed(0)}',
                 style: AppTextStyles.dataMd.copyWith(color: AppColors.gold)),
         ]),
         const SizedBox(height: 6),
         Row(children: [
-          const Icon(Icons.access_time_outlined, size: 13, color: AppColors.onSurfaceVariant),
+          Icon(Icons.access_time_outlined, size: 13, color: AppColors.onSurfaceVariant),
           const SizedBox(width: 4),
           Text(_fmt(event.start), style: AppTextStyles.dataSm),
         ]),
@@ -504,7 +505,7 @@ class _EmptySection extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.inbox_outlined, size: 48, color: AppColors.outlineVariant),
+          Icon(Icons.inbox_outlined, size: 48, color: AppColors.outlineVariant),
           const SizedBox(height: 12),
           Text(message,
               style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant),

@@ -1,11 +1,14 @@
 // lib/features/expenses/daily_expenses_screen.dart
-// Live data from Supabase — replaces previous mock-data implementation.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/providers/team_filter_notifier.dart';
+import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/repositories/expense_repository.dart';
+import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/team_filter_chip.dart';
 
 class DailyExpensesScreen extends StatefulWidget {
   const DailyExpensesScreen({super.key});
@@ -18,17 +21,52 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
   List<Map<String, dynamic>> _categories = [];
   String _cat  = 'All';
   bool _loading = true;
+  TeamFilterNotifier? _teamFilter;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _teamFilter = context.read<TeamFilterNotifier>()
+        ..loadTeams()
+        ..addListener(_onTeamChange);
+      _load();
+    });
+    // Live refresh when expenses change.
+    RealtimeService.instance.listen(const ['expenses'], _onRealtime);
+  }
+
+  void _onRealtime() {
+    if (mounted) _load();
+  }
+
+  @override
+  void dispose() {
+    RealtimeService.instance.unlisten(_onRealtime);
+    _teamFilter?.removeListener(_onTeamChange);
+    super.dispose();
+  }
+
+  void _onTeamChange() {
+    if (mounted) _load();
   }
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    final profile = context.read<AuthNotifier>().profile;
+    // Refresh privileges so grants/restrictions take effect immediately.
+    await context.read<TeamPrivilegesNotifier>().reload();
+
+    // Determine team scope: admin uses switcher, manager uses their own team
+    String? teamId;
+    if (profile?.isAdmin == true) {
+      teamId = context.read<TeamFilterNotifier>().selectedTeamId;
+    } else if (profile?.isManager == true) {
+      teamId = profile?.teamId;
+    }
+
     final results = await Future.wait([
-      ExpenseRepository.fetchAll(),
+      ExpenseRepository.fetchAll(teamId: teamId),
       ExpenseRepository.fetchCategories(),
     ]);
     if (mounted) {
@@ -63,24 +101,74 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
     }
   }
 
+  Future<void> _approveExpense(ExpenseItem e) async {
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile == null) return;
+    await ExpenseRepository.approveExpense(e.id, profile.id);
+    _load();
+  }
+
+  Future<void> _deleteExpense(ExpenseItem e) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Expense'),
+        content: const Text('Are you sure you want to delete this expense?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await ExpenseRepository.deleteExpense(e.id);
+      _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final profile   = context.watch<AuthNotifier>().profile;
+    final privs     = context.watch<TeamPrivilegesNotifier>();
+    // "Manager view" = admin, a manager with the privilege, or a granted employee.
+    final isManager = profile?.isAdmin == true || privs.canManageExpenses;
+    final canManageExpenses = isManager;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Daily Expenses'),
         actions: [
+          if (isManager)
+            IconButton(
+              icon: const Icon(Icons.category_outlined),
+              tooltip: 'Manage Categories',
+              onPressed: () => _showManageCategories(context),
+            ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddExpense(),
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: AppColors.gold),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
-          : Column(children: [
+      floatingActionButton: (!isManager || canManageExpenses)
+          ? FloatingActionButton(
+              onPressed: () => _showAddExpense(isManager: isManager),
+              backgroundColor: AppColors.primary,
+              child: const Icon(Icons.add, color: AppColors.gold),
+            )
+          : null,
+      body: Column(
+        children: [
+          const TeamFilterChip(),
+          Expanded(
+            child: _loading
+              ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+              : Column(children: [
               // Total banner
               Container(
                 width: double.infinity,
@@ -90,8 +178,9 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
                   Text('TOTAL EXPENSES',
                     style: AppTextStyles.labelCaps.copyWith(color: Colors.white54)),
                   const SizedBox(height: 4),
-                  Text('${_total.toStringAsFixed(2)} SAR',
-                    style: AppTextStyles.dataLg.copyWith(color: AppColors.gold, fontSize: 28)),
+                  Text('${_total.toStringAsFixed(2)} EGP',
+                    style: AppTextStyles.dataLg.copyWith(
+                      color: AppColors.gold, fontSize: 28)),
                   Text('${_filtered.length} record${_filtered.length == 1 ? '' : 's'}',
                     style: AppTextStyles.bodySm.copyWith(color: Colors.white54)),
                 ]),
@@ -126,7 +215,7 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
                 child: _filtered.isEmpty
                     ? Center(
                         child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          const Icon(Icons.receipt_long_outlined,
+                          Icon(Icons.receipt_long_outlined,
                             size: 64, color: AppColors.outlineVariant),
                           const SizedBox(height: 12),
                           Text('No expenses found', style: AppTextStyles.labelMd),
@@ -140,60 +229,44 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (_, i) {
                             final e = _filtered[i];
-                            return Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceContainerLowest,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AppColors.outlineVariant),
-                              ),
-                              child: Row(children: [
-                                Container(
-                                  width: 42, height: 42,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.gold.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Icon(_categoryIcon(e.categoryName),
-                                    color: AppColors.gold, size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(e.description.isNotEmpty ? e.description : e.categoryName,
-                                      style: AppTextStyles.labelMd),
-                                    const SizedBox(height: 2),
-                                    Row(children: [
-                                      TStatusChip(label: e.categoryName, color: AppColors.secondary),
-                                      const SizedBox(width: 6),
-                                      Text('· ${e.date}', style: AppTextStyles.bodySm),
-                                    ]),
-                                    if (e.recordedByName.isNotEmpty) ...[
-                                      const SizedBox(height: 2),
-                                      Text('By: ${e.recordedByName}',
-                                        style: AppTextStyles.bodySm.copyWith(
-                                          color: AppColors.onSurfaceVariant, fontSize: 11)),
-                                    ],
-                                  ],
-                                )),
-                                Text('${e.amount.toStringAsFixed(2)} SAR',
-                                  style: AppTextStyles.dataMd.copyWith(
-                                    color: AppColors.statusHigh, fontSize: 15)),
-                              ]),
+                            return _ExpenseCard(
+                              item:      e,
+                              isManager: isManager,
+                              icon:      _categoryIcon(e.categoryName),
+                              onApprove: (isManager && e.status != 'approved')
+                                  ? () => _approveExpense(e)
+                                  : null,
+                              onDelete:  isManager ? () => _deleteExpense(e) : null,
                             );
                           },
                         ),
                       ),
               ),
             ]),
+          ),
+        ],
+      ),
     );
   }
 
-  Future<void> _showAddExpense() async {
+  Future<void> _showManageCategories(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (_) => _ManageCategoriesDialog(
+        categories: _categories,
+        onChanged:  _load,
+      ),
+    );
+  }
+
+  Future<void> _showAddExpense({required bool isManager}) async {
     if (_categories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not load expense categories')),
+        SnackBar(
+          content: Text(isManager
+              ? 'No categories yet. Use the category button to add some.'
+              : 'No categories available. Please ask your admin to create categories.'),
+        ),
       );
       return;
     }
@@ -208,7 +281,306 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
   }
 }
 
-// ── Add Expense Dialog ─────────────────────────────────────────────────────
+// ── Expense Card ────────────────────────────────────────────────────────────
+
+class _ExpenseCard extends StatelessWidget {
+  const _ExpenseCard({
+    required this.item,
+    required this.isManager,
+    required this.icon,
+    this.onApprove,
+    this.onDelete,
+  });
+  final ExpenseItem item;
+  final bool isManager;
+  final IconData icon;
+  final VoidCallback? onApprove;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: item.status == 'approved'
+              ? AppColors.statusDone.withValues(alpha: 0.4)
+              : AppColors.outlineVariant,
+        ),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 42, height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.gold.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppColors.gold, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item.description.isNotEmpty
+                  ? item.description : item.categoryName,
+                style: AppTextStyles.labelMd),
+              const SizedBox(height: 2),
+              Row(children: [
+                TStatusChip(label: item.categoryName, color: AppColors.secondary),
+                const SizedBox(width: 6),
+                Text('· ${item.date}', style: AppTextStyles.bodySm),
+              ]),
+              if (item.recordedByName.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text('By: ${item.recordedByName}',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant, fontSize: 11)),
+              ],
+            ],
+          )),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('${item.amount.toStringAsFixed(2)} EGP',
+              style: AppTextStyles.dataMd.copyWith(
+                color: AppColors.statusHigh, fontSize: 15)),
+            const SizedBox(height: 4),
+            _ExpenseStatusBadge(status: item.status),
+          ]),
+        ]),
+
+        // Admin / manager actions
+        if (isManager) ...[
+          const SizedBox(height: 10),
+          const Divider(height: 1),
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            if (onApprove != null)
+              TextButton.icon(
+                icon: const Icon(Icons.check_circle_outline,
+                  size: 16, color: AppColors.statusDone),
+                label: Text('Approve',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.statusDone)),
+                onPressed: onApprove,
+              ),
+            if (onDelete != null)
+              TextButton.icon(
+                icon: const Icon(Icons.delete_outline,
+                  size: 16, color: AppColors.error),
+                label: Text('Delete',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.error)),
+                onPressed: onDelete,
+              ),
+          ]),
+        ],
+      ]),
+    );
+  }
+}
+
+// ── Expense Status Badge ────────────────────────────────────────────────────
+
+class _ExpenseStatusBadge extends StatelessWidget {
+  const _ExpenseStatusBadge({required this.status});
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color;
+    final String label;
+    switch (status) {
+      case 'approved':
+        color = AppColors.statusDone;
+        label = 'Approved';
+        break;
+      case 'rejected':
+        color = AppColors.statusHigh;
+        label = 'Rejected';
+        break;
+      default:
+        color = AppColors.gold;
+        label = 'Pending';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(label,
+        style: AppTextStyles.bodySm.copyWith(color: color, fontSize: 10)),
+    );
+  }
+}
+
+// ── Manage Categories Dialog ────────────────────────────────────────────────
+
+class _ManageCategoriesDialog extends StatefulWidget {
+  const _ManageCategoriesDialog({
+    required this.categories,
+    required this.onChanged,
+  });
+  final List<Map<String, dynamic>> categories;
+  final VoidCallback onChanged;
+
+  @override
+  State<_ManageCategoriesDialog> createState() =>
+      _ManageCategoriesDialogState();
+}
+
+class _ManageCategoriesDialogState extends State<_ManageCategoriesDialog> {
+  late List<Map<String, dynamic>> _cats;
+  final _nameCtrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cats = List<Map<String, dynamic>>.from(widget.categories);
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addCategory() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _saving = true);
+    final ok = await ExpenseRepository.createCategory(name: name);
+    if (ok) {
+      _nameCtrl.clear();
+      final updated = await ExpenseRepository.fetchCategories();
+      if (mounted) setState(() => _cats = updated);
+      widget.onChanged();
+    }
+    if (mounted) setState(() => _saving = false);
+  }
+
+  Future<void> _deleteCategory(String id) async {
+    await ExpenseRepository.deleteCategory(id);
+    final updated = await ExpenseRepository.fetchCategories();
+    if (mounted) setState(() => _cats = updated);
+    widget.onChanged();
+  }
+
+  Future<void> _editCategory(Map<String, dynamic> cat) async {
+    final ctrl = TextEditingController(text: cat['name'] as String? ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Edit Category'),
+        content: TextField(
+          controller: ctrl,
+          decoration: const InputDecoration(labelText: 'Category Name'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (result != null && result.isNotEmpty) {
+      await ExpenseRepository.updateCategory(id: cat['id'] as String, name: result);
+      final updated = await ExpenseRepository.fetchCategories();
+      if (mounted) setState(() => _cats = updated);
+      widget.onChanged();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Manage Categories'),
+      content: SizedBox(
+        width: 360,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // Add new
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'New Category Name',
+                  hintText: 'e.g. Marketing',
+                ),
+                onSubmitted: (_) => _addCategory(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _saving ? null : _addCategory,
+              child: _saving
+                  ? const SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Add'),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          const Divider(),
+          const SizedBox(height: 4),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 300),
+            child: _cats.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('No categories yet'),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _cats.length,
+                    itemBuilder: (_, i) {
+                      final cat = _cats[i];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(cat['name'] as String? ?? '',
+                          style: AppTextStyles.bodyMd),
+                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined,
+                              size: 18, color: AppColors.gold),
+                            tooltip: 'Rename',
+                            onPressed: () => _editCategory(cat),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline,
+                              size: 18, color: AppColors.error),
+                            tooltip: 'Remove',
+                            onPressed: () => _deleteCategory(
+                              cat['id'] as String),
+                          ),
+                        ]),
+                      );
+                    },
+                  ),
+          ),
+        ]),
+      ),
+      actions: [
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Add Expense Dialog ──────────────────────────────────────────────────────
 
 class _AddExpenseDialog extends StatefulWidget {
   const _AddExpenseDialog({
@@ -225,7 +597,7 @@ class _AddExpenseDialog extends StatefulWidget {
 }
 
 class _AddExpenseDialogState extends State<_AddExpenseDialog> {
-  final _formKey   = GlobalKey<FormState>();
+  final _formKey    = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
   final _descCtrl   = TextEditingController();
   final _paidCtrl   = TextEditingController();
@@ -259,7 +631,7 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
       description: _descCtrl.text.trim(),
       recordedBy:  widget.recordedBy,
       date:        _date.toIso8601String().substring(0, 10),
-      paidTo:      _paidCtrl.text.trim().isEmpty ? null : _paidCtrl.text.trim(),
+      paidTo: _paidCtrl.text.trim().isEmpty ? null : _paidCtrl.text.trim(),
     );
     if (mounted) {
       Navigator.pop(context);
@@ -292,7 +664,8 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
               TextFormField(
                 controller: _amountCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Amount (SAR)', prefixText: 'SAR '),
+                decoration: const InputDecoration(
+                  labelText: 'Amount (EGP)', prefixText: 'EGP '),
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Required';
                   if (double.tryParse(v) == null) return 'Enter a valid number';
@@ -305,7 +678,8 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
                 controller: _descCtrl,
                 maxLines: 2,
                 decoration: const InputDecoration(labelText: 'Description'),
-                validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 12),
 
@@ -324,7 +698,8 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
                   'Date: ${_date.day}/${_date.month}/${_date.year}',
                   style: AppTextStyles.bodyMd,
                 ),
-                trailing: const Icon(Icons.calendar_today_outlined, color: AppColors.gold),
+                trailing: const Icon(Icons.calendar_today_outlined,
+                  color: AppColors.gold),
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: context,
@@ -340,12 +715,17 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         ElevatedButton(
           onPressed: _saving ? null : _save,
           child: _saving
-              ? const SizedBox(width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
               : const Text('Save'),
         ),
       ],

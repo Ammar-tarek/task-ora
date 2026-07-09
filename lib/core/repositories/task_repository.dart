@@ -20,14 +20,19 @@ class TaskRepository {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /// Fetch tasks visible to [profile] according to role:
-  ///   admin / manager → all tasks (manager optionally scoped to their team)
+  ///   admin / manager → all tasks (manager scoped to their team)
   ///   employee        → team tasks + tasks they are assigned to
   ///   client          → tasks where client_id = profile.id
+  ///
+  /// [overrideTeamId] is admin-only: forces a team filter on top of the
+  /// normal "all" admin view (used by the admin team-switcher UI).
   static Future<List<TaskModel>> fetchTasksForProfile(
-    ProfileModel profile,
-  ) async {
+    ProfileModel profile, {
+    String? overrideTeamId,
+  }) async {
     if (profile.isAdminOrManager) {
-      return _fetchAll(teamId: profile.isManager ? profile.teamId : null);
+      final teamId = overrideTeamId ?? (profile.isManager ? profile.teamId : null);
+      return _fetchAll(teamId: teamId);
     }
     if (profile.isEmployee) return _fetchEmployeeTasks(profile);
     if (profile.isClient)   return _fetchClientTasks(profile);
@@ -35,10 +40,13 @@ class TaskRepository {
   }
 
   static Future<List<TaskModel>> _fetchAll({String? teamId}) async {
+    // Manager view: own team tasks PLUS tasks handed off to their team (waiting list).
     try {
       final base = _client.from('tasks').select(_taskSelect);
       final query = teamId != null
-          ? base.eq('team_id', teamId).order('created_at', ascending: false)
+          ? base
+              .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId')
+              .order('created_at', ascending: false)
           : base.order('created_at', ascending: false);
       final data = await query;
       return (data as List).map((m) => TaskModel.fromMap(m)).toList();
@@ -46,7 +54,9 @@ class TaskRepository {
       try {
         final base = _client.from('tasks').select('*');
         final query = teamId != null
-            ? base.eq('team_id', teamId).order('created_at', ascending: false)
+            ? base
+                .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId')
+                .order('created_at', ascending: false)
             : base.order('created_at', ascending: false);
         final data = await query;
         return (data as List).map((m) => TaskModel.fromMap(m)).toList();
@@ -56,63 +66,67 @@ class TaskRepository {
     }
   }
 
+  // ── Department handoff (waiting list) ───────────────────────────────────────
+
+  /// Manager sends a task to another department. Detaches it from the source
+  /// team so no employee sees it; only the target department's manager sees it
+  /// in their Waiting List until they accept it.
+  static Future<void> handoffTask({
+    required String taskId,
+    required String fromTeamId,
+    required String toTeamId,
+    required String byProfileId,
+    String? note,
+  }) async {
+    await _adminClient.from('tasks').update({
+      'team_id':              null,
+      'handoff_from_team_id': fromTeamId,
+      'handoff_to_team_id':   toTeamId,
+      'handoff_by':           byProfileId,
+      'handoff_note':         note,
+      'updated_at':           DateTime.now().toIso8601String(),
+    }).eq('id', taskId);
+    // Remove old assignees — new department will reassign.
+    await _adminClient.from('task_assignees').delete().eq('task_id', taskId);
+  }
+
+  /// Target manager accepts a handoff into their department. The task becomes a
+  /// normal team task visible to that team.
+  static Future<void> acceptHandoff({
+    required String taskId,
+    required String teamId,
+  }) async {
+    await _adminClient.from('tasks').update({
+      'team_id':            teamId,
+      'handoff_to_team_id': null,
+      'updated_at':         DateTime.now().toIso8601String(),
+    }).eq('id', taskId);
+  }
+
   static Future<List<TaskModel>> _fetchEmployeeTasks(
     ProfileModel profile,
   ) async {
+    // Employees see ONLY tasks explicitly assigned to them — never all team
+    // tasks. A moved task stays hidden until the manager assigns them.
     try {
-      final seenIds = <String>{};
-      final results = <TaskModel>[];
-
-      // 1 — tasks in their team
-      if (profile.teamId != null) {
-        final data = await _client
-            .from('tasks')
-            .select(_taskSelect)
-            .eq('team_id', profile.teamId!)
-            .order('created_at', ascending: false);
-        for (final m in data as List) {
-          final t = TaskModel.fromMap(m as Map<String, dynamic>);
-          if (seenIds.add(t.id)) results.add(t);
-        }
-      }
-
-      // 2 — tasks they are assigned to (cross-team mentions / explicit assignments)
-      final assigneeRows = await _client
+      final assigneeRows = await _adminClient
           .from('task_assignees')
           .select('task_id')
           .eq('profile_id', profile.id);
 
-      final newIds = (assigneeRows as List)
+      final ids = (assigneeRows as List)
           .map((r) => r['task_id'] as String)
-          .where((id) => !seenIds.contains(id))
           .toList();
+      if (ids.isEmpty) return [];
 
-      if (newIds.isNotEmpty) {
-        final data = await _client
-            .from('tasks')
-            .select(_taskSelect)
-            .inFilter('id', newIds)
-            .order('created_at', ascending: false);
-        for (final m in data as List) {
-          final t = TaskModel.fromMap(m as Map<String, dynamic>);
-          if (seenIds.add(t.id)) results.add(t);
-        }
-      }
-
-      return results;
+      final data = await _adminClient
+          .from('tasks')
+          .select(_taskSelect)
+          .inFilter('id', ids)
+          .order('created_at', ascending: false);
+      return (data as List).map((m) => TaskModel.fromMap(m)).toList();
     } catch (_) {
-      // Graceful fallback: team tasks only (no join)
-      if (profile.teamId == null) return [];
-      try {
-        final data = await _client
-            .from('tasks')
-            .select('*')
-            .eq('team_id', profile.teamId!)
-            .order('created_at', ascending: false);
-        return (data as List).map((m) => TaskModel.fromMap(m)).toList();
-      } catch (_) {
-        return [];
-      }
+      return [];
     }
   }
 
@@ -188,7 +202,7 @@ class TaskRepository {
       'not_started':     tasks.where((t) => t.status == 'not_started').toList(),
       'in_progress':     tasks.where((t) => t.status == 'in_progress').toList(),
       'employee_done':   tasks.where((t) => t.status == 'employee_done').toList(),
-      'client_approve':  tasks.where((t) => t.status == 'client_approve').toList(),
+      'client_approved':  tasks.where((t) => t.status == 'client_approved').toList(),
       'client_rejected': tasks.where((t) => t.status == 'client_rejected').toList(),
       'completed':       tasks.where((t) => t.status == 'completed').toList(),
       'on_hold':         tasks.where((t) => t.status == 'on_hold').toList(),
@@ -208,7 +222,6 @@ class TaskRepository {
             *,
             task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url)),
             task_comments(id, content, is_internal, created_at, author:profiles(full_name)),
-            task_edit_logs(id, edited_at, summary, editor:profiles!task_edit_logs_edited_by_fkey(full_name)),
             task_attachments(id, file_name, file_url, file_type, is_client_visible),
             task_approvals(id, employee_done_at, client_decision, client_reviewed_at)
           ''')
@@ -258,10 +271,10 @@ class TaskRepository {
   static Future<List<TaskEditLog>> fetchEditHistory(String taskId) async {
     try {
       final data = await _client
-          .from('task_edit_logs')
-          .select('*, editor:profiles!task_edit_logs_edited_by_fkey(full_name)')
+          .from('task_audit_log')
+          .select('*, actor:profiles!actor_id(full_name)')
           .eq('task_id', taskId)
-          .order('edited_at', ascending: false)
+          .order('created_at', ascending: false)
           .limit(20);
       return (data as List)
           .map((m) => TaskEditLog.fromMap(m as Map<String, dynamic>))
@@ -280,10 +293,11 @@ class TaskRepository {
     String summary,
   ) async {
     try {
-      await _client.from('task_edit_logs').insert({
-        'task_id':   taskId,
-        'edited_by': editedBy,
-        'summary':   summary,
+      await _client.from('task_audit_log').insert({
+        'task_id':  taskId,
+        'actor_id': editedBy,
+        'action':   'edit',
+        'notes':    summary,
       });
     } catch (_) {}
   }

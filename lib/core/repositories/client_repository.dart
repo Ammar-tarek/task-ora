@@ -54,12 +54,14 @@ class ClientRepository {
   static final _adminDb = SupabaseService.adminClient;
   static SupabaseClient get adminDb => _adminDb;
 
-  static Future<List<ClientModel>> fetchClients() async {
+  static Future<List<ClientModel>> fetchClients({String? clientType}) async {
     try {
-      final data = await _adminDb
-          .from('client_profiles')
-          .select()
-          .order('company_name');
+      var query = _adminDb.from('client_profiles').select();
+      if (clientType != null && clientType.isNotEmpty && clientType != 'both') {
+        // Client belongs to this department OR to both departments.
+        query = query.or('client_type.eq.$clientType,client_type.eq.both');
+      }
+      final data = await query.order('company_name');
       return (data as List).map((m) => ClientModel.fromMap(m)).toList();
     } catch (_) {
       return [];
@@ -120,6 +122,7 @@ class ClientRepository {
     String? whatsappNumber,
     String? address,
     String? notes,
+    String? clientType,
   }) async {
     try {
       // 1. Create the auth user via admin API
@@ -153,6 +156,7 @@ class ClientRepository {
         'whatsapp_number': whatsappNumber,
         'address':        address,
         'notes':          notes,
+        if (clientType != null && clientType.isNotEmpty) 'client_type': clientType,
       }).select().single();
 
       return (client: ClientModel.fromMap(data), error: null);
@@ -178,6 +182,7 @@ class ClientRepository {
     String? notes,
     String? newEmail,
     String? newPassword,
+    String? clientType,
   }) async {
     try {
       // 1. Update auth user if email or password changed
@@ -211,6 +216,7 @@ class ClientRepository {
         'whatsapp_number': whatsappNumber,
         'address':         address,
         'notes':           notes,
+        if (clientType != null && clientType.isNotEmpty) 'client_type': clientType,
       }).eq('id', clientId).select().single();
 
       return (client: ClientModel.fromMap(data), error: null);
@@ -248,7 +254,7 @@ class ClientRepository {
     try {
       final data = await _adminDb
           .from('tasks')
-          .select('*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name)), task_comments(id, content, is_internal, created_at, author:profiles!task_comments_author_id_fkey(full_name)), task_edit_logs(id, summary, edited_at, editor:profiles!task_edit_logs_edited_by_fkey(full_name))')
+          .select('*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name)), task_comments(id, content, is_internal, created_at, author:profiles!task_comments_author_id_fkey(full_name))')
           .eq('client_id', clientId)
           .order('created_at', ascending: false);
       return (data as List).map((m) => TaskModel.fromMap(m)).toList();

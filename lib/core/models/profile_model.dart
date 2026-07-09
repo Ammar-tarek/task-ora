@@ -3,7 +3,7 @@
 
 class ProfileModel {
   final String id;
-  final String role;        // 'admin' | 'employee' | 'client'
+  final String role;        // 'admin' | 'manager' | 'employee' | 'client'
   final String fullName;
   final String? phone;
   final String? avatarUrl;

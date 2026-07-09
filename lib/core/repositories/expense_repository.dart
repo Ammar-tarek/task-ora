@@ -10,6 +10,8 @@ class ExpenseItem {
   final String description;
   final String? receiptUrl;
   final String recordedByName;
+  final String status;     // 'pending' | 'approved' | 'rejected'
+  final String? approvedBy;
 
   const ExpenseItem({
     required this.id,
@@ -19,6 +21,8 @@ class ExpenseItem {
     required this.description,
     this.receiptUrl,
     required this.recordedByName,
+    this.status = 'pending',
+    this.approvedBy,
   });
 
   factory ExpenseItem.fromMap(Map<String, dynamic> m) {
@@ -32,19 +36,43 @@ class ExpenseItem {
       description:     m['description'] as String? ?? '',
       receiptUrl:      m['receipt_url'] as String?,
       recordedByName:  profile?['full_name'] as String? ?? '',
+      status:          m['status'] as String? ?? 'pending',
+      approvedBy:      m['approved_by'] as String?,
     );
   }
 }
 
 class ExpenseRepository {
-  static final _client = SupabaseService.client;
   static final _admin  = SupabaseService.adminClient;
 
-  static Future<List<ExpenseItem>> fetchAll({int limit = 50}) async {
+  // ── Expenses ─────────────────────────────────────────────────────────────────
+
+  /// Fetch expense records. Pass [teamId] to scope to a specific team
+  /// (filters by the recorder's team_id).
+  static Future<List<ExpenseItem>> fetchAll({
+    int limit = 50,
+    String? teamId,
+  }) async {
     try {
+      const sel = '*, category:expense_categories(name), recorder:profiles!expenses_recorded_by_fkey(full_name)';
+      if (teamId != null) {
+        final members = await _admin
+            .from('profiles')
+            .select('id')
+            .eq('team_id', teamId);
+        final ids = (members as List).map((m) => m['id'] as String).toList();
+        if (ids.isEmpty) return [];
+        final data = await _admin
+            .from('expenses')
+            .select(sel)
+            .inFilter('recorded_by', ids)
+            .order('expense_date', ascending: false)
+            .limit(limit);
+        return (data as List).map((m) => ExpenseItem.fromMap(m)).toList();
+      }
       final data = await _admin
           .from('expenses')
-          .select('*, category:expense_categories(name), recorder:profiles!expenses_recorded_by_fkey(full_name)')
+          .select(sel)
           .order('expense_date', ascending: false)
           .limit(limit);
       return (data as List).map((m) => ExpenseItem.fromMap(m)).toList();
@@ -52,6 +80,48 @@ class ExpenseRepository {
       return [];
     }
   }
+
+  static Future<void> createExpense({
+    required String categoryId,
+    required double amount,
+    required String description,
+    required String recordedBy,
+    required String date,
+    String? paidTo,
+  }) async {
+    // adminClient: expenses RLS is admin-only, so managers/employees would be
+    // blocked on the regular client. UI gates who can reach this.
+    try {
+      await _admin.from('expenses').insert({
+        'category_id':  categoryId,
+        'amount':       amount,
+        'description':  description,
+        'recorded_by':  recordedBy,
+        'expense_date': date,
+        'paid_to':      paidTo,
+        'status':       'pending',
+      });
+    } catch (_) {}
+  }
+
+  /// Admin / manager approves an expense.
+  static Future<void> approveExpense(String expenseId, String approvedById) async {
+    try {
+      await _admin.from('expenses').update({
+        'status':      'approved',
+        'approved_by': approvedById,
+      }).eq('id', expenseId);
+    } catch (_) {}
+  }
+
+  /// Admin / manager deletes an expense.
+  static Future<void> deleteExpense(String expenseId) async {
+    try {
+      await _admin.from('expenses').delete().eq('id', expenseId);
+    } catch (_) {}
+  }
+
+  // ── Categories ────────────────────────────────────────────────────────────────
 
   static Future<List<Map<String, dynamic>>> fetchCategories() async {
     try {
@@ -66,23 +136,36 @@ class ExpenseRepository {
     }
   }
 
-  static Future<void> createExpense({
-    required String categoryId,
-    required double amount,
-    required String description,
-    required String recordedBy,
-    required String date,
-    String? paidTo,
-  }) async {
+  /// Admin / manager creates a new expense category.
+  static Future<bool> createCategory({required String name}) async {
     try {
-      await _client.from('expenses').insert({
-        'category_id':  categoryId,
-        'amount':       amount,
-        'description':  description,
-        'recorded_by':  recordedBy,
-        'expense_date': date,
-        'paid_to':      paidTo,
+      await _admin.from('expense_categories').insert({
+        'name':      name,
+        'is_active': true,
       });
-    } catch (_) { /* table may not exist yet */ }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Admin / manager renames an expense category.
+  static Future<bool> updateCategory({required String id, required String name}) async {
+    try {
+      await _admin.from('expense_categories').update({'name': name}).eq('id', id);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Admin / manager soft-deletes a category (sets is_active = false).
+  static Future<bool> deleteCategory(String id) async {
+    try {
+      await _admin.from('expense_categories').update({'is_active': false}).eq('id', id);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }

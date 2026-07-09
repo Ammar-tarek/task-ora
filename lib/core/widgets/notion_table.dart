@@ -137,7 +137,7 @@ class _NotionTableState extends State<NotionTable>
       child: LayoutBuilder(
         builder: (context, constraints) {
           final bool isMobile = MediaQuery.of(context).size.width < 600;
-          final double minTableWidth = isMobile ? 580.0 : 750.0;
+          final double minTableWidth = isMobile ? 680.0 : 820.0;
           final bool needsScroll = constraints.maxWidth < minTableWidth;
 
           Widget tableBody;
@@ -297,7 +297,7 @@ class _NotionTableState extends State<NotionTable>
           color: index.isEven
               ? AppColors.surfaceContainerLowest
               : AppColors.background,
-          border: const Border(
+          border: Border(
             bottom: BorderSide(color: AppColors.outlineVariant, width: 0.5),
           ),
         ),
@@ -379,7 +379,7 @@ class _NotionTableState extends State<NotionTable>
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLow,
-        border: const Border(
+        border: Border(
           bottom: BorderSide(color: AppColors.outlineVariant, width: 1),
         ),
       ),
@@ -457,12 +457,12 @@ class _NotionTableState extends State<NotionTable>
       onTap: widget.onAddRow,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(top: BorderSide(color: AppColors.outlineVariant, width: 0.5)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.add, size: 15, color: AppColors.onSurfaceVariant),
+            Icon(Icons.add, size: 15, color: AppColors.onSurfaceVariant),
             const SizedBox(width: 6),
             Text('New', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
           ],

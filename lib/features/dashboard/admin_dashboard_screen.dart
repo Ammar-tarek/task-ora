@@ -173,7 +173,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           else if (_error != null)
             SliverFillRemaining(
               child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.outlineVariant),
+                Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.outlineVariant),
                 const SizedBox(height: 12),
                 Text('Could not load data', style: AppTextStyles.labelMd),
                 const SizedBox(height: 8),
@@ -203,7 +203,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
+                      gradient: LinearGradient(
                         colors: [AppColors.primary, Color(0xFF2C2600)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -554,7 +554,7 @@ class _OverviewCard extends StatelessWidget {
                 )),
             ],
           )),
-          const Icon(Icons.chevron_right, size: 18, color: AppColors.outlineVariant),
+          Icon(Icons.chevron_right, size: 18, color: AppColors.outlineVariant),
         ]),
       ),
     );

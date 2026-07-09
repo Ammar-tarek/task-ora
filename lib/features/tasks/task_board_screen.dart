@@ -5,12 +5,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/providers/team_filter_notifier.dart';
 import '../../core/repositories/task_repository.dart';
+import '../../core/repositories/team_repository.dart';
+import '../../core/services/realtime_service.dart';
 import '../../core/models/task_model.dart';
+import '../../core/models/team_model.dart';
 import '../../core/models/profile_model.dart';
 import '../../core/utils/task_permissions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/notion_table.dart';
+import '../../core/widgets/team_filter_chip.dart';
 import 'task_detail_sheet.dart';
 
 class TaskBoardScreen extends StatefulWidget {
@@ -19,7 +24,7 @@ class TaskBoardScreen extends StatefulWidget {
   State<TaskBoardScreen> createState() => _TaskBoardScreenState();
 }
 
-enum _Sort { newest, oldest, dueDate, priorityHigh, clientAZ, titleAZ }
+enum _Sort { newest, oldest, dueDate, priorityHigh, clientAZ, titleAZ, moved }
 
 class _TaskBoardScreenState extends State<TaskBoardScreen>
     with TickerProviderStateMixin {
@@ -36,6 +41,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   TaskPermissions? _perms;
 
   final List<NotionColumn> _customColumns = [];
+  TeamFilterNotifier? _teamFilter;
+  List<TeamModel> _teams = []; // for department handoff picker + names
 
   static const _statusFilters = [
     'All', 'To Do', 'In Progress', 'Employee Done',
@@ -45,7 +52,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     'To Do':            'not_started',
     'In Progress':      'in_progress',
     'Employee Done':    'employee_done',
-    'Client Approved':  'client_approve',
+    'Client Approved':  'client_approved',
     'Client Rejected':  'client_rejected',
     'Completed':        'completed',
     'On Hold':          'on_hold',
@@ -57,7 +64,30 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   @override
   void initState() {
     super.initState();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _teamFilter = context.read<TeamFilterNotifier>()
+        ..loadTeams()
+        ..addListener(_onTeamChange);
+      _load();
+    });
+    // Live refresh when tasks change anywhere.
+    RealtimeService.instance.listen(
+        const ['tasks', 'task_assignees'], _onRealtime);
+  }
+
+  void _onRealtime() {
+    if (mounted) _load(animate: false);
+  }
+
+  @override
+  void dispose() {
+    RealtimeService.instance.unlisten(_onRealtime);
+    _teamFilter?.removeListener(_onTeamChange);
+    super.dispose();
+  }
+
+  void _onTeamChange() {
+    if (mounted) _load(animate: false);
   }
 
   // ── Derived client / assignee maps from loaded tasks ────────────────────────
@@ -84,8 +114,17 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   // ── Filtered + sorted list ───────────────────────────────────────────────────
 
+  // Tasks pending a department handoff — shown only in the Waiting List.
+  List<TaskModel> get _waiting {
+    final mine = _tasks.where((t) => t.handoffToTeamId != null).toList();
+    if (_profile?.isAdmin == true) return mine;
+    final myTeam = _profile?.teamId;
+    return mine.where((t) => t.handoffToTeamId == myTeam).toList();
+  }
+
   List<TaskModel> get _filtered {
-    var list = List<TaskModel>.of(_tasks);
+    // Exclude pending-handoff tasks — they live in the Waiting List only.
+    var list = List<TaskModel>.of(_tasks.where((t) => t.handoffToTeamId == null));
 
     // Status filter
     if (_filter != 'All') {
@@ -127,6 +166,14 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             (a.clientName ?? '').compareTo(b.clientName ?? ''));
       case _Sort.titleAZ:
         list.sort((a, b) => a.title.compareTo(b.title));
+      case _Sort.moved:
+        // Moved (handed-off) tasks first, newest among them.
+        list.sort((a, b) {
+          final am = a.handoffFromTeamId != null ? 1 : 0;
+          final bm = b.handoffFromTeamId != null ? 1 : 0;
+          if (am != bm) return bm - am;
+          return b.createdAt.compareTo(a.createdAt);
+        });
     }
 
     return list;
@@ -140,6 +187,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       case _Sort.priorityHigh: return 'Priority (high→low)';
       case _Sort.clientAZ:     return 'Client A–Z';
       case _Sort.titleAZ:      return 'Title A–Z';
+      case _Sort.moved:        return 'Moved tasks';
     }
   }
 
@@ -185,9 +233,19 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       _profile = profile;
       _perms   = profile != null ? TaskPermissions(profile) : null;
 
+      String? overrideTeamId;
+      if (profile?.isAdmin == true) {
+        overrideTeamId = context.read<TeamFilterNotifier>().selectedTeamId;
+      }
+
       final data = profile != null
-          ? await TaskRepository.fetchTasksForProfile(profile)
+          ? await TaskRepository.fetchTasksForProfile(
+              profile, overrideTeamId: overrideTeamId)
           : [];
+      // Teams list (for handoff target picker + department names).
+      if (_teams.isEmpty && profile?.isClient != true) {
+        try { _teams = await TeamRepository.fetchAllAdmin(); } catch (_) {}
+      }
       if (mounted) setState(() { _tasks = data as List<TaskModel>; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
@@ -237,11 +295,21 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
               ),
           ],
         ),
-        'status': TStatusChip(
-            label: t.statusLabel,
-            color: _statusColor(t.status)),
+        // FittedBox prevents the chip overflowing (and overlapping the next
+        // column) when the cell is narrow on a phone.
+        'status': FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: TStatusChip(
+              label: t.statusLabel,
+              color: _statusColor(t.status)),
+        ),
         if (_perms?.canSeePriority != false)
-          'priority': TPriorityBadge(priority: t.priorityLabel),
+          'priority': FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: TPriorityBadge(priority: t.priorityLabel),
+          ),
         if (_perms?.canSeeAssignees != false)
           'assignee': Row(mainAxisSize: MainAxisSize.min, children: [
             TAvatar(name: t.leadAssigneeName, size: avatarSize),
@@ -258,7 +326,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         if (_perms?.canSeeCost == true)
           'cost': Text(
             t.cost != null
-                ? '\$${t.cost!.toStringAsFixed(2)}'
+                ? 'EGP ${t.cost!.toStringAsFixed(2)}'
                 : '—',
             style: dataStyle.copyWith(color: AppColors.gold),
           ),
@@ -276,7 +344,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     switch (status) {
       case 'in_progress':     return AppColors.statusInProgress;
       case 'employee_done':   return AppColors.statusMedium;
-      case 'client_approve':  return AppColors.statusDone;
+      case 'client_approved':  return AppColors.statusDone;
       case 'client_rejected': return AppColors.error;
       case 'completed':       return AppColors.statusDone;
       case 'on_hold':         return AppColors.outline;
@@ -289,6 +357,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   void _showSortSheet() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -314,6 +383,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
               _Sort.priorityHigh: 'Priority (high → low)',
               _Sort.clientAZ:     'Client (A – Z)',
               _Sort.titleAZ:      'Title (A – Z)',
+              _Sort.moved:        'Moved tasks',
             };
             final icons = {
               _Sort.newest:       Icons.arrow_downward,
@@ -322,6 +392,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
               _Sort.priorityHigh: Icons.flag_outlined,
               _Sort.clientAZ:     Icons.business_outlined,
               _Sort.titleAZ:      Icons.sort_by_alpha,
+              _Sort.moved:        Icons.swap_horiz,
             };
             return ListTile(
               leading: Icon(icons[s], size: 20, color: AppColors.gold),
@@ -382,7 +453,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             )
           else
             ...opts.entries.map((e) => ListTile(
-              leading: const Icon(Icons.business_outlined,
+              leading: Icon(Icons.business_outlined,
                   size: 20, color: AppColors.onSurfaceVariant),
               title: Text(e.value, style: AppTextStyles.bodyMd),
               trailing: _clientId == e.key
@@ -509,7 +580,12 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
               child: const Icon(Icons.add, color: AppColors.gold),
             )
           : null,
-      body: _buildBody(),
+      body: Column(
+        children: [
+          const TeamFilterChip(),
+          Expanded(child: _buildBody()),
+        ],
+      ),
     );
   }
 
@@ -521,7 +597,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     if (_error != null) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.error_outline,
+          Icon(Icons.error_outline,
               size: 40, color: AppColors.outlineVariant),
           const SizedBox(height: 12),
           Text('Error loading tasks', style: AppTextStyles.labelMd),
@@ -530,23 +606,127 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         ]),
       );
     }
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 400),
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeIn,
-      transitionBuilder: (child, anim) => FadeTransition(
-        opacity: anim,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0.03, 0), end: Offset.zero,
-          ).animate(anim),
-          child: child,
+    final canManage = _profile?.isAdmin == true || _profile?.isManager == true;
+    final waiting = _waiting;
+    return Column(children: [
+      if (canManage && waiting.isNotEmpty)
+        _WaitingList(
+          tasks: waiting,
+          teamName: _teamName,
+          onAccept: _acceptHandoff,
+          onView: _openWaitingDetail,
+        ),
+      Expanded(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 400),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          // Align children to the top — default centers a short child and
+          // leaves a big empty gap above the table.
+          layoutBuilder: (current, previous) => Stack(
+            alignment: Alignment.topCenter,
+            children: [...previous, if (current != null) current],
+          ),
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.03, 0), end: Offset.zero,
+              ).animate(anim),
+              child: child,
+            ),
+          ),
+          child: _isTableView
+              ? _buildTableView(key: const ValueKey('table'))
+              : _buildBoardView(key: const ValueKey('board')),
         ),
       ),
-      child: _isTableView
-          ? _buildTableView(key: const ValueKey('table'))
-          : _buildBoardView(key: const ValueKey('board')),
+    ]);
+  }
+
+  String _teamName(String? teamId) {
+    if (teamId == null) return '—';
+    final t = _teams.where((t) => t.id == teamId);
+    return t.isEmpty ? 'Other dept' : t.first.name;
+  }
+
+  /// Open a waiting-list task's full details, with an Accept action inside.
+  void _openWaitingDetail(TaskModel task) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => TaskDetailSheet(
+        taskId: task.id,
+        onUpdated: () => _load(animate: false),
+        onAcceptHandoff: () => _acceptHandoff(task),
+      ),
     );
+  }
+
+  Future<void> _acceptHandoff(TaskModel task) async {
+    final myTeam = _profile?.teamId;
+    if (myTeam == null) return;
+    await TaskRepository.acceptHandoff(taskId: task.id, teamId: myTeam);
+    await _load(animate: false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Task accepted. Open it to assign your team.'),
+        backgroundColor: AppColors.statusDone,
+      ));
+    }
+  }
+
+  /// Move a task to another department. Source = task's current team (admins
+  /// can move any task; managers only their own team's tasks).
+  Future<void> _moveToDepartment(TaskModel task) async {
+    final sourceTeam = task.teamId ?? _profile?.teamId;
+    // Candidate targets: teams of a different department.
+    String? myDept;
+    for (final t in _teams) { if (t.id == sourceTeam) { myDept = t.department; break; } }
+    final targets = _teams
+        .where((t) => t.id != sourceTeam && (myDept == null || t.department != myDept))
+        .toList();
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No other department to hand off to.')));
+      return;
+    }
+    final picked = await showModalBottomSheet<TeamModel>(
+      context: context,
+      backgroundColor: AppColors.surfaceContainerLowest,
+      builder: (_) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 12),
+          Text('Move to department', style: AppTextStyles.headlineSm),
+          const SizedBox(height: 8),
+          ...targets.map((t) => ListTile(
+            leading: const Icon(Icons.apartment_outlined, color: AppColors.gold),
+            title: Text(t.department ?? t.name, style: AppTextStyles.labelMd),
+            subtitle: Text('Team: ${t.name}', style: AppTextStyles.bodySm),
+            onTap: () => Navigator.pop(context, t),
+          )),
+          const SizedBox(height: 12),
+        ]),
+      ),
+    );
+    if (picked == null || sourceTeam == null) return;
+    await TaskRepository.handoffTask(
+      taskId:      task.id,
+      fromTeamId:  sourceTeam,
+      toTeamId:    picked.id,
+      byProfileId: _profile!.id,
+    );
+    await _load(animate: false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Sent to ${picked.department ?? picked.name} — waiting for their manager.'),
+        backgroundColor: AppColors.primary,
+      ));
+    }
   }
 
   Widget _buildSortFilterBar() {
@@ -614,7 +794,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
           selected: _filter,
           onSelected: (f) => setState(() => _filter = f),
         ),
-        _buildSortFilterBar(),
+        // Sort / client / assignee filters are only useful for the admin's
+        // full view — hide for manager/employee to keep tasks near the top.
+        if (_profile?.isAdmin == true) _buildSortFilterBar(),
         NotionTable(
           columns: _columns,
           rows: _buildRows(),
@@ -669,7 +851,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       'not_started':     base.where((t) => t.status == 'not_started').toList(),
       'in_progress':     base.where((t) => t.status == 'in_progress').toList(),
       'employee_done':   base.where((t) => t.status == 'employee_done').toList(),
-      'client_approve':  base.where((t) => t.status == 'client_approve').toList(),
+      'client_approved':  base.where((t) => t.status == 'client_approved').toList(),
       'client_rejected': base.where((t) => t.status == 'client_rejected').toList(),
       'completed':       base.where((t) => t.status == 'completed').toList(),
       'on_hold':         base.where((t) => t.status == 'on_hold').toList(),
@@ -678,7 +860,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       _KanbanDef(key: 'not_started',     label: 'TO DO',            color: AppColors.statusTodo),
       _KanbanDef(key: 'in_progress',     label: 'IN PROGRESS',      color: AppColors.statusInProgress),
       _KanbanDef(key: 'employee_done',   label: 'EMPLOYEE DONE',    color: AppColors.statusMedium),
-      _KanbanDef(key: 'client_approve',  label: 'CLIENT APPROVED',  color: AppColors.statusDone),
+      _KanbanDef(key: 'client_approved',  label: 'CLIENT APPROVED',  color: AppColors.statusDone),
       _KanbanDef(key: 'client_rejected', label: 'CLIENT REJECTED',  color: AppColors.error),
       _KanbanDef(key: 'completed',       label: 'COMPLETED',        color: AppColors.statusDone),
       _KanbanDef(key: 'on_hold',         label: 'ON HOLD',          color: AppColors.outline),
@@ -686,7 +868,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     return Column(
       key: key,
       children: [
-        _buildSortFilterBar(),
+        if (_profile?.isAdmin == true) _buildSortFilterBar(),
         Expanded(
           child: ListView(
             scrollDirection: Axis.horizontal,
@@ -769,6 +951,15 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   }
 
   void _showDetailSheet(BuildContext context, String id) {
+    // Allow department handoff only for a manager on their own active team task.
+    final matches = _tasks.where((t) => t.id == id);
+    final task = matches.isEmpty ? null : matches.first;
+    final canMove = task != null &&
+        task.teamId != null &&
+        task.handoffToTeamId == null &&
+        (_profile?.isAdmin == true ||
+            (_profile?.isManager == true && task.teamId == _profile?.teamId));
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -779,6 +970,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       builder: (_) => TaskDetailSheet(
         taskId: id,
         onUpdated: () => _load(animate: false),
+        onMoveDepartment: canMove ? () => _moveToDepartment(task) : null,
       ),
     );
   }
@@ -832,7 +1024,7 @@ class _CommentsCountBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (count == 0) return Text('—', style: AppTextStyles.bodySm);
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      const Icon(Icons.comment_outlined,
+      Icon(Icons.comment_outlined,
           size: 13, color: AppColors.onSurfaceVariant),
       const SizedBox(width: 3),
       Text('$count', style: AppTextStyles.dataSm),
@@ -1081,12 +1273,12 @@ class _KanbanCard extends StatelessWidget {
               const Icon(Icons.monetization_on_outlined,
                   size: 12, color: AppColors.gold),
               const SizedBox(width: 3),
-              Text('\$${task.cost!.toStringAsFixed(0)}',
+              Text('EGP ${task.cost!.toStringAsFixed(0)}',
                   style: AppTextStyles.dataSm.copyWith(
                       color: AppColors.gold)),
               const SizedBox(width: 8),
             ],
-            const Icon(Icons.calendar_today_outlined,
+            Icon(Icons.calendar_today_outlined,
                 size: 12, color: AppColors.onSurfaceVariant),
             const SizedBox(width: 4),
             Text(task.dueDateDisplay, style: AppTextStyles.bodySm),
@@ -1257,7 +1449,7 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
                   ),
                 ),
                 const Spacer(),
-                const Icon(Icons.chevron_right,
+                Icon(Icons.chevron_right,
                     size: 18, color: AppColors.onSurfaceVariant),
               ]),
             ),
@@ -1332,6 +1524,94 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
           color: sel ? AppColors.primary : AppColors.outlineVariant,
         ),
       ),
+    );
+  }
+}
+
+// ── Waiting List (department handoff inbox) ───────────────────────────────────
+class _WaitingList extends StatelessWidget {
+  const _WaitingList({
+    required this.tasks,
+    required this.teamName,
+    required this.onAccept,
+    required this.onView,
+  });
+  final List<TaskModel> tasks;
+  final String Function(String?) teamName;
+  final Future<void> Function(TaskModel) onAccept;
+  final void Function(TaskModel) onView;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.inbox_outlined, size: 18, color: AppColors.gold),
+          const SizedBox(width: 8),
+          Text('Waiting List', style: AppTextStyles.labelMd),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+            decoration: BoxDecoration(
+              color: AppColors.gold, borderRadius: BorderRadius.circular(10)),
+            child: Text('${tasks.length}',
+                style: AppTextStyles.bodySm.copyWith(
+                    color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11)),
+          ),
+        ]),
+        const SizedBox(height: 4),
+        Text('Tasks handed to your department. Accept to assign your team.',
+            style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
+        const SizedBox(height: 10),
+        ...tasks.map((t) => InkWell(
+          onTap: () => onView(t),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.outlineVariant),
+          ),
+          child: Row(children: [
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t.title, style: AppTextStyles.labelMd,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Row(children: [
+                  Text('From: ${teamName(t.handoffFromTeamId)}',
+                      style: AppTextStyles.bodySm
+                          .copyWith(color: AppColors.onSurfaceVariant)),
+                  const SizedBox(width: 8),
+                  Text('Tap to view',
+                      style: AppTextStyles.bodySm.copyWith(
+                          color: AppColors.gold, fontSize: 11)),
+                ]),
+              ],
+            )),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: () => onAccept(t),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.statusDone,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              icon: const Icon(Icons.check, size: 16, color: Colors.white),
+              label: const Text('Accept', style: TextStyle(color: Colors.white)),
+            ),
+          ]),
+        ))),
+      ]),
     );
   }
 }

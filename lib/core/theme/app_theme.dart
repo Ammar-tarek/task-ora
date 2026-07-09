@@ -2,31 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ── Colors ────────────────────────────────────────────────────────────────────
+// Brand + status colours are compile-time constants (same in light & dark).
+// Surface / text / outline colours are MUTABLE statics that [setDarkMode]
+// swaps at runtime so every screen that references them updates instantly.
 class AppColors {
   AppColors._();
 
-  static const Color primary            = Color(0xFF000000);
+  static bool _dark = false;
+  static bool get isDark => _dark;
+
+  // ── Constant brand / status colours (identical in both modes) ──────────────
   static const Color onPrimary          = Color(0xFFFFFFFF);
-  static const Color primaryContainer   = Color(0xFF1C1B1B);
 
   static const Color gold               = Color(0xFFC9A84C);
   static const Color goldLight          = Color(0xFFFED977);
   static const Color goldDark           = Color(0xFF755B00);
 
-  static const Color background         = Color(0xFFFDF8F8);
-  static const Color surface            = Color(0xFFF1EDEC);
-  static const Color surfaceHigh        = Color(0xFFEBE7E6);
-  static const Color surfaceContainerLow   = Color(0xFFF7F3F2);
-  static const Color surfaceContainerLowest = Color(0xFFFFFFFF);
-
-  static const Color onSurface         = Color(0xFF1C1B1B);
-  static const Color onSurfaceVariant  = Color(0xFF444748);
-  static const Color outline           = Color(0xFF747878);
-  static const Color outlineVariant    = Color(0xFFC4C7C7);
-
   static const Color error             = Color(0xFFBA1A1A);
   static const Color onError           = Color(0xFFFFFFFF);
-  static const Color errorContainer    = Color(0xFFFFDAD6);
 
   static const Color secondary         = Color(0xFF755B00);
   static const Color onSecondary       = Color(0xFFFFFFFF);
@@ -41,61 +34,111 @@ class AppColors {
   static const Color statusLow       = Color(0xFF2E7D32);
   static const Color statusMedium    = Color(0xFF755B00);
   static const Color statusHigh      = Color(0xFFBA1A1A);
+
+  // ── Mutable theme-sensitive colours (swapped by [setDarkMode]) ─────────────
+  static Color primary            = const Color(0xFF000000);
+  static Color primaryContainer   = const Color(0xFF1C1B1B);
+
+  static Color background         = const Color(0xFFFDF8F8);
+  static Color surface            = const Color(0xFFF1EDEC);
+  static Color surfaceHigh        = const Color(0xFFEBE7E6);
+  static Color surfaceContainerLow    = const Color(0xFFF7F3F2);
+  static Color surfaceContainerLowest = const Color(0xFFFFFFFF);
+
+  static Color onSurface         = const Color(0xFF1C1B1B);
+  static Color onSurfaceVariant  = const Color(0xFF444748);
+  static Color outline           = const Color(0xFF747878);
+  static Color outlineVariant    = const Color(0xFFC4C7C7);
+
+  static Color errorContainer    = const Color(0xFFFFDAD6);
+
+  /// Swap the mutable palette between light and dark.
+  static void setDarkMode(bool dark) {
+    _dark = dark;
+    if (dark) {
+      primary               = const Color(0xFF2A2622);
+      primaryContainer      = const Color(0xFF35312C);
+      background            = const Color(0xFF141312);
+      surface               = const Color(0xFF201E1C);
+      surfaceHigh           = const Color(0xFF2A2725);
+      surfaceContainerLow   = const Color(0xFF1A1817);
+      surfaceContainerLowest = const Color(0xFF232120);
+      onSurface             = const Color(0xFFEDE8E5);
+      onSurfaceVariant      = const Color(0xFFB4AFAC);
+      outline               = const Color(0xFF938E8B);
+      outlineVariant        = const Color(0xFF3B3836);
+      errorContainer        = const Color(0xFF5A1A16);
+    } else {
+      primary               = const Color(0xFF000000);
+      primaryContainer      = const Color(0xFF1C1B1B);
+      background            = const Color(0xFFFDF8F8);
+      surface               = const Color(0xFFF1EDEC);
+      surfaceHigh           = const Color(0xFFEBE7E6);
+      surfaceContainerLow   = const Color(0xFFF7F3F2);
+      surfaceContainerLowest = const Color(0xFFFFFFFF);
+      onSurface             = const Color(0xFF1C1B1B);
+      onSurfaceVariant      = const Color(0xFF444748);
+      outline               = const Color(0xFF747878);
+      outlineVariant        = const Color(0xFFC4C7C7);
+      errorContainer        = const Color(0xFFFFDAD6);
+    }
+  }
 }
 
 // ── Text Styles ───────────────────────────────────────────────────────────────
 class AppTextStyles {
   AppTextStyles._();
 
-  static TextStyle displayLg = GoogleFonts.playfairDisplay(
+  // Getters (not fields) so the baked-in colour follows the active theme mode.
+  static TextStyle get displayLg => GoogleFonts.playfairDisplay(
     fontSize: 42, fontWeight: FontWeight.w700, height: 1.1,
     letterSpacing: -0.84, color: AppColors.onSurface,
   );
-  static TextStyle displayMd = GoogleFonts.playfairDisplay(
+  static TextStyle get displayMd => GoogleFonts.playfairDisplay(
     fontSize: 32, fontWeight: FontWeight.w700, height: 1.2,
     letterSpacing: -0.32, color: AppColors.onSurface,
   );
-  static TextStyle headlineLg = GoogleFonts.playfairDisplay(
+  static TextStyle get headlineLg => GoogleFonts.playfairDisplay(
     fontSize: 26, fontWeight: FontWeight.w600, height: 1.3,
     color: AppColors.onSurface,
   );
-  static TextStyle headlineMd = GoogleFonts.playfairDisplay(
+  static TextStyle get headlineMd => GoogleFonts.playfairDisplay(
     fontSize: 22, fontWeight: FontWeight.w600, height: 1.3,
     color: AppColors.onSurface,
   );
-  static TextStyle headlineSm = GoogleFonts.playfairDisplay(
+  static TextStyle get headlineSm => GoogleFonts.playfairDisplay(
     fontSize: 18, fontWeight: FontWeight.w600, height: 1.3,
     color: AppColors.onSurface,
   );
-  static TextStyle bodyLg = GoogleFonts.inter(
+  static TextStyle get bodyLg => GoogleFonts.inter(
     fontSize: 17, fontWeight: FontWeight.w400, height: 1.6,
     color: AppColors.onSurface,
   );
-  static TextStyle bodyMd = GoogleFonts.inter(
+  static TextStyle get bodyMd => GoogleFonts.inter(
     fontSize: 15, fontWeight: FontWeight.w400, height: 1.5,
     color: AppColors.onSurface,
   );
-  static TextStyle bodySm = GoogleFonts.inter(
+  static TextStyle get bodySm => GoogleFonts.inter(
     fontSize: 13, fontWeight: FontWeight.w400, height: 1.5,
     color: AppColors.onSurfaceVariant,
   );
-  static TextStyle labelCaps = GoogleFonts.inter(
+  static TextStyle get labelCaps => GoogleFonts.inter(
     fontSize: 11, fontWeight: FontWeight.w700, height: 1.2,
     letterSpacing: 1.2, color: AppColors.onSurfaceVariant,
   );
-  static TextStyle labelMd = GoogleFonts.inter(
+  static TextStyle get labelMd => GoogleFonts.inter(
     fontSize: 13, fontWeight: FontWeight.w600, height: 1.2,
     color: AppColors.onSurface,
   );
-  static TextStyle dataLg = GoogleFonts.jetBrainsMono(
+  static TextStyle get dataLg => GoogleFonts.jetBrainsMono(
     fontSize: 18, fontWeight: FontWeight.w500, height: 1.4,
     color: AppColors.onSurface,
   );
-  static TextStyle dataMd = GoogleFonts.jetBrainsMono(
+  static TextStyle get dataMd => GoogleFonts.jetBrainsMono(
     fontSize: 14, fontWeight: FontWeight.w500, height: 1.4,
     color: AppColors.onSurface,
   );
-  static TextStyle dataSm = GoogleFonts.jetBrainsMono(
+  static TextStyle get dataSm => GoogleFonts.jetBrainsMono(
     fontSize: 12, fontWeight: FontWeight.w500, height: 1.4,
     color: AppColors.onSurfaceVariant,
   );
@@ -105,11 +148,21 @@ class AppTextStyles {
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get light {
-    final base = ThemeData.light(useMaterial3: true);
+  /// Kept for backwards-compatibility — resolves to the current mode's theme.
+  static ThemeData get light => build();
+
+  /// Builds a ThemeData from the current [AppColors] palette. Call after
+  /// [AppColors.setDarkMode] so the two stay in sync.
+  static ThemeData build() {
+    final dark = AppColors.isDark;
+    final base = ThemeData(useMaterial3: true,
+        brightness: dark ? Brightness.dark : Brightness.light);
+    // Nav highlight: primary reads well on white, gold reads well on dark.
+    final navSelected = dark ? AppColors.gold : AppColors.primary;
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.background,
-      colorScheme: const ColorScheme.light(
+      colorScheme: (dark ? const ColorScheme.dark() : const ColorScheme.light()).copyWith(
+        brightness: dark ? Brightness.dark : Brightness.light,
         primary: AppColors.primary,
         onPrimary: AppColors.onPrimary,
         primaryContainer: AppColors.primaryContainer,
@@ -131,7 +184,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 1,
         shadowColor: AppColors.outline.withValues(alpha: 0.1),
-        iconTheme: const IconThemeData(color: AppColors.onSurface),
+        iconTheme: IconThemeData(color: AppColors.onSurface),
         titleTextStyle: AppTextStyles.headlineSm.copyWith(fontSize: 19),
         centerTitle: false,
       ),
@@ -140,7 +193,7 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: AppColors.outlineVariant, width: 1),
+          side: BorderSide(color: AppColors.outlineVariant, width: 1),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -168,11 +221,11 @@ class AppTheme {
         fillColor: AppColors.surfaceContainerLowest,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: const BorderSide(color: AppColors.outlineVariant),
+          borderSide: BorderSide(color: AppColors.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: const BorderSide(color: AppColors.outlineVariant),
+          borderSide: BorderSide(color: AppColors.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
@@ -188,14 +241,14 @@ class AppTheme {
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       ),
-      dividerTheme: const DividerThemeData(
+      dividerTheme: DividerThemeData(
         color: AppColors.outlineVariant,
         thickness: 1,
         space: 0,
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.surfaceContainerLowest,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: navSelected,
         unselectedItemColor: AppColors.onSurfaceVariant,
         selectedLabelStyle: AppTextStyles.bodySm.copyWith(
           fontSize: 11, fontWeight: FontWeight.w600,

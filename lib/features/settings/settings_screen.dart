@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
+import '../../core/providers/theme_controller.dart';
 import '../../core/services/n8n_service.dart';
 import '../../core/services/wifi_attendance_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -17,8 +20,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _pushNotifs  = true;
   bool _emailDigest = false;
-  bool _darkMode    = false;
-  String _language  = 'English';
 
   // n8n integration
   final _webhookCtrl = TextEditingController();
@@ -39,7 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) _webhookCtrl.text = url;
     });
     WifiAttendanceService.getCompanySsid().then((ssid) {
-      if (mounted && ssid != null) _wifiSsidCtrl.text = ssid;
+      if (mounted && ssid != null) setState(() => _wifiSsidCtrl.text = ssid);
     });
     WifiAttendanceService.isEnabled().then((v) {
       if (mounted) setState(() => _wifiEnabled = v);
@@ -77,15 +78,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _saveWifiSettings() async {
     setState(() { _savingWifi = true; _wifiStatus = null; });
-    await WifiAttendanceService.setCompanySsid(_wifiSsidCtrl.text.trim());
-    await WifiAttendanceService.setEnabled(_wifiEnabled);
-    if (mounted) setState(() { _savingWifi = false; _wifiStatus = 'Saved'; });
+    final adminId = context.read<AuthNotifier>().profile?.id;
+    try {
+      await WifiAttendanceService.setCompanySsid(
+        _wifiSsidCtrl.text.trim(), updatedBy: adminId);
+      await WifiAttendanceService.setEnabled(_wifiEnabled, updatedBy: adminId);
+      if (mounted) setState(() { _savingWifi = false; _wifiStatus = 'Saved'; });
+      // Re-run detection immediately so the change takes effect now.
+      WifiAttendanceService.instance.checkNow();
+    } catch (e) {
+      if (mounted) setState(() {
+        _savingWifi = false;
+        _wifiStatus = 'Could not save — check your connection';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final profile   = context.watch<AuthNotifier>().profile;
     final isManager = profile?.isAdminOrManager == true;
+    final isAdmin   = profile?.isAdmin == true;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -114,10 +127,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: AppTextStyles.bodySm.copyWith(color: Colors.white38),
                 ),
               ])),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, color: AppColors.gold),
-                onPressed: () {},
-              ),
             ]),
           ),
 
@@ -128,8 +137,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.people_outline, title: 'User Management',
               onTap: () => context.push('/users'),
             ),
+            // Roles & Privileges — admins manage everyone & change roles;
+            // managers manage privileges for their own team.
             _SettingsTile(
-              icon: Icons.manage_accounts_outlined, title: 'Roles & Privileges',
+              icon: Icons.manage_accounts_outlined,
+              title: isAdmin ? 'Roles & Privileges' : 'Team Privileges',
               onTap: () => context.push('/roles'),
             ),
             _SettingsTile(
@@ -139,8 +151,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Divider(height: 1),
           ],
 
-          // ── Attendance Settings (admin/manager) ───────────────────────────
-          if (isManager) ...[
+          // ── Attendance Settings (all roles that get tracked) ─────────────
+          if (profile?.isClient != true) ...[
             const _SectionTitle(title: 'ATTENDANCE'),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -150,50 +162,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(width: 10),
                   Text('WiFi Auto-Attendance', style: AppTextStyles.bodyMd),
                   const Spacer(),
+                  // Toggle is interactive for admins only; others see status.
                   Switch(
                     value: _wifiEnabled,
-                    onChanged: (v) => setState(() => _wifiEnabled = v),
+                    onChanged: isAdmin
+                        ? (v) => setState(() => _wifiEnabled = v)
+                        : null,
                     activeColor: AppColors.gold,
                     activeTrackColor: AppColors.primary,
                   ),
                 ]),
                 Text(
-                  'When enabled, employees are automatically checked in when '
-                  'their device connects to the company WiFi and checked out '
-                  'when they disconnect. Hours accumulate across reconnections.',
+                  isAdmin
+                      ? 'When enabled, employees and managers are automatically '
+                        'checked in when their device connects to the company '
+                        'WiFi and checked out when they disconnect.'
+                      : 'When you connect to the company WiFi, your attendance '
+                        'is recorded automatically and sent for approval. '
+                        'These settings are managed by your administrator.',
                   style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _wifiSsidCtrl,
-                  enabled: _wifiEnabled,
-                  decoration: InputDecoration(
-                    labelText: 'Company WiFi Name (SSID)',
-                    hintText: 'e.g. CompanyOffice_5G',
-                    hintStyle: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
-                    prefixIcon: const Icon(Icons.wifi_outlined, color: AppColors.gold, size: 18),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.outlineVariant)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.outlineVariant)),
-                    disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: AppColors.outlineVariant.withValues(alpha: 0.4))),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+
+                // Admin: editable SSID field. Others: read-only display.
+                if (isAdmin)
+                  TextField(
+                    controller: _wifiSsidCtrl,
+                    enabled: _wifiEnabled,
+                    decoration: InputDecoration(
+                      labelText: 'Company WiFi Name (SSID)',
+                      hintText: 'e.g. CompanyOffice_5G',
+                      hintStyle: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+                      prefixIcon: const Icon(Icons.wifi_outlined, color: AppColors.gold, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: AppColors.outlineVariant)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: AppColors.outlineVariant)),
+                      disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: AppColors.outlineVariant.withValues(alpha: 0.4))),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerLowest,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.outlineVariant),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.wifi_outlined, color: AppColors.gold, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Company WiFi Name (SSID)',
+                            style: AppTextStyles.labelCaps.copyWith(
+                              color: AppColors.onSurfaceVariant, fontSize: 10)),
+                          const SizedBox(height: 2),
+                          Text(
+                            _wifiSsidCtrl.text.isEmpty
+                                ? 'Not set by administrator yet'
+                                : _wifiSsidCtrl.text,
+                            style: AppTextStyles.bodyMd.copyWith(
+                              color: _wifiSsidCtrl.text.isEmpty
+                                  ? AppColors.onSurfaceVariant
+                                  : AppColors.onSurface),
+                          ),
+                        ],
+                      )),
+                      Icon(Icons.lock_outline, size: 16, color: AppColors.onSurfaceVariant),
+                    ]),
                   ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _savingWifi ? null : _saveWifiSettings,
-                    icon: _savingWifi
-                        ? const SizedBox(width: 14, height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.save_outlined, size: 16, color: Colors.white),
-                    label: const Text('Save Attendance Settings'),
+
+                // Save button — admin only.
+                if (isAdmin) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _savingWifi ? null : _saveWifiSettings,
+                      icon: _savingWifi
+                          ? const SizedBox(width: 14, height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.save_outlined, size: 16, color: Colors.white),
+                      label: const Text('Save Attendance Settings'),
+                    ),
                   ),
-                ),
-                if (_wifiStatus != null) ...[
+                ],
+                if (isAdmin && _wifiStatus != null) ...[
                   const SizedBox(height: 8),
                   Row(children: [
                     Icon(
@@ -262,9 +321,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     hintStyle: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
                     prefixIcon: const Icon(Icons.link, color: AppColors.gold, size: 18),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.outlineVariant)),
+                        borderSide: BorderSide(color: AppColors.outlineVariant)),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.outlineVariant)),
+                        borderSide: BorderSide(color: AppColors.outlineVariant)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
                 ),
@@ -274,10 +333,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _testingWebhook ? null : _testWebhook,
                       icon: _testingWebhook
-                          ? const SizedBox(width: 14, height: 14,
+                          ? SizedBox(width: 14, height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2,
                                   color: AppColors.onSurfaceVariant))
-                          : const Icon(Icons.send_outlined, size: 16, color: AppColors.onSurfaceVariant),
+                          : Icon(Icons.send_outlined, size: 16, color: AppColors.onSurfaceVariant),
                       label: Text('Test', style: AppTextStyles.bodySm
                           .copyWith(color: AppColors.onSurfaceVariant)),
                     ),
@@ -334,28 +393,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
             activeColor: AppColors.gold, activeTrackColor: AppColors.primary,
           ),
           SwitchListTile(
-            value: _darkMode,
-            onChanged: (v) => setState(() => _darkMode = v),
+            value: context.watch<ThemeController>().isDark,
+            onChanged: (v) => context.read<ThemeController>().setDark(v),
             title: Text('Dark Mode', style: AppTextStyles.bodyMd),
-            subtitle: Text('Switch to dark theme (coming soon)', style: AppTextStyles.bodySm),
+            subtitle: Text('Switch between light and dark theme', style: AppTextStyles.bodySm),
             secondary: const Icon(Icons.dark_mode_outlined, color: AppColors.gold),
             activeColor: AppColors.gold, activeTrackColor: AppColors.primary,
           ),
           ListTile(
             leading: const Icon(Icons.language, color: AppColors.gold),
-            title: Text('Language', style: AppTextStyles.bodyMd),
-            subtitle: Text(_language, style: AppTextStyles.bodySm),
-            trailing: const Icon(Icons.chevron_right, color: AppColors.onSurfaceVariant),
+            title: Text(S.t('language'), style: AppTextStyles.bodyMd),
+            subtitle: Text(
+              context.watch<LocaleController>().isArabic ? 'العربية' : 'English',
+              style: AppTextStyles.bodySm,
+            ),
+            trailing: Icon(Icons.chevron_right, color: AppColors.onSurfaceVariant),
             onTap: () => showModalBottomSheet(
               context: context,
               builder: (_) => Column(mainAxisSize: MainAxisSize.min, children: [
                 const SizedBox(height: 16),
-                Text('Select Language', style: AppTextStyles.headlineSm),
+                Text(S.t('language'), style: AppTextStyles.headlineSm),
                 const Divider(),
-                ...['English', 'Arabic'].map((l) => ListTile(
-                  title: Text(l, style: AppTextStyles.bodyMd),
-                  trailing: _language == l ? const Icon(Icons.check, color: AppColors.gold) : null,
-                  onTap: () { setState(() => _language = l); Navigator.pop(context); },
+                ...[('en', 'English'), ('ar', 'العربية')].map((l) => ListTile(
+                  title: Text(l.$2, style: AppTextStyles.bodyMd),
+                  trailing: context.read<LocaleController>().locale.languageCode == l.$1
+                      ? const Icon(Icons.check, color: AppColors.gold)
+                      : null,
+                  onTap: () {
+                    context.read<LocaleController>().setLanguage(l.$1);
+                    Navigator.pop(context);
+                  },
                 )),
                 const SizedBox(height: 16),
               ]),
@@ -417,7 +484,7 @@ class _SettingsTile extends StatelessWidget {
     leading: Icon(icon, color: AppColors.gold),
     title: Text(title, style: AppTextStyles.bodyMd),
     subtitle: subtitle != null ? Text(subtitle!, style: AppTextStyles.bodySm) : null,
-    trailing: onTap != null ? const Icon(Icons.chevron_right, color: AppColors.onSurfaceVariant) : null,
+    trailing: onTap != null ? Icon(Icons.chevron_right, color: AppColors.onSurfaceVariant) : null,
     onTap: onTap,
   );
 }

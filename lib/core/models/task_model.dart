@@ -1,6 +1,8 @@
 // lib/core/models/task_model.dart
 // Matches public.tasks table + joined assignees, comments, edit logs.
 
+import '../utils/app_time.dart';
+
 class TaskModel {
   final String id;
   final String title;
@@ -8,9 +10,11 @@ class TaskModel {
   final String? clientId;
   final String? clientName;
   final String? teamId;
+  final String? handoffToTeamId;   // pending handoff → target dept manager
+  final String? handoffFromTeamId; // source dept
   final String? parentTaskId;
   final String createdBy;
-  final String status;       // 'not_started' | 'in_progress' | 'employee_done' | 'client_approve' | 'client_rejected' | 'completed' | 'on_hold'
+  final String status;       // 'not_started' | 'in_progress' | 'employee_done' | 'client_approved' | 'client_rejected' | 'completed' | 'on_hold'
   final String priority;     // 'low' | 'medium' | 'high' | 'critical'
   final String? dueDate;
   final double? cost;
@@ -29,6 +33,8 @@ class TaskModel {
     this.clientId,
     this.clientName,
     this.teamId,
+    this.handoffToTeamId,
+    this.handoffFromTeamId,
     this.parentTaskId,
     required this.createdBy,
     required this.status,
@@ -55,6 +61,8 @@ class TaskModel {
       clientId:             m['client_id'] as String?,
       clientName:           (m['client'] as Map<String, dynamic>?)?['company_name'] as String?,
       teamId:               m['team_id'] as String?,
+      handoffToTeamId:      m['handoff_to_team_id'] as String?,
+      handoffFromTeamId:    m['handoff_from_team_id'] as String?,
       parentTaskId:         m['parent_task_id'] as String?,
       createdBy:            m['created_by'] as String? ?? '',
       status:               m['status'] as String? ?? 'not_started',
@@ -82,7 +90,7 @@ class TaskModel {
       case 'not_started':     return 'To Do';
       case 'in_progress':     return 'In Progress';
       case 'employee_done':   return 'Employee Done';
-      case 'client_approve':  return 'Client Approved';
+      case 'client_approved':  return 'Client Approved';
       case 'client_rejected': return 'Client Rejected';
       case 'completed':       return 'Completed';
       case 'on_hold':         return 'On Hold';
@@ -103,7 +111,7 @@ class TaskModel {
   String get dueDateDisplay {
     if (dueDate == null) return '—';
     try {
-      final dt = DateTime.parse(dueDate!);
+      final dt = AppTime.cairo(DateTime.parse(dueDate!));
       const months = ['Jan','Feb','Mar','Apr','May','Jun',
                       'Jul','Aug','Sep','Oct','Nov','Dec'];
       return '${months[dt.month - 1]} ${dt.day}';
@@ -123,7 +131,9 @@ class TaskModel {
   }) {
     return TaskModel(
       id: id, title: title, description: description,
-      clientId: clientId, clientName: clientName, teamId: teamId, parentTaskId: parentTaskId,
+      clientId: clientId, clientName: clientName, teamId: teamId,
+      handoffToTeamId: handoffToTeamId, handoffFromTeamId: handoffFromTeamId,
+      parentTaskId: parentTaskId,
       createdBy: createdBy,
       status: status ?? this.status,
       priority: priority,
@@ -190,11 +200,11 @@ class TaskComment {
 
   String get timeDisplay {
     try {
-      final dt = DateTime.parse(createdAt).toLocal();
+      final dt = AppTime.cairo(DateTime.parse(createdAt));
       const months = ['Jan','Feb','Mar','Apr','May','Jun',
                       'Jul','Aug','Sep','Oct','Nov','Dec'];
       return '${months[dt.month - 1]} ${dt.day}, '
-          '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+          '${AppTime.hm(dt)}';
     } catch (_) {
       return createdAt;
     }
@@ -217,24 +227,26 @@ class TaskEditLog {
   });
 
   factory TaskEditLog.fromMap(Map<String, dynamic> m) {
-    final editor = m['editor'] as Map<String, dynamic>?;
+    // Supports both legacy task_edit_logs and current task_audit_log schemas.
+    final editor = (m['editor'] ?? m['actor']) as Map<String, dynamic>?;
     return TaskEditLog(
       id:         m['id'] as String? ?? '',
       editorName: editor?['full_name'] as String? ??
                   m['editor_name'] as String? ?? 'Unknown',
       editedAt:   m['edited_at'] as String? ??
                   m['created_at'] as String? ?? '',
-      summary:    m['summary'] as String?,
+      summary:    m['summary'] as String? ??
+                  m['notes'] as String? ?? m['action'] as String?,
     );
   }
 
   String get timeDisplay {
     try {
-      final dt = DateTime.parse(editedAt).toLocal();
+      final dt = AppTime.cairo(DateTime.parse(editedAt));
       const months = ['Jan','Feb','Mar','Apr','May','Jun',
                       'Jul','Aug','Sep','Oct','Nov','Dec'];
       return '${months[dt.month - 1]} ${dt.day}, '
-          '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+          '${AppTime.hm(dt)}';
     } catch (_) {
       return editedAt;
     }

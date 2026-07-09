@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/repositories/notification_repository.dart';
+import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/app_time.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -18,7 +20,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _loading = true;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+    RealtimeService.instance.listen(const ['notifications'], _onRealtime);
+  }
+
+  void _onRealtime() { if (mounted) _load(); }
+
+  @override
+  void dispose() {
+    RealtimeService.instance.unlisten(_onRealtime);
+    super.dispose();
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -59,7 +73,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           : _notifications.isEmpty
               ? Center(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.notifications_none_outlined,
+                    Icon(Icons.notifications_none_outlined,
                       size: 64, color: AppColors.outlineVariant),
                     const SizedBox(height: 16),
                     Text('No notifications', style: AppTextStyles.labelMd),
@@ -100,7 +114,7 @@ class _NotifCard extends StatelessWidget {
 
   String get _timeAgo {
     try {
-      final dt   = DateTime.parse(notif.createdAt).toLocal();
+      final dt   = AppTime.cairo(DateTime.parse(notif.createdAt));
       final diff = DateTime.now().difference(dt);
       if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
       if (diff.inHours < 24)   return '${diff.inHours}h ago';

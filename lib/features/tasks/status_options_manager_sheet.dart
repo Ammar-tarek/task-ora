@@ -157,7 +157,7 @@ class _StatusOptionsManagerSheetState
                 )
               else
                 Row(children: [
-                  const Icon(Icons.lock_outline,
+                  Icon(Icons.lock_outline,
                       size: 14, color: AppColors.outlineVariant),
                   const SizedBox(width: 6),
                   Text(initialLabel,
@@ -247,7 +247,7 @@ class _StatusOptionsManagerSheetState
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.78,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

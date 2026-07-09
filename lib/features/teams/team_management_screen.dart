@@ -424,7 +424,7 @@ class _TeamCard extends StatelessWidget {
                 ),
               ),
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: AppColors.onSurfaceVariant, size: 20),
+                icon: Icon(Icons.more_vert, color: AppColors.onSurfaceVariant, size: 20),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 itemBuilder: (_) => [
                   const PopupMenuItem(
@@ -468,7 +468,7 @@ class _TeamCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
               child: Row(children: [
-                const Icon(Icons.notes_outlined, size: 14, color: AppColors.onSurfaceVariant),
+                Icon(Icons.notes_outlined, size: 14, color: AppColors.onSurfaceVariant),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(

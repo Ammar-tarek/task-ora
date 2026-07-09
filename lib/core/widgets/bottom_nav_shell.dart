@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../auth/auth_notifier.dart';
+import '../l10n/app_strings.dart';
 import '../theme/app_theme.dart';
 
 class BottomNavShell extends StatelessWidget {
@@ -10,31 +11,32 @@ class BottomNavShell extends StatelessWidget {
   final StatefulNavigationShell shell;
 
   // All 5 items in branch order (matches StatefulShellRoute branches 0-4).
-  static const _allItems = [
+  // Built per-frame so labels follow the active language.
+  static List<BottomNavigationBarItem> get _allItems => [
     BottomNavigationBarItem(
-      icon: Icon(Icons.dashboard_outlined),
-      activeIcon: Icon(Icons.dashboard),
-      label: 'Dashboard',
+      icon: const Icon(Icons.dashboard_outlined),
+      activeIcon: const Icon(Icons.dashboard),
+      label: S.t('dashboard'),
     ),
     BottomNavigationBarItem(
-      icon: Icon(Icons.check_box_outlined),
-      activeIcon: Icon(Icons.check_box),
-      label: 'Tasks',
+      icon: const Icon(Icons.check_box_outlined),
+      activeIcon: const Icon(Icons.check_box),
+      label: S.t('tasks'),
     ),
     BottomNavigationBarItem(
-      icon: Icon(Icons.calendar_month_outlined),
-      activeIcon: Icon(Icons.calendar_month),
-      label: 'Calendar',
+      icon: const Icon(Icons.calendar_month_outlined),
+      activeIcon: const Icon(Icons.calendar_month),
+      label: S.t('calendar'),
     ),
     BottomNavigationBarItem(
-      icon: Icon(Icons.account_balance_wallet_outlined),
-      activeIcon: Icon(Icons.account_balance_wallet),
-      label: 'Finance',
+      icon: const Icon(Icons.account_balance_wallet_outlined),
+      activeIcon: const Icon(Icons.account_balance_wallet),
+      label: S.t('finance'),
     ),
     BottomNavigationBarItem(
-      icon: Icon(Icons.settings_outlined),
-      activeIcon: Icon(Icons.settings),
-      label: 'Settings',
+      icon: const Icon(Icons.settings_outlined),
+      activeIcon: const Icon(Icons.settings),
+      label: S.t('settings'),
     ),
   ];
 

@@ -23,11 +23,18 @@ import 'status_options_manager_sheet.dart';
 class TaskDetailSheet extends StatefulWidget {
   final String taskId;
   final VoidCallback? onUpdated;
+  /// When set, shows a "Move to department" action (source manager only).
+  final VoidCallback? onMoveDepartment;
+  /// When set, shows an "Accept into my department" action (target manager,
+  /// task still in the Waiting List).
+  final VoidCallback? onAcceptHandoff;
 
   const TaskDetailSheet({
     super.key,
     required this.taskId,
     this.onUpdated,
+    this.onMoveDepartment,
+    this.onAcceptHandoff,
   });
 
   @override
@@ -121,17 +128,30 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         _clients = await ClientRepository.fetchClients();
       }
 
-      // Assignee picker — team members
+      // Assignee picker — members of the TASK's team (not the viewer's).
+      // Admin editing a Marketing task must see Marketing people.
       if (_perms.canEditFull) {
         final currentProfile = context.read<AuthNotifier>().profile;
         if (currentProfile != null) {
-          final myTeams = await TeamRepository.fetchByLeadId(currentProfile.id);
-          final teamId  = myTeams.isNotEmpty
-              ? myTeams.first.id : currentProfile.teamId;
-          if (teamId != null) {
-            _allEmployees = await TeamRepository.fetchMembers(teamId);
+          String? teamId = task.teamId;
+          if (teamId == null) {
+            // No team on the task yet — fall back to the viewer's team.
+            final myTeams =
+                await TeamRepository.fetchByLeadId(currentProfile.id);
+            teamId = myTeams.isNotEmpty
+                ? myTeams.first.id
+                : currentProfile.teamId;
           }
-          if (!_allEmployees.any((e) => e.id == currentProfile.id)) {
+          if (teamId != null) {
+            _allEmployees = await TeamRepository.fetchMembersAdmin(teamId);
+          } else if (currentProfile.isAdmin) {
+            // Admin + teamless task → offer all active staff.
+            _allEmployees = await TeamRepository.fetchAllStaffAdmin();
+          }
+          // Clients can never be assignees.
+          _allEmployees.removeWhere((e) => e.isClient);
+          if (!currentProfile.isClient &&
+              !_allEmployees.any((e) => e.id == currentProfile.id)) {
             _allEmployees.insert(0, currentProfile);
           }
         }
@@ -419,50 +439,54 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.92,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: _loading
-          ? const SizedBox(
-              height: 250,
-              child: Center(
-                child: CircularProgressIndicator(color: AppColors.gold),
-              ),
-            )
-          : _error != null
-              ? SizedBox(
-                  height: 250,
-                  child: Center(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.error_outline,
-                          size: 40, color: AppColors.error),
-                      const SizedBox(height: 12),
-                      Text(_error!, style: AppTextStyles.labelMd),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                          onPressed: _load, child: const Text('Retry')),
-                    ]),
-                  ),
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildHandle(),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.fromLTRB(
-                            20, 0, 20, 20 + bottomInset),
-                        child: _buildBody(),
-                      ),
-                    ),
-                    _buildActions(),
-                  ],
+    // Mirror the create-task sheet: content-height sheet that scrolls freely.
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: _loading
+            ? const SizedBox(
+                height: 250,
+                child: Center(
+                  child: CircularProgressIndicator(color: AppColors.gold),
                 ),
+              )
+            : _error != null
+                ? SizedBox(
+                    height: 250,
+                    child: Center(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.error_outline,
+                            size: 40, color: AppColors.error),
+                        const SizedBox(height: 12),
+                        Text(_error!, style: AppTextStyles.labelMd),
+                        const SizedBox(height: 12),
+                        ElevatedButton(
+                            onPressed: _load, child: const Text('Retry')),
+                      ]),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildHandle(),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                          child: _buildBody(),
+                        ),
+                        _buildActions(),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
+      ),
     );
   }
 
@@ -529,7 +553,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               Text('PRICE', style: AppTextStyles.labelCaps),
               const SizedBox(height: 2),
               Text(
-                '\$${_task!.cost!.toStringAsFixed(2)}',
+                'EGP ${_task!.cost!.toStringAsFixed(2)}',
                 style: AppTextStyles.headlineSm.copyWith(
                   color: AppColors.gold, fontWeight: FontWeight.w700,
                 ),
@@ -813,7 +837,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         _SectionLabel('UPDATE STATUS'),
         const Spacer(),
         TextButton.icon(
-          icon: const Icon(Icons.info_outline, size: 14,
+          icon: Icon(Icons.info_outline, size: 14,
               color: AppColors.outlineVariant),
           label: Text('View Options',
               style: AppTextStyles.bodySm.copyWith(
@@ -964,7 +988,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Row(children: [
-              const Icon(Icons.edit_note_rounded,
+              Icon(Icons.edit_note_rounded,
                   size: 16, color: AppColors.onSurfaceVariant),
               const SizedBox(width: 8),
               Expanded(
@@ -1033,25 +1057,61 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     // Admin / Manager — delete + cancel + save
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-      child: Row(children: [
-        OutlinedButton.icon(
-          onPressed: busy ? null : _delete,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.error,
-            side: const BorderSide(color: AppColors.error),
+      child: Column(children: [
+        if (widget.onAcceptHandoff != null) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: busy ? null : () {
+                Navigator.pop(context);
+                widget.onAcceptHandoff!();
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.statusDone),
+              icon: const Icon(Icons.check, size: 18, color: Colors.white),
+              label: const Text('Accept into my department',
+                  style: TextStyle(color: Colors.white)),
+            ),
           ),
-          icon: _deleting ? _Spinner(color: AppColors.error)
-              : const Icon(Icons.delete_outline, size: 18),
-          label: const Text('Delete'),
+          const SizedBox(height: 12),
+        ],
+        if (widget.onMoveDepartment != null) ...[
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: busy ? null : () {
+                Navigator.pop(context);
+                widget.onMoveDepartment!();
+              },
+              icon: const Icon(Icons.swap_horiz, size: 18, color: AppColors.gold),
+              label: const Text('Move to another department'),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        Row(children: [
+        // Compact icon-only delete — leaves room for Cancel + Save.
+        SizedBox(
+          width: 48,
+          child: OutlinedButton(
+            onPressed: busy ? null : _delete,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.error,
+              side: const BorderSide(color: AppColors.error),
+              padding: EdgeInsets.zero,
+            ),
+            child: _deleting
+                ? _Spinner(color: AppColors.error)
+                : const Icon(Icons.delete_outline, size: 20),
+          ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         Expanded(
           child: OutlinedButton(
             onPressed: busy ? null : () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         Expanded(
           flex: 2,
           child: ElevatedButton(
@@ -1059,6 +1119,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             child: _saving ? _Spinner() : const Text('Save Changes'),
           ),
         ),
+        ]),
       ]),
     );
   }
@@ -1143,7 +1204,7 @@ class _CommentTile extends StatelessWidget {
               style: AppTextStyles.labelMd.copyWith(fontSize: 13)),
           const Spacer(),
           if (comment.isInternal)
-            const Icon(Icons.lock_outline,
+            Icon(Icons.lock_outline,
                 size: 12, color: AppColors.onSurfaceVariant),
           const SizedBox(width: 4),
           Text(comment.timeDisplay, style: AppTextStyles.dataSm),
@@ -1200,7 +1261,7 @@ class _DatePickerRow extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          const Icon(Icons.chevron_right,
+          Icon(Icons.chevron_right,
               size: 18, color: AppColors.onSurfaceVariant),
         ]),
       ),

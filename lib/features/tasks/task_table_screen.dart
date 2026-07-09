@@ -5,12 +5,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/providers/team_filter_notifier.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/models/task_model.dart';
 import '../../core/models/profile_model.dart';
 import '../../core/utils/task_permissions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/notion_table.dart';
+import '../../core/widgets/team_filter_chip.dart';
 import 'task_detail_sheet.dart';
 
 class TaskTableScreen extends StatefulWidget {
@@ -28,6 +30,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
 
   ProfileModel? _profile;
   TaskPermissions? _perms;
+  TeamFilterNotifier? _teamFilter;
 
   late AnimationController _pageAnim;
   late Animation<double> _pageFade;
@@ -41,7 +44,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
     'To Do':            'not_started',
     'In Progress':      'in_progress',
     'Employee Done':    'employee_done',
-    'Client Approved':  'client_approve',
+    'Client Approved':  'client_approved',
     'Client Rejected':  'client_rejected',
     'Completed':        'completed',
     'On Hold':          'on_hold',
@@ -59,13 +62,23 @@ class _TaskTableScreenState extends State<TaskTableScreen>
     _pageSlide = Tween<Offset>(
       begin: const Offset(0, 0.03), end: Offset.zero,
     ).animate(CurvedAnimation(parent: _pageAnim, curve: Curves.easeOut));
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _teamFilter = context.read<TeamFilterNotifier>()
+        ..loadTeams()
+        ..addListener(_onTeamChange);
+      _load();
+    });
   }
 
   @override
   void dispose() {
+    _teamFilter?.removeListener(_onTeamChange);
     _pageAnim.dispose();
     super.dispose();
+  }
+
+  void _onTeamChange() {
+    if (mounted) _load(animate: false);
   }
 
   List<TaskModel> get _filtered {
@@ -115,8 +128,14 @@ class _TaskTableScreenState extends State<TaskTableScreen>
       _profile = profile;
       _perms   = profile != null ? TaskPermissions(profile) : null;
 
+      String? overrideTeamId;
+      if (profile?.isAdmin == true) {
+        overrideTeamId = context.read<TeamFilterNotifier>().selectedTeamId;
+      }
+
       final data = profile != null
-          ? await TaskRepository.fetchTasksForProfile(profile)
+          ? await TaskRepository.fetchTasksForProfile(
+              profile, overrideTeamId: overrideTeamId)
           : <TaskModel>[];
       if (mounted) {
         setState(() { _tasks = data; _loading = false; });
@@ -187,7 +206,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
         if (_perms?.canSeeCost == true)
           'cost': Text(
             t.cost != null
-                ? '\$${t.cost!.toStringAsFixed(2)}'
+                ? 'EGP ${t.cost!.toStringAsFixed(2)}'
                 : '—',
             style: dataStyle.copyWith(color: AppColors.gold),
           ),
@@ -210,7 +229,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
     switch (status) {
       case 'in_progress':     return AppColors.statusInProgress;
       case 'employee_done':   return AppColors.statusMedium;
-      case 'client_approve':  return AppColors.statusDone;
+      case 'client_approved':  return AppColors.statusDone;
       case 'client_rejected': return AppColors.error;
       case 'completed':       return AppColors.statusDone;
       case 'on_hold':         return AppColors.outline;
@@ -231,23 +250,27 @@ class _TaskTableScreenState extends State<TaskTableScreen>
           const SizedBox(width: 4),
         ],
       ),
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.gold))
-          : _error != null
-              ? Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.error_outline,
-                        size: 40, color: AppColors.outlineVariant),
-                    const SizedBox(height: 12),
-                    Text('Error loading tasks',
-                        style: AppTextStyles.labelMd),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
-                        onPressed: _load, child: const Text('Retry')),
-                  ]),
-                )
-              : FadeTransition(
+      body: Column(
+        children: [
+          const TeamFilterChip(),
+          Expanded(
+            child: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppColors.gold))
+              : _error != null
+                  ? Center(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.error_outline,
+                            size: 40, color: AppColors.outlineVariant),
+                        const SizedBox(height: 12),
+                        Text('Error loading tasks',
+                            style: AppTextStyles.labelMd),
+                        const SizedBox(height: 8),
+                        ElevatedButton(
+                            onPressed: _load, child: const Text('Retry')),
+                      ]),
+                    )
+                  : FadeTransition(
                   opacity: _pageFade,
                   child: SlideTransition(
                     position: _pageSlide,
@@ -325,6 +348,9 @@ class _TaskTableScreenState extends State<TaskTableScreen>
                     ),
                   ),
                 ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -354,7 +380,7 @@ class _CommentsCountBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (count == 0) return Text('—', style: AppTextStyles.bodySm);
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      const Icon(Icons.comment_outlined,
+      Icon(Icons.comment_outlined,
           size: 13, color: AppColors.onSurfaceVariant),
       const SizedBox(width: 3),
       Text('$count', style: AppTextStyles.dataSm),

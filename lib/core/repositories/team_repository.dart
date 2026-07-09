@@ -9,8 +9,33 @@ import '../services/supabase_service.dart';
 
 class TeamRepository {
   static final _client = SupabaseService.client;
+  static final _admin  = SupabaseService.adminClient;
 
   // ── Teams ──────────────────────────────────────────────────────────────────
+
+  /// All teams bypassing RLS — needed where a manager must see OTHER teams
+  /// (e.g. the department-handoff picker). Managers' RLS limits them to their
+  /// own team, so the normal [fetchAll] would return only one team.
+  static Future<List<TeamModel>> fetchAllAdmin({bool activeOnly = false}) async {
+    try {
+      var query = _admin.from('teams').select();
+      if (activeOnly) query = query.eq('is_active', true);
+      final data = await query.order('name');
+      return (data as List).map((m) => TeamModel.fromMap(m)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Fetch a single team by id.
+  static Future<TeamModel?> fetchById(String id) async {
+    try {
+      final data = await _client.from('teams').select().eq('id', id).single();
+      return TeamModel.fromMap(data);
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Fetch all teams ordered by name. Includes inactive teams for admin view.
   static Future<List<TeamModel>> fetchAll({bool activeOnly = false}) async {
@@ -104,6 +129,37 @@ class TeamRepository {
   // ── Member management ──────────────────────────────────────────────────────
 
   /// Fetch all profiles assigned to this team.
+  /// Team members bypassing RLS — used where an ADMIN (no team of their own)
+  /// must list another team's members, e.g. the task assignee picker.
+  static Future<List<ProfileModel>> fetchMembersAdmin(String teamId) async {
+    try {
+      final data = await _admin
+          .from('profiles')
+          .select()
+          .eq('team_id', teamId)
+          .order('full_name');
+      return (data as List).map((m) => ProfileModel.fromMap(m)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// All active staff (non-client) bypassing RLS — admin fallback when a task
+  /// has no team yet.
+  static Future<List<ProfileModel>> fetchAllStaffAdmin() async {
+    try {
+      final data = await _admin
+          .from('profiles')
+          .select()
+          .neq('role', 'client')
+          .eq('status', 'active')
+          .order('full_name');
+      return (data as List).map((m) => ProfileModel.fromMap(m)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   static Future<List<ProfileModel>> fetchMembers(String teamId) async {
     try {
       final data = await _client

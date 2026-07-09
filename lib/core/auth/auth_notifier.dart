@@ -93,6 +93,67 @@ class AuthNotifier extends ChangeNotifier {
 
   // ── Public methods ─────────────────────────────────────────────────────────
 
+  /// Re-fetch the current user's profile from the DB. Used by the pending
+  /// screen to detect when an admin/manager has assigned the user to a team.
+  Future<void> refreshProfile() => _fetchProfile();
+
+  /// Anyone can edit their OWN profile: name and/or avatar picture.
+  /// [avatarBytes] + [avatarExt] (e.g. 'jpg') uploads a new picture.
+  /// Returns null on success, or an error message.
+  Future<String?> updateOwnProfile({
+    String? fullName,
+    List<int>? avatarBytes,
+    String? avatarExt,
+  }) async {
+    final userId = SupabaseService.auth.currentUser?.id;
+    if (userId == null) return 'Not signed in.';
+    try {
+      final updates = <String, dynamic>{};
+      if (fullName != null && fullName.trim().isNotEmpty) {
+        updates['full_name'] = fullName.trim();
+      }
+      if (avatarBytes != null) {
+        final ext  = (avatarExt ?? 'jpg').toLowerCase();
+        final path = '$userId/avatar.$ext';
+        await SupabaseService.adminClient.storage.from('avatars').uploadBinary(
+              path,
+              Uint8List.fromList(avatarBytes),
+              fileOptions: const FileOptions(upsert: true),
+            );
+        final url = SupabaseService.adminClient.storage
+            .from('avatars')
+            .getPublicUrl(path);
+        // Cache-bust so the new image shows immediately.
+        updates['avatar_url'] = '$url?v=${DateTime.now().millisecondsSinceEpoch}';
+      }
+      if (updates.isNotEmpty) {
+        await SupabaseService.adminClient
+            .from('profiles')
+            .update(updates)
+            .eq('id', userId);
+        await _fetchProfile();
+      }
+      return null;
+    } catch (e) {
+      return 'Could not update profile: $e';
+    }
+  }
+
+  /// Change the current user's password. Returns null on success.
+  Future<String?> updatePassword(String newPassword) async {
+    if (newPassword.length < 6) return 'Password must be at least 6 characters.';
+    try {
+      await SupabaseService.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      return null;
+    } on AuthException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not update password.';
+    }
+  }
+
   /// Sign in with email + password.
   /// Returns null on success, or an error string.
   Future<String?> signIn(String email, String password) async {
@@ -113,9 +174,11 @@ class AuthNotifier extends ChangeNotifier {
 
   /// Register a new user.
   ///
-  /// Role logic (checked against DB, not client-side only):
-  ///   - profiles table empty → first user → role = 'admin'
-  ///   - profiles table has rows → role = 'employee'
+  /// Role logic:
+  ///   - Everyone who self-registers is created as an 'employee' with no team.
+  ///   - They land on the pending screen until an admin/manager assigns them
+  ///     to a team. Admins are provisioned directly in Supabase, never via
+  ///     public sign-up.
   ///
   /// Email uniqueness is enforced by Supabase Auth (auth.users UNIQUE constraint).
   ///
@@ -129,13 +192,8 @@ class AuthNotifier extends ChangeNotifier {
     required String fullName,
   }) async {
     try {
-      // Determine role — first ever user becomes admin
-      final existing = await SupabaseService.client
-          .from('profiles')
-          .select('id')
-          .limit(1);
-      final isFirstUser = (existing as List).isEmpty;
-      final role = isFirstUser ? 'admin' : 'employee';
+      // Everyone who registers is an employee — no self-service admins.
+      const role = 'employee';
 
       final response = await SupabaseService.auth.signUp(
         email: email.trim(),
