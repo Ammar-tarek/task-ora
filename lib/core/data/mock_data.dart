@@ -1,5 +1,5 @@
 // lib/core/data/mock_data.dart
-// All static mock data for TaskOra UI
+// All static mock data for CB TO-DO UI
 
 class MockTask {
   final String id, title, assignee, priority, status, dueDate, tag;
@@ -73,12 +73,12 @@ class MockData {
 
   // ── Users ──────────────────────────────────────────────────────────────────
   static const List<MockUser> users = [
-    MockUser(id:'u1', name:'Sara Ahmed', email:'sara@taskora.com', role:'Admin', status:'Active', joinDate:'Jan 2024'),
-    MockUser(id:'u2', name:'Omar Khalid', email:'omar@taskora.com', role:'Developer', status:'Active', joinDate:'Mar 2024'),
-    MockUser(id:'u3', name:'Lina Hassan', email:'lina@taskora.com', role:'Manager', status:'Active', joinDate:'Feb 2024'),
-    MockUser(id:'u4', name:'Yusuf Ali', email:'yusuf@taskora.com', role:'QA Engineer', status:'Active', joinDate:'Apr 2024'),
-    MockUser(id:'u5', name:'Nadia Farouk', email:'nadia@taskora.com', role:'Designer', status:'Inactive', joinDate:'Jun 2023'),
-    MockUser(id:'u6', name:'Khaled Mansour', email:'khaled@taskora.com', role:'Developer', status:'Active', joinDate:'May 2024'),
+    MockUser(id:'u1', name:'Sara Ahmed', email:'sara@cbtodo.com', role:'Admin', status:'Active', joinDate:'Jan 2024'),
+    MockUser(id:'u2', name:'Omar Khalid', email:'omar@cbtodo.com', role:'Developer', status:'Active', joinDate:'Mar 2024'),
+    MockUser(id:'u3', name:'Lina Hassan', email:'lina@cbtodo.com', role:'Manager', status:'Active', joinDate:'Feb 2024'),
+    MockUser(id:'u4', name:'Yusuf Ali', email:'yusuf@cbtodo.com', role:'QA Engineer', status:'Active', joinDate:'Apr 2024'),
+    MockUser(id:'u5', name:'Nadia Farouk', email:'nadia@cbtodo.com', role:'Designer', status:'Inactive', joinDate:'Jun 2023'),
+    MockUser(id:'u6', name:'Khaled Mansour', email:'khaled@cbtodo.com', role:'Developer', status:'Active', joinDate:'May 2024'),
   ];
 
   // ── Expenses ───────────────────────────────────────────────────────────────

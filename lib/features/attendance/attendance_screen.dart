@@ -8,6 +8,7 @@ import '../../core/providers/team_filter_notifier.dart';
 import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/repositories/attendance_repository.dart';
 import '../../core/services/realtime_service.dart';
+import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_time.dart';
 import '../../core/widgets/team_filter_chip.dart';
@@ -126,6 +127,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
+  void _showEmployeeDetails(EmpAttendanceSummary summary) {
+    showDialog(
+      context: context,
+      builder: (_) => _EmployeeMonthlyAttendanceDialog(
+        employeeId: summary.employeeId,
+        employeeName: summary.name,
+        year: _sumYear,
+        month: _sumMonth,
+        onRefreshParent: _loadSummary,
+      ),
+    );
+  }
+
   Widget _buildSummary() {
     const months = ['January','February','March','April','May','June','July',
       'August','September','October','November','December'];
@@ -173,7 +187,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                     itemCount: shown.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _SummaryCard(s: shown[i]),
+                    itemBuilder: (_, i) => _SummaryCard(
+                      s: shown[i],
+                      onTap: () => _showEmployeeDetails(shown[i]),
+                    ),
                   ),
       ),
     ]);
@@ -288,6 +305,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
+  Future<void> _showAdminAddAttendanceDialog() async {
+    await showDialog(
+      context: context,
+      builder: (_) => _AdminAddAttendanceDialog(
+        initialDate: _selectedDate,
+        onSaved: () {
+          if (_summaryMode) _loadSummary();
+          _load();
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile   = context.watch<AuthNotifier>().profile;
@@ -331,16 +361,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ),
         ],
       ),
-      // Employee FAB to log manual attendance
-      floatingActionButton: isManager
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _showManualEntryDialog(null),
-              backgroundColor: AppColors.primary,
-              icon: const Icon(Icons.add, color: AppColors.gold),
-              label: const Text('Log Attendance',
-                style: TextStyle(color: AppColors.gold)),
-            ),
+      // FAB for employee self-service or admin/manager manual entry
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: isManager
+            ? _showAdminAddAttendanceDialog
+            : () => _showManualEntryDialog(null),
+        backgroundColor: AppColors.primary,
+        icon: Icon(isManager ? Icons.person_add_alt_1_outlined : Icons.add, color: AppColors.gold),
+        label: Text(isManager ? 'Add Attendance' : 'Log Attendance',
+          style: const TextStyle(color: AppColors.gold)),
+      ),
       body: Column(
         children: [
           const TeamFilterChip(),
@@ -420,6 +450,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         onPressed: _pickDate,
                         child: Text('Change date',
                           style: AppTextStyles.labelMd.copyWith(color: AppColors.gold)),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: _showAdminAddAttendanceDialog,
+                        icon: const Icon(Icons.add, size: 16, color: AppColors.gold),
+                        label: const Text('Add Attendance', style: TextStyle(color: AppColors.gold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          textStyle: AppTextStyles.labelMd,
+                        ),
                       ),
                     ]),
                     const SizedBox(height: 12),
@@ -1256,8 +1297,9 @@ class _DailyReportDialogState extends State<_DailyReportDialog> {
 
 // ── Monthly summary card (per employee) ─────────────────────────────────────
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.s});
+  const _SummaryCard({required this.s, required this.onTap});
   final EmpAttendanceSummary s;
+  final VoidCallback onTap;
 
   Widget _pill(String label, int value, Color color) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1273,30 +1315,454 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.outlineVariant),
-      ),
-      child: Row(children: [
-        TAvatar(name: s.name, size: 40),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(s.name, style: AppTextStyles.labelMd,
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 6),
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              _pill('Attended', s.attended, AppColors.statusDone),
-              _pill('Absent', s.absent, AppColors.statusHigh),
-              _pill('Late', s.late, AppColors.gold),
-              if (s.halfDay > 0) _pill('Half', s.halfDay, AppColors.statusMedium),
-            ]),
-          ]),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.outlineVariant),
         ),
-      ]),
+        child: Row(children: [
+          TAvatar(name: s.name, size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(s.name, style: AppTextStyles.labelMd,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 6),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                _pill('Attended', s.attended, AppColors.statusDone),
+                _pill('Absent', s.absent, AppColors.statusHigh),
+                _pill('Late', s.late, AppColors.gold),
+                if (s.halfDay > 0) _pill('Half', s.halfDay, AppColors.statusMedium),
+              ]),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.chevron_right, size: 20, color: AppColors.outlineVariant),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Monthly attendance detail dialog ────────────────────────────────────────
+class _EmployeeMonthlyAttendanceDialog extends StatefulWidget {
+  const _EmployeeMonthlyAttendanceDialog({
+    required this.employeeId,
+    required this.employeeName,
+    required this.year,
+    required this.month,
+    required this.onRefreshParent,
+  });
+
+  final String employeeId;
+  final String employeeName;
+  final int year;
+  final int month;
+  final VoidCallback onRefreshParent;
+
+  @override
+  State<_EmployeeMonthlyAttendanceDialog> createState() =>
+      __EmployeeMonthlyAttendanceDialogState();
+}
+
+class __EmployeeMonthlyAttendanceDialogState
+    extends State<_EmployeeMonthlyAttendanceDialog> {
+  List<AttendanceRecord> _records = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final data = await AttendanceRepository.fetchForEmployeeMonthly(
+      employeeId: widget.employeeId,
+      year: widget.year,
+      month: widget.month,
+    );
+    if (mounted) {
+      setState(() {
+        _records = data;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _approveRecord(AttendanceRecord record) async {
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile == null) return;
+    await AttendanceRepository.approveAttendance(
+      attendanceId: record.id,
+      approvedBy:   profile.id,
+    );
+    widget.onRefreshParent();
+    _load();
+  }
+
+  Future<void> _showOverrideDialog(AttendanceRecord record) async {
+    await showDialog(
+      context: context,
+      builder: (_) => _OverrideDialog(
+        record:  record,
+        onSaved: () {
+          widget.onRefreshParent();
+          _load();
+        },
+      ),
+    );
+  }
+
+  Future<void> _viewReport(AttendanceRecord r) async {
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: Row(children: [
+          const Icon(Icons.description_outlined, color: AppColors.gold, size: 20),
+          const SizedBox(width: 8),
+          Expanded(child: Text('${r.employeeName} · ${r.date}',
+              style: AppTextStyles.labelMd, overflow: TextOverflow.ellipsis)),
+        ]),
+        content: SingleChildScrollView(
+          child: Text(
+            r.hasReport ? r.dailyReport! : 'No report submitted.',
+            style: AppTextStyles.bodyMd,
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = context.watch<AuthNotifier>().profile;
+    final privs   = context.watch<TeamPrivilegesNotifier>();
+    final isManager = profile?.isAdmin == true || privs.canManageAttendance;
+    final canManageAttendance = isManager;
+
+    const months = ['January','February','March','April','May','June','July',
+      'August','September','October','November','December'];
+
+    return AlertDialog(
+      backgroundColor: AppColors.background,
+      titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.employeeName, style: AppTextStyles.headlineSm),
+                const SizedBox(height: 2),
+                Text(
+                  '${months[widget.month - 1]} ${widget.year}',
+                  style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 500,
+        height: 450,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+            : _records.isEmpty
+                ? Center(
+                    child: Text(
+                      'No attendance records found.',
+                      style: AppTextStyles.labelMd,
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.only(top: 8, bottom: 16),
+                    itemCount: _records.length,
+                    itemBuilder: (context, i) {
+                      final r = _records[i];
+                      return _AttendanceRow(
+                        record: r,
+                        isManager: isManager,
+                        onEdit: canManageAttendance ? () => _showOverrideDialog(r) : null,
+                        onApprove: (!canManageAttendance || r.isApproved ||
+                                (profile?.isManager == true && r.employeeId == profile?.id))
+                            ? null
+                            : () => _approveRecord(r),
+                        onReport: () => _viewReport(r),
+                      );
+                    },
+                  ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminAddAttendanceDialog extends StatefulWidget {
+  const _AdminAddAttendanceDialog({
+    required this.initialDate,
+    required this.onSaved,
+  });
+
+  final String initialDate;
+  final VoidCallback onSaved;
+
+  @override
+  State<_AdminAddAttendanceDialog> createState() => _AdminAddAttendanceDialogState();
+}
+
+class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
+  final _reasonCtrl = TextEditingController();
+  List<Map<String, String>> _employees = [];
+  bool _loadingEmployees = true;
+  String? _selectedEmployeeId;
+  late String _selectedDate;
+  TimeOfDay _inTime  = const TimeOfDay(hour: 9, minute: 0);
+  TimeOfDay _outTime = const TimeOfDay(hour: 17, minute: 0);
+  String _status = 'present';
+  bool _saving = false;
+  String? _error;
+
+  static const _statuses = ['present', 'late', 'half_day', 'absent'];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = widget.initialDate;
+    _loadEmployees();
+  }
+
+  Future<void> _loadEmployees() async {
+    try {
+      final data = await SupabaseService.adminClient
+          .from('profiles')
+          .select('id, full_name')
+          .neq('role', 'client')
+          .eq('status', 'active')
+          .order('full_name');
+      final list = (data as List)
+          .map((m) => {
+                'id': m['id'] as String,
+                'name': m['full_name'] as String? ?? 'Unknown',
+              })
+          .toList();
+      if (mounted) {
+        setState(() {
+          _employees = list;
+          if (list.isNotEmpty) _selectedEmployeeId = list.first['id'];
+          _loadingEmployees = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingEmployees = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _reasonCtrl.dispose();
+    super.dispose();
+  }
+
+  String _buildDateTime(String date, TimeOfDay t) {
+    final p = date.split('-').map(int.parse).toList();
+    return AppTime
+        .fromCairoToUtc(p[0], p[1], p[2], t.hour, t.minute)
+        .toIso8601String();
+  }
+
+  bool get _isAbsent => _status == 'absent';
+
+  bool _endsAfterStart() {
+    final inMins  = _inTime.hour * 60 + _inTime.minute;
+    final outMins = _outTime.hour * 60 + _outTime.minute;
+    return outMins > inMins;
+  }
+
+  Future<void> _pickDate() async {
+    final initial = DateTime.tryParse(_selectedDate) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked.toIso8601String().substring(0, 10));
+    }
+  }
+
+  Future<void> _pickTime(bool isIn) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: isIn ? _inTime : _outTime,
+    );
+    if (picked != null) setState(() => isIn ? _inTime = picked : _outTime = picked);
+  }
+
+  String _fmtTime(TimeOfDay t) => AppTime.hm2(t.hour, t.minute);
+
+  Future<void> _save() async {
+    if (_selectedEmployeeId == null) {
+      setState(() => _error = 'Please select an employee.');
+      return;
+    }
+    if (!_isAbsent && !_endsAfterStart()) {
+      setState(() => _error = 'Check-out time must be after check-in time.');
+      return;
+    }
+    setState(() { _saving = true; _error = null; });
+
+    final note = _reasonCtrl.text.trim().isNotEmpty
+        ? _reasonCtrl.text.trim()
+        : 'Manual admin attendance entry';
+
+    final err = await AttendanceRepository.overrideAttendance(
+      employeeId:   _selectedEmployeeId!,
+      date:         _selectedDate,
+      checkInTime:  _buildDateTime(_selectedDate, _inTime),
+      checkOutTime: _buildDateTime(_selectedDate, _outTime),
+      reason:       note,
+      status:       _status,
+    );
+
+    if (!mounted) return;
+    if (err == null) {
+      Navigator.pop(context);
+      widget.onSaved();
+    } else {
+      setState(() { _saving = false; _error = err; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.person_add_alt_1_outlined, color: AppColors.gold),
+          SizedBox(width: 8),
+          Text('Add Employee Attendance'),
+        ],
+      ),
+      content: SizedBox(
+        width: 380,
+        child: _loadingEmployees
+            ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_error != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(_error!,
+                          style: AppTextStyles.bodySm.copyWith(color: AppColors.error)),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    DropdownButtonFormField<String>(
+                      value: _selectedEmployeeId,
+                      decoration: const InputDecoration(labelText: 'Employee *'),
+                      items: _employees.map((e) => DropdownMenuItem(
+                        value: e['id'],
+                        child: Text(e['name'] ?? 'Unknown'),
+                      )).toList(),
+                      onChanged: (v) => setState(() => _selectedEmployeeId = v),
+                    ),
+                    const SizedBox(height: 12),
+
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Date: $_selectedDate', style: AppTextStyles.bodyMd),
+                      trailing: const Icon(Icons.calendar_today_outlined, color: AppColors.gold),
+                      onTap: _pickDate,
+                    ),
+                    const SizedBox(height: 8),
+
+                    DropdownButtonFormField<String>(
+                      value: _status,
+                      decoration: const InputDecoration(labelText: 'Status'),
+                      items: _statuses.map((s) => DropdownMenuItem(
+                        value: s,
+                        child: Text(s[0].toUpperCase() + s.substring(1).replaceAll('_', ' ')),
+                      )).toList(),
+                      onChanged: (v) => setState(() { _status = v ?? 'present'; _error = null; }),
+                    ),
+                    const SizedBox(height: 12),
+
+                    if (!_isAbsent) ...[
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('Check-in: ${_fmtTime(_inTime)}', style: AppTextStyles.bodyMd),
+                        trailing: const Icon(Icons.access_time_outlined, color: AppColors.gold),
+                        onTap: () => _pickTime(true),
+                      ),
+
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('Check-out: ${_fmtTime(_outTime)}', style: AppTextStyles.bodyMd),
+                        trailing: const Icon(Icons.access_time_outlined, color: AppColors.gold),
+                        onTap: () => _pickTime(false),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    TextField(
+                      controller: _reasonCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Note / Reason',
+                        hintText: 'e.g. Manual admin entry for official mission',
+                      ),
+                      maxLines: 2,
+                    ),
+                  ],
+                ),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+          child: _saving
+              ? const SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(color: AppColors.gold, strokeWidth: 2))
+              : const Text('Save Attendance', style: TextStyle(color: AppColors.gold)),
+        ),
+      ],
     );
   }
 }

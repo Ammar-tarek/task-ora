@@ -44,15 +44,27 @@ class _SplashScreenState extends State<SplashScreen>
             scale: _scale,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
-                width: 80, height: 80,
+                width: 180, height: 180,
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.gold,
-                  borderRadius: BorderRadius.circular(20),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-                child: const Icon(Icons.task_alt, color: Colors.black, size: 44),
+                child: Image.asset(
+                  'assets/logo.png',
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                ),
               ),
               const SizedBox(height: 24),
-              Text('TaskOra',
+              Text('CB TO-DO',
                 style: AppTextStyles.displayMd.copyWith(
                   color: Colors.white, letterSpacing: 2,
                 ),

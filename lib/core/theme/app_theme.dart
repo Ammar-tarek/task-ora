@@ -387,63 +387,71 @@ class TStatCard extends StatelessWidget {
     required this.icon,
     this.sub,
     this.accent = false,
+    this.onTap,
   });
   final String title, value;
   final IconData icon;
   final String? sub;
   final bool accent;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: accent ? AppColors.primary : AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: accent ? Colors.transparent : AppColors.outlineVariant,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(children: [
-            Icon(icon, size: 16,
-              color: AppColors.gold,
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: accent ? AppColors.primary : AppColors.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: accent ? Colors.transparent : AppColors.outlineVariant,
             ),
-            const Spacer(),
-            if (sub != null)
-              Flexible(
-                child: Text(sub!,
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: accent ? Colors.white54 : null,
-                    fontSize: 11,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(children: [
+                Icon(icon, size: 16,
+                  color: AppColors.gold,
+                ),
+                const Spacer(),
+                if (sub != null)
+                  Flexible(
+                    child: Text(sub!,
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: accent ? Colors.white54 : null,
+                        fontSize: 11,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  overflow: TextOverflow.ellipsis,
+              ]),
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value,
+                  style: AppTextStyles.dataLg.copyWith(
+                    fontSize: 22,
+                    color: accent ? AppColors.gold : AppColors.onSurface,
+                  ),
                 ),
               ),
-          ]),
-          const SizedBox(height: 8),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(value,
-              style: AppTextStyles.dataLg.copyWith(
-                fontSize: 22,
-                color: accent ? AppColors.gold : AppColors.onSurface,
+              const SizedBox(height: 2),
+              Text(title,
+                style: AppTextStyles.labelCaps.copyWith(
+                  fontSize: 9,
+                  color: accent ? Colors.white60 : AppColors.onSurfaceVariant,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(title,
-            style: AppTextStyles.labelCaps.copyWith(
-              fontSize: 9,
-              color: accent ? Colors.white60 : AppColors.onSurfaceVariant,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+        ),
       ),
     );
   }

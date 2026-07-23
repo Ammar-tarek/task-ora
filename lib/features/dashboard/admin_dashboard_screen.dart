@@ -63,7 +63,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     List<ProfileModel> employees = [];
 
     try {
-      stats = await DashboardRepository.fetchStats(profile.id);
+      stats = await DashboardRepository.fetchStats(profile);
     } catch (_) { /* stats stays null — cards show 0 */ }
 
     try {
@@ -127,15 +127,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             elevation: 0, automaticallyImplyLeading: false, titleSpacing: 16,
             title: Row(children: [
               Container(
-                width: 32, height: 32,
+                height: 38, width: 64,
+                padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.5)),
                 ),
-                child: const Icon(Icons.task_alt, color: AppColors.gold, size: 18),
+                child: Image.asset(
+                  'assets/logo.png',
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                ),
               ),
               const SizedBox(width: 10),
-              Text('TaskOra', style: AppTextStyles.headlineSm),
+              Text('CB TO-DO', style: AppTextStyles.headlineSm),
             ]),
             actions: [
               IconButton(
@@ -245,23 +251,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       TStatCard(
                         title: 'TOTAL TASKS',
                         value: '${_stats?.totalTasks ?? 0}',
-                        icon: Icons.assignment_outlined, accent: true),
+                        icon: Icons.assignment_outlined,
+                        accent: true,
+                        onTap: () => context.go('/tasks?filter=All'),
+                      ),
                       TStatCard(
                         title: 'COMPLETED',
                         value: '${_stats?.doneTasks ?? 0}',
                         icon: Icons.check_circle_outline,
                         sub: (_stats != null && _stats!.totalTasks > 0)
                             ? '${(_stats!.doneTasks / _stats!.totalTasks * 100).round()}%'
-                            : '0%'),
+                            : '0%',
+                        onTap: () => context.go('/tasks?filter=Completed'),
+                      ),
                       TStatCard(
                         title: 'IN PROGRESS',
                         value: '${_stats?.inProgressTasks ?? 0}',
-                        icon: Icons.loop, sub: 'Active'),
+                        icon: Icons.loop,
+                        sub: 'Active',
+                        onTap: () => context.go('/tasks?filter=In Progress'),
+                      ),
                       TStatCard(
                         title: 'TEAM SIZE',
                         value: '${_stats?.totalEmployees ?? 0}',
                         icon: Icons.people_outline,
-                        sub: '${_stats?.presentToday ?? 0} present'),
+                        sub: '${_stats?.presentToday ?? 0} present',
+                        onTap: () => context.push(isAdmin ? '/users' : '/teams'),
+                      ),
                     ],
                   );
                 }),
@@ -476,9 +492,9 @@ class _TaskDistributionBar extends StatelessWidget {
         const SizedBox(height: 14),
         // Legend — wraps responsively
         Wrap(spacing: 16, runSpacing: 8, children: [
-          _legend(AppColors.statusDone, 'Done', done),
-          _legend(AppColors.statusInProgress, 'In Progress', inProgress),
-          _legend(AppColors.statusTodo, 'To Do', todo < 0 ? 0 : todo),
+          _legend(context, AppColors.statusDone, 'Done', 'Completed', done),
+          _legend(context, AppColors.statusInProgress, 'In Progress', 'In Progress', inProgress),
+          _legend(context, AppColors.statusTodo, 'To Do', 'To Do', todo < 0 ? 0 : todo),
         ]),
       ]),
     );
@@ -489,14 +505,21 @@ class _TaskDistributionBar extends StatelessWidget {
     child: Container(color: color),
   );
 
-  Widget _legend(Color color, String label, int count) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(width: 10, height: 10,
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
-      const SizedBox(width: 6),
-      Text('$label ($count)', style: AppTextStyles.bodySm),
-    ],
+  Widget _legend(BuildContext context, Color color, String label, String filterName, int count) => InkWell(
+    onTap: () => context.go('/tasks?filter=$filterName'),
+    borderRadius: BorderRadius.circular(4),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 10, height: 10,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 6),
+          Text('$label ($count)', style: AppTextStyles.bodySm),
+        ],
+      ),
+    ),
   );
 }
 

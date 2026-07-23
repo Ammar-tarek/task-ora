@@ -204,7 +204,7 @@ class TeamRepository {
   /// Fetch member counts for every team at once. Returns {teamId -> count}.
   static Future<Map<String, int>> fetchMemberCounts() async {
     try {
-      final data = await _client
+      final data = await _admin
           .from('profiles')
           .select('team_id')
           .not('team_id', 'is', null);

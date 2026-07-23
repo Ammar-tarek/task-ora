@@ -1,4 +1,4 @@
-﻿// lib/core/services/local_notification_service.dart
+// lib/core/services/local_notification_service.dart
 // Thin wrapper around flutter_local_notifications.
 // Call LocalNotificationService.init() once in main(), then use
 // LocalNotificationService.show() anywhere in the app.
@@ -6,6 +6,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:go_router/go_router.dart';
 
 class LocalNotificationService {
   LocalNotificationService._();
@@ -15,12 +16,16 @@ class LocalNotificationService {
 
   static bool _initialized = false;
 
+  /// Router reference for navigating when a push notification is tapped.
+  static GoRouter? _router;
+  static void setRouter(GoRouter router) => _router = router;
+
   // ── Notification channel IDs ──────────────────────────────────────────────
 
-  static const _channelTaskId   = 'taskora_tasks';
+  static const _channelTaskId   = 'cbtodo_tasks';
   static const _channelTaskName = 'Tasks';
 
-  static const _channelHrId   = 'taskora_hr';
+  static const _channelHrId   = 'cbtodo_hr';
   static const _channelHrName = 'HR & Attendance';
 
   // ── Init ──────────────────────────────────────────────────────────────────
@@ -44,6 +49,7 @@ class LocalNotificationService {
         android: androidSettings,
         iOS: iosSettings,
       ),
+      onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
     // Create notification channels (Android 8+) and request permission (Android 13+).
@@ -75,6 +81,16 @@ class LocalNotificationService {
     _initialized = true;
   }
 
+  // ── Tap handler ──────────────────────────────────────────────────────────
+
+  /// When the user taps a device notification, navigate to the notifications
+  /// screen. The payload (if present) is currently unused but available for
+  /// future per-notification deep-linking.
+  static void _onNotificationTap(NotificationResponse response) {
+    if (_router == null) return;
+    _router!.push('/notifications');
+  }
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   /// Pass one of these types to [show] to pick the right channel.
@@ -90,6 +106,7 @@ class LocalNotificationService {
     required String body,
     String type = typeTask,
     int?   id,
+    String? payload,
   }) async {
     if (!_initialized || kIsWeb) return;
 
@@ -118,6 +135,7 @@ class LocalNotificationService {
       title,
       body,
       notifDetails,
+      payload: payload,
     );
   }
 }

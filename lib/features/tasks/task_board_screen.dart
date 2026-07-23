@@ -19,7 +19,9 @@ import '../../core/widgets/team_filter_chip.dart';
 import 'task_detail_sheet.dart';
 
 class TaskBoardScreen extends StatefulWidget {
-  const TaskBoardScreen({super.key});
+  const TaskBoardScreen({super.key, this.initialFilter});
+  final String? initialFilter;
+
   @override
   State<TaskBoardScreen> createState() => _TaskBoardScreenState();
 }
@@ -64,6 +66,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   @override
   void initState() {
     super.initState();
+    if (widget.initialFilter != null && _statusFilters.contains(widget.initialFilter)) {
+      _filter = widget.initialFilter!;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _teamFilter = context.read<TeamFilterNotifier>()
         ..loadTeams()
@@ -668,9 +673,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   }
 
   Future<void> _acceptHandoff(TaskModel task) async {
-    final myTeam = _profile?.teamId;
-    if (myTeam == null) return;
-    await TaskRepository.acceptHandoff(taskId: task.id, teamId: myTeam);
+    final targetTeam = task.handoffToTeamId ?? _profile?.teamId;
+    if (targetTeam == null) return;
+    await TaskRepository.acceptHandoff(taskId: task.id, teamId: targetTeam);
     await _load(animate: false);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1307,6 +1312,30 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
   DateTime? _dueDate;
   bool _creating = false;
 
+  String? _selectedTeamId;
+  List<TeamModel> _teams = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTeams();
+  }
+
+  Future<void> _loadTeams() async {
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile?.isAdmin == true) {
+      final teams = await TeamRepository.fetchAllAdmin(activeOnly: true);
+      setState(() {
+        _teams = teams;
+        if (teams.isNotEmpty) {
+          _selectedTeamId = teams.first.id;
+        }
+      });
+    } else {
+      _selectedTeamId = profile?.teamId;
+    }
+  }
+
   Future<void> _create() async {
     if (_titleCtrl.text.trim().isEmpty) return;
     setState(() => _creating = true);
@@ -1316,7 +1345,7 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
       description: _descCtrl.text.trim().isEmpty
           ? null : _descCtrl.text.trim(),
       createdBy:   profile.id,
-      teamId:      profile.teamId,
+      teamId:      _selectedTeamId,
       priority:    _priority,
       dueDate:     _dueDate?.toIso8601String().split('T').first,
     );
@@ -1377,6 +1406,35 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
             ),
           ),
           const SizedBox(height: 18),
+
+          // Department (only for Admin)
+          if (context.read<AuthNotifier>().profile?.isAdmin == true && _teams.isNotEmpty) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('DEPARTMENT', style: AppTextStyles.labelCaps),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String?>(
+              value: _selectedTeamId,
+              isExpanded: true,
+              decoration: InputDecoration(
+                hintText: 'Select department/team',
+                prefixIcon: const Icon(Icons.group_outlined,
+                    color: AppColors.gold, size: 18),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+              items: _teams.map((t) => DropdownMenuItem<String?>(
+                    value: t.id,
+                    child: Text(t.name,
+                        overflow: TextOverflow.ellipsis),
+                  )).toList(),
+              onChanged: (val) => setState(() => _selectedTeamId = val),
+            ),
+            const SizedBox(height: 18),
+          ],
 
           // Priority
           Align(

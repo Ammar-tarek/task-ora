@@ -90,7 +90,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                   Text(
                     'Your account has been created successfully.\n\n'
                     'An administrator or team manager needs to add you to a '
-                    'team before you can start using TaskOra.\n\n'
+                    'team before you can start using CB TO-DO.\n\n'
                     "You'll get full access as soon as you're assigned.",
                     style: AppTextStyles.bodyMd
                         .copyWith(color: AppColors.onSurfaceVariant),

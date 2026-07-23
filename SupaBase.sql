@@ -672,3 +672,6 @@ CREATE TABLE public.client_task_column_visibility (
   CONSTRAINT client_task_column_visibility_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.client_profiles(id),
   CONSTRAINT client_task_column_visibility_configured_by_fkey FOREIGN KEY (configured_by) REFERENCES public.profiles(id)
 );
+
+-- Enable Supabase Realtime for notifications table
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;

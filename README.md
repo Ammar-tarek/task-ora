@@ -1,4 +1,4 @@
-<h1 align="center">TaskOra — Operations Dashboard</h1>
+<h1 align="center">CB TO-DO — Operations Dashboard</h1>
 
 <p align="center">
   A cross-platform Flutter application for managing teams, tasks, attendance, finance, and clients — built for CSE Graduation Project Group 23.

@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/task_model.dart';
 import '../models/profile_model.dart';
 import '../services/supabase_service.dart';
+import 'notification_repository.dart';
+import 'team_repository.dart';
 
 class TaskRepository {
   static final _client      = SupabaseService.client;
@@ -88,6 +90,37 @@ class TaskRepository {
     }).eq('id', taskId);
     // Remove old assignees — new department will reassign.
     await _adminClient.from('task_assignees').delete().eq('task_id', taskId);
+
+    // Send notifications to target team lead and admins
+    try {
+      final taskData = await fetchTaskDetail(taskId);
+      final title = taskData?['title'] as String? ?? 'Task';
+      final toTeam = await TeamRepository.fetchById(toTeamId);
+      final recipients = <String>{};
+
+      if (toTeam?.teamLeadId != null) {
+        recipients.add(toTeam!.teamLeadId!);
+      }
+
+      final adminRows = await _adminClient
+          .from('profiles')
+          .select('id')
+          .eq('role', 'admin');
+      for (final row in (adminRows as List)) {
+        recipients.add(row['id'] as String);
+      }
+
+      for (final recipientId in recipients) {
+        await NotificationRepository.createNotification(
+          recipientId: recipientId,
+          type: 'task_handoff',
+          title: 'Department Task Switch',
+          body: 'Task "$title" has been moved to ${toTeam?.name ?? "another department"}.',
+          referenceType: 'task',
+          referenceId: taskId,
+        );
+      }
+    } catch (_) {}
   }
 
   /// Target manager accepts a handoff into their department. The task becomes a
@@ -397,6 +430,7 @@ class TaskRepository {
     double? cost,
     String? clientId,
     bool clearClient = false,
+    String? teamId,
     String? editedBy,
     String? editSummary,
   }) async {
@@ -409,6 +443,7 @@ class TaskRepository {
         'completion_percentage': completionPercentage,
         // explicit null clears the FK; only set when admin chose to change it
         if (clientId != null || clearClient) 'client_id': clientId,
+        if (teamId != null) 'team_id': teamId,
       };
       if (description != null) payload['description'] = description;
       if (cost != null) payload['cost'] = cost;
@@ -478,6 +513,46 @@ class TaskRepository {
         }).toList();
         await _client.from('task_assignees').insert(inserts);
       }
+
+      // Notify the employees and the team lead (manager)
+      try {
+        final taskData = await fetchTaskDetail(taskId);
+        if (taskData != null) {
+          final title = taskData['title'] as String? ?? 'New Task';
+          final teamId = taskData['team_id'] as String?;
+
+          // Notify the employees
+          for (final pId in profileIds) {
+            if (pId != assignedBy) {
+              await NotificationRepository.createNotification(
+                recipientId: pId,
+                type: 'task_assigned',
+                title: 'New task assigned',
+                body: 'You have been assigned: $title',
+                referenceType: 'task',
+                referenceId: taskId,
+              );
+            }
+          }
+
+          // Notify the manager/team lead (if any)
+          if (teamId != null) {
+            final team = await TeamRepository.fetchById(teamId);
+            final teamLeadId = team?.teamLeadId;
+            if (teamLeadId != null && teamLeadId != assignedBy && !profileIds.contains(teamLeadId)) {
+              await NotificationRepository.createNotification(
+                recipientId: teamLeadId,
+                type: 'task_assigned',
+                title: 'Task assigned in your team',
+                body: 'A task "$title" has been assigned to team members.',
+                referenceType: 'task',
+                referenceId: taskId,
+              );
+            }
+          }
+        }
+      } catch (_) {}
+
       return true;
     } on PostgrestException catch (e) {
       throw Exception('Assignees update failed [${e.code}]: ${e.message}');

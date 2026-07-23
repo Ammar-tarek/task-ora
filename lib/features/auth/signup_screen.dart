@@ -174,15 +174,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
         // Brand
         Row(children: [
           Container(
-            width: 40, height: 40,
+            height: 70, width: 120,
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(10),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.5)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: const Icon(Icons.task_alt, color: AppColors.gold, size: 22),
+            child: Image.asset(
+              'assets/logo.png',
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+            ),
           ),
-          const SizedBox(width: 12),
-          Text('TaskOra', style: AppTextStyles.headlineMd),
+          const SizedBox(width: 14),
+          Text('CB TO-DO', style: AppTextStyles.headlineMd),
         ]),
         const SizedBox(height: 32),
 

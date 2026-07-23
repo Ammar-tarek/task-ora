@@ -16,6 +16,7 @@ import '../../core/models/task_model.dart';
 import '../../core/models/profile_model.dart';
 import '../../core/models/task_status_option.dart';
 import '../../core/models/client_model.dart';
+import '../../core/models/team_model.dart';
 import '../../core/utils/task_permissions.dart';
 import '../../core/services/n8n_service.dart';
 import 'status_options_manager_sheet.dart';
@@ -67,6 +68,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   bool _commentIsInternal = true;
   String? _clientId;
   List<ClientModel> _clients = [];
+  String? _selectedTeamId;
+  List<TeamModel> _teams = [];
 
   // Live comment list — built from task + optionally refetched
   List<TaskComment> _comments = [];
@@ -122,6 +125,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       _progress             = task.completionPercentage.toDouble();
       _selectedAssigneeIds  = task.assignees.map((a) => a.profileId).toList();
       _clientId             = task.clientId;
+      _selectedTeamId       = task.teamId;
 
       // Load clients for picker (admin/manager only)
       if (_perms.canEditFull) {
@@ -133,7 +137,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       if (_perms.canEditFull) {
         final currentProfile = context.read<AuthNotifier>().profile;
         if (currentProfile != null) {
-          String? teamId = task.teamId;
+          if (currentProfile.isAdmin) {
+            _teams = await TeamRepository.fetchAllAdmin(activeOnly: true);
+          }
+
+          String? teamId = _selectedTeamId;
           if (teamId == null) {
             // No team on the task yet — fall back to the viewer's team.
             final myTeams =
@@ -141,6 +149,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             teamId = myTeams.isNotEmpty
                 ? myTeams.first.id
                 : currentProfile.teamId;
+            _selectedTeamId = teamId;
           }
           if (teamId != null) {
             _allEmployees = await TeamRepository.fetchMembersAdmin(teamId);
@@ -170,6 +179,35 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       _statusOptions = await TaskStatusOptionsRepository.fetchOptions();
     } catch (e) {
       _error = 'Error loading task: $e';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _onTeamChanged(String? newTeamId) async {
+    if (newTeamId == null) return;
+    setState(() {
+      _selectedTeamId = newTeamId;
+      _loading = true;
+    });
+
+    try {
+      final currentProfile = context.read<AuthNotifier>().profile;
+      final employees = await TeamRepository.fetchMembersAdmin(newTeamId);
+      employees.removeWhere((e) => e.isClient);
+      if (currentProfile != null &&
+          !currentProfile.isClient &&
+          !employees.any((e) => e.id == currentProfile.id)) {
+        employees.insert(0, currentProfile);
+      }
+
+      setState(() {
+        _allEmployees = employees;
+        // Filter current assignees: keep only those in the new team
+        _selectedAssigneeIds.removeWhere(
+            (id) => !employees.any((e) => e.id == id));
+      });
+    } catch (_) {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -207,6 +245,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         cost:                  costVal,
         clientId:              _clientId,
         clearClient:           _clientId == null,
+        teamId:                _selectedTeamId,
         editedBy:              currentUid,
         editSummary:           'Task details updated',
       );
@@ -681,7 +720,31 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               color: AppColors.gold, size: 18),
         ),
       ),
-      const SizedBox(height: 18),
+      // Department (only for Admin)
+      if (_perms.profile.isAdmin) ...[
+        _SectionLabel('DEPARTMENT'),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String?>(
+          value: _selectedTeamId,
+          isExpanded: true,
+          decoration: InputDecoration(
+            hintText: 'Select department/team',
+            prefixIcon: const Icon(Icons.group_outlined,
+                color: AppColors.gold, size: 18),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8)),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          ),
+          items: _teams.map((t) => DropdownMenuItem<String?>(
+                value: t.id,
+                child: Text(t.name,
+                    overflow: TextOverflow.ellipsis),
+              )).toList(),
+          onChanged: _onTeamChanged,
+        ),
+        const SizedBox(height: 18),
+      ],
 
       // Client
       _SectionLabel('CLIENT'),

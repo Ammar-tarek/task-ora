@@ -252,6 +252,28 @@ class AttendanceRepository {
     });
   }
 
+  /// Fetch all attendance records for a specific employee in a specific month/year.
+  static Future<List<AttendanceRecord>> fetchForEmployeeMonthly({
+    required String employeeId,
+    required int year,
+    required int month,
+  }) async {
+    final first = '${year.toString().padLeft(4, '0')}-'
+        '${month.toString().padLeft(2, '0')}-01';
+    final nextY = month == 12 ? year + 1 : year;
+    final nextM = month == 12 ? 1 : month + 1;
+    final next = '${nextY.toString().padLeft(4, '0')}-'
+        '${nextM.toString().padLeft(2, '0')}-01';
+
+    return _queryAttendanceList((sel) => _admin
+        .from('attendance')
+        .select(sel)
+        .eq('employee_id', employeeId)
+        .gte('attendance_date', first)
+        .lt('attendance_date', next)
+        .order('attendance_date', ascending: false));
+  }
+
   /// Fetch the last 30 days of attendance for a specific employee.
   static Future<List<AttendanceRecord>> fetchForEmployee(String employeeId) async {
     final from = DateTime.now()

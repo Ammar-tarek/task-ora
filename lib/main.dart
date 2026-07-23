@@ -12,6 +12,7 @@ import 'core/providers/locale_controller.dart';
 import 'core/providers/team_filter_notifier.dart';
 import 'core/providers/team_privileges_notifier.dart';
 import 'core/providers/theme_controller.dart';
+import 'package:go_router/go_router.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
@@ -24,6 +25,11 @@ void main() async {
   final auth      = AuthNotifier();
   final teamPrivs = TeamPrivilegesNotifier(auth);
 
+  // Create the router exactly once — must live outside the widget tree
+  // to avoid duplicate-navigator-key assertions on rebuilds.
+  final router = makeRouter(auth);
+  LocalNotificationService.setRouter(router);
+
   runApp(
     MultiProvider(
       providers: [
@@ -33,18 +39,21 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ThemeController()),
         ChangeNotifierProvider(create: (_) => LocaleController()),
       ],
-      child: const TaskOraApp(),
+      child: CbToDoApp(router: router),
     ),
   );
 }
 
-class TaskOraApp extends StatefulWidget {
-  const TaskOraApp({super.key});
+class CbToDoApp extends StatefulWidget {
+  const CbToDoApp({super.key, required this.router});
+  final GoRouter router;
   @override
-  State<TaskOraApp> createState() => _TaskOraAppState();
+  State<CbToDoApp> createState() => _CbToDoAppState();
 }
 
-class _TaskOraAppState extends State<TaskOraApp> with WidgetsBindingObserver {
+class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
+  AuthNotifier? _auth;
+
   @override
   void initState() {
     super.initState();
@@ -52,9 +61,43 @@ class _TaskOraAppState extends State<TaskOraApp> with WidgetsBindingObserver {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newAuth = Provider.of<AuthNotifier>(context, listen: false);
+    if (_auth != newAuth) {
+      _auth?.removeListener(_onAuthChanged);
+      _auth = newAuth;
+      _auth?.addListener(_onAuthChanged);
+      _onAuthChanged();
+    }
+  }
+
+  @override
   void dispose() {
+    _auth?.removeListener(_onAuthChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onAuthChanged() {
+    final auth = _auth;
+    if (auth == null) return;
+
+    final profile = auth.profile;
+    // Start WiFi attendance tracking for employees AND managers.
+    if (auth.isLoggedIn &&
+        (profile?.isEmployee == true || profile?.isManager == true)) {
+      WifiAttendanceService.instance.init(profile!.id);
+    } else {
+      WifiAttendanceService.instance.dispose();
+    }
+
+    // Start / stop realtime notification triggers based on login state.
+    if (auth.isLoggedIn && profile != null) {
+      NotificationTriggerService.instance.start(profile);
+    } else {
+      NotificationTriggerService.instance.stop();
+    }
   }
 
   // Re-check WiFi whenever the app comes back to the foreground.
@@ -73,32 +116,15 @@ class _TaskOraAppState extends State<TaskOraApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthNotifier>(context);
     // Rebuild whenever the theme mode changes so the palette swap takes effect.
     context.watch<ThemeController>();
     final localeCtrl = context.watch<LocaleController>();
 
-    // Start WiFi attendance tracking for employees AND managers.
-    final profile = auth.profile;
-    if (auth.isLoggedIn &&
-        (profile?.isEmployee == true || profile?.isManager == true)) {
-      WifiAttendanceService.instance.init(profile!.id);
-    } else {
-      WifiAttendanceService.instance.dispose();
-    }
-
-    // Start / stop realtime notification triggers based on login state.
-    if (auth.isLoggedIn && profile != null) {
-      NotificationTriggerService.instance.start(profile);
-    } else {
-      NotificationTriggerService.instance.stop();
-    }
-
     return MaterialApp.router(
-      title: 'CB-TO DO',
+      title: 'CB TO-DO',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.build(),
-      routerConfig: makeRouter(auth),
+      routerConfig: widget.router,
       // App language (en/ar) — Arabic gets RTL automatically.
       locale: localeCtrl.locale,
       supportedLocales: const [Locale('en'), Locale('ar')],

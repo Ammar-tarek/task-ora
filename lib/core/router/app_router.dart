@@ -157,7 +157,11 @@ GoRouter makeRouter(AuthNotifier auth) {
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/tasks',
-              builder: (_, __) => const TaskBoardScreen(),
+              builder: (_, state) {
+                final filter = state.uri.queryParameters['filter'] ??
+                    (state.extra is String ? state.extra as String : null);
+                return TaskBoardScreen(initialFilter: filter);
+              },
               routes: [
                 GoRoute(
                   path: 'table',
@@ -314,5 +318,4 @@ class _PrivilegeDeniedScreen extends StatelessWidget {
   }
 }
 
-// Keep backward-compat alias for any code that still references appRouter
-GoRouter get appRouter => makeRouter(AuthNotifier());
+

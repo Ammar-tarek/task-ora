@@ -132,6 +132,7 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
                         itemBuilder: (_, i) => _PenaltyCard(
                           penalty:   _penalties[i],
                           isManager: isManager,
+                          currentUserId: profile?.id ?? '',
                           onApply: isManager ? () async {
                             await PenaltyRepository.applyPenalty(_penalties[i].id);
                             _load();
@@ -392,16 +393,19 @@ class _PenaltyCard extends StatelessWidget {
   const _PenaltyCard({
     required this.penalty,
     required this.isManager,
+    required this.currentUserId,
     this.onApply,
     this.onDelete,
   });
   final PenaltyItem penalty;
   final bool isManager;
+  final String currentUserId;
   final VoidCallback? onApply;
   final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
+    final isOwnPenalty = penalty.employeeId == currentUserId;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -420,7 +424,7 @@ class _PenaltyCard extends StatelessWidget {
           ])),
           Text('EGP ${penalty.amount.toStringAsFixed(0)}',
             style: AppTextStyles.dataLg.copyWith(color: AppColors.error, fontSize: 18)),
-          if (isManager && onDelete != null) ...[
+          if (isManager && onDelete != null && !isOwnPenalty) ...[
             const SizedBox(width: 8),
             IconButton(
               icon: Icon(Icons.delete_outline, size: 18, color: AppColors.onSurfaceVariant),
@@ -445,7 +449,7 @@ class _PenaltyCard extends StatelessWidget {
           const SizedBox(width: 8),
           Text(penalty.date, style: AppTextStyles.bodySm.copyWith(fontSize: 11)),
           const Spacer(),
-          if (isManager && !penalty.isApplied && onApply != null)
+          if (isManager && !penalty.isApplied && onApply != null && !isOwnPenalty)
             TextButton(
               onPressed: onApply,
               child: Text('Apply Deduction',

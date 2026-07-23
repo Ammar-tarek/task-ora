@@ -28,8 +28,8 @@ class NotificationTriggerService {
     _profile = profile;
     _stop();
 
-    _channel = SupabaseService.adminClient
-        .channel('notif-${profile.id}')
+    _channel = SupabaseService.client
+        .channel('public:notifications:recipient_id=eq.${profile.id}')
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
@@ -42,12 +42,17 @@ class NotificationTriggerService {
           callback: (payload) {
             final row = payload.newRecord;
             final type = row['type'] as String? ?? 'system';
+            final refType = row['reference_type'] as String?;
+            final refId   = row['reference_id']   as String?;
             LocalNotificationService.show(
-              title: row['title'] as String? ?? 'TaskOra',
+              title: row['title'] as String? ?? 'CB TO-DO',
               body:  row['body']  as String? ?? '',
               type:  _hrTypes.contains(type)
                   ? LocalNotificationService.typeHr
                   : LocalNotificationService.typeTask,
+              payload: (refType != null && refId != null)
+                  ? '$refType:$refId'
+                  : null,
             );
           },
         )
