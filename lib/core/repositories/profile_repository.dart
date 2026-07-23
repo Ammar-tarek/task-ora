@@ -25,10 +25,7 @@ class ProfileRepository {
   /// Fetch all profiles (any role).
   static Future<List<ProfileModel>> fetchAll() async {
     try {
-      final data = await _client
-          .from('profiles')
-          .select()
-          .order('full_name');
+      final data = await _client.from('profiles').select().order('full_name');
       return (data as List).map((m) => ProfileModel.fromMap(m)).toList();
     } catch (_) {
       return [];
@@ -52,11 +49,16 @@ class ProfileRepository {
   /// Update a user's status (active / inactive).
   static Future<void> setStatus(String id, String status) async {
     try {
-      await _client.from('profiles').update({
-        'status': status,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', id);
-    } catch (_) { /* silently fail if table doesn't exist */ }
+      await _client
+          .from('profiles')
+          .update({
+            'status': status,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', id);
+    } catch (_) {
+      /* silently fail if table doesn't exist */
+    }
   }
 
   /// Fetch profiles that have no team assigned yet (for the member picker).
@@ -112,7 +114,7 @@ class ProfileRepository {
     required String password,
     required String fullName,
     required String role, // 'manager' or 'employee'
-    String? teamId,       // auto-assign to this team after creation
+    String? teamId, // auto-assign to this team after creation
   }) async {
     try {
       // Step 1: Create auth user with only full_name in metadata.
@@ -135,10 +137,10 @@ class ProfileRepository {
       // the role and name explicitly — bypassing any trigger constraints.
       await Future.delayed(const Duration(milliseconds: 800));
       await SupabaseService.adminClient.from('profiles').upsert({
-        'id':        userId,
+        'id': userId,
         'full_name': fullName.trim(),
-        'role':      role,
-        'status':    'active',
+        'role': role,
+        'status': 'active',
         if (teamId != null) 'team_id': teamId,
       });
 
@@ -202,7 +204,9 @@ class ProfileRepository {
   /// Fetch the auth email for a user (requires admin client).
   static Future<String?> fetchEmail(String userId) async {
     try {
-      final res = await SupabaseService.adminClient.auth.admin.getUserById(userId);
+      final res = await SupabaseService.adminClient.auth.admin.getUserById(
+        userId,
+      );
       return res.user?.email;
     } catch (_) {
       return null;
@@ -223,20 +227,24 @@ class ProfileRepository {
     try {
       // 1. Update auth user if email or password changed
       final attrs = AdminUserAttributes(
-        email:    (email != null && email.isNotEmpty) ? email : null,
-        password: (newPassword != null && newPassword.isNotEmpty) ? newPassword : null,
+        email: (email != null && email.isNotEmpty) ? email : null,
+        password: (newPassword != null && newPassword.isNotEmpty)
+            ? newPassword
+            : null,
       );
       if (attrs.email != null || attrs.password != null) {
-        await SupabaseService.adminClient.auth.admin
-            .updateUserById(userId, attributes: attrs);
+        await SupabaseService.adminClient.auth.admin.updateUserById(
+          userId,
+          attributes: attrs,
+        );
       }
 
       // 2. Update profile row
       final updates = <String, dynamic>{
-        'full_name':   fullName,
-        'phone':       phone?.isEmpty == true ? null : phone,
-        'updated_at':  DateTime.now().toIso8601String(),
-        if (role   != null) 'role':   role,
+        'full_name': fullName,
+        'phone': phone?.isEmpty == true ? null : phone,
+        'updated_at': DateTime.now().toIso8601String(),
+        if (role != null) 'role': role,
         if (status != null) 'status': status,
       };
       await SupabaseService.adminClient
@@ -274,8 +282,10 @@ class ProfileRepository {
   /// ```
   static Future<ProfileModel?> fetchByEmail(String email) async {
     try {
-      final data = await SupabaseService.client
-          .rpc('get_profile_by_email', params: {'user_email': email.trim().toLowerCase()});
+      final data = await SupabaseService.client.rpc(
+        'get_profile_by_email',
+        params: {'user_email': email.trim().toLowerCase()},
+      );
       final list = data as List?;
       if (list == null || list.isEmpty) return null;
       return ProfileModel.fromMap(list.first as Map<String, dynamic>);

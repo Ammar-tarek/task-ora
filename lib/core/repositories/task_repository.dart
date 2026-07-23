@@ -10,7 +10,7 @@ import 'notification_repository.dart';
 import 'team_repository.dart';
 
 class TaskRepository {
-  static final _client      = SupabaseService.client;
+  static final _client = SupabaseService.client;
   static final _adminClient = SupabaseService.adminClient;
 
   // ── Task select fragment (reused across methods) ────────────────────────────
@@ -33,11 +33,12 @@ class TaskRepository {
     String? overrideTeamId,
   }) async {
     if (profile.isAdminOrManager) {
-      final teamId = overrideTeamId ?? (profile.isManager ? profile.teamId : null);
+      final teamId =
+          overrideTeamId ?? (profile.isManager ? profile.teamId : null);
       return _fetchAll(teamId: teamId);
     }
     if (profile.isEmployee) return _fetchEmployeeTasks(profile);
-    if (profile.isClient)   return _fetchClientTasks(profile);
+    if (profile.isClient) return _fetchClientTasks(profile);
     return [];
   }
 
@@ -47,8 +48,8 @@ class TaskRepository {
       final base = _client.from('tasks').select(_taskSelect);
       final query = teamId != null
           ? base
-              .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId')
-              .order('created_at', ascending: false)
+                .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId')
+                .order('created_at', ascending: false)
           : base.order('created_at', ascending: false);
       final data = await query;
       return (data as List).map((m) => TaskModel.fromMap(m)).toList();
@@ -57,8 +58,8 @@ class TaskRepository {
         final base = _client.from('tasks').select('*');
         final query = teamId != null
             ? base
-                .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId')
-                .order('created_at', ascending: false)
+                  .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId')
+                  .order('created_at', ascending: false)
             : base.order('created_at', ascending: false);
         final data = await query;
         return (data as List).map((m) => TaskModel.fromMap(m)).toList();
@@ -80,14 +81,17 @@ class TaskRepository {
     required String byProfileId,
     String? note,
   }) async {
-    await _adminClient.from('tasks').update({
-      'team_id':              null,
-      'handoff_from_team_id': fromTeamId,
-      'handoff_to_team_id':   toTeamId,
-      'handoff_by':           byProfileId,
-      'handoff_note':         note,
-      'updated_at':           DateTime.now().toIso8601String(),
-    }).eq('id', taskId);
+    await _adminClient
+        .from('tasks')
+        .update({
+          'team_id': null,
+          'handoff_from_team_id': fromTeamId,
+          'handoff_to_team_id': toTeamId,
+          'handoff_by': byProfileId,
+          'handoff_note': note,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', taskId);
     // Remove old assignees — new department will reassign.
     await _adminClient.from('task_assignees').delete().eq('task_id', taskId);
 
@@ -137,7 +141,8 @@ class TaskRepository {
           recipientId: recipientId,
           type: 'task_handoff',
           title: 'Department Task Switch',
-          body: 'Task "$title" has been moved to ${toTeam?.name ?? "another department"}.',
+          body:
+              'Task "$title" has been moved to ${toTeam?.name ?? "another department"}.',
           referenceType: 'task',
           referenceId: taskId,
         );
@@ -156,11 +161,14 @@ class TaskRepository {
     final title = taskData?['title'] as String? ?? 'Task';
     final fromTeamId = taskData?['handoff_from_team_id'] as String?;
 
-    await _adminClient.from('tasks').update({
-      'team_id':            teamId,
-      'handoff_to_team_id': null,
-      'updated_at':         DateTime.now().toIso8601String(),
-    }).eq('id', taskId);
+    await _adminClient
+        .from('tasks')
+        .update({
+          'team_id': teamId,
+          'handoff_to_team_id': null,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', taskId);
 
     // 2. Notify source & target managers, leads, and admins that handoff was accepted
     try {
@@ -208,7 +216,8 @@ class TaskRepository {
           recipientId: recipientId,
           type: 'handoff_accepted',
           title: 'Department Switch Accepted',
-          body: 'Task "$title" handoff was accepted into ${toTeam?.name ?? "target"} department.',
+          body:
+              'Task "$title" handoff was accepted into ${toTeam?.name ?? "target"} department.',
           referenceType: 'task',
           referenceId: taskId,
         );
@@ -243,9 +252,7 @@ class TaskRepository {
     }
   }
 
-  static Future<List<TaskModel>> _fetchClientTasks(
-    ProfileModel profile,
-  ) async {
+  static Future<List<TaskModel>> _fetchClientTasks(ProfileModel profile) async {
     try {
       final data = await _adminClient
           .from('tasks')
@@ -279,9 +286,13 @@ class TaskRepository {
       final base = _client.from('tasks').select(_taskSelect);
       dynamic query;
       if (userId != null) {
-        query = base.eq('created_by', userId).order('created_at', ascending: false);
+        query = base
+            .eq('created_by', userId)
+            .order('created_at', ascending: false);
       } else if (teamId != null) {
-        query = base.eq('team_id', teamId).order('created_at', ascending: false);
+        query = base
+            .eq('team_id', teamId)
+            .order('created_at', ascending: false);
       } else {
         query = base.order('created_at', ascending: false);
       }
@@ -292,9 +303,13 @@ class TaskRepository {
         final base = _client.from('tasks').select('*');
         dynamic query;
         if (userId != null) {
-          query = base.eq('created_by', userId).order('created_at', ascending: false);
+          query = base
+              .eq('created_by', userId)
+              .order('created_at', ascending: false);
         } else if (teamId != null) {
-          query = base.eq('team_id', teamId).order('created_at', ascending: false);
+          query = base
+              .eq('team_id', teamId)
+              .order('created_at', ascending: false);
         } else {
           query = base.order('created_at', ascending: false);
         }
@@ -312,13 +327,17 @@ class TaskRepository {
   }) async {
     final tasks = await fetchTasks(userId: userId, teamId: teamId);
     return {
-      'not_started':     tasks.where((t) => t.status == 'not_started').toList(),
-      'in_progress':     tasks.where((t) => t.status == 'in_progress').toList(),
-      'employee_done':   tasks.where((t) => t.status == 'employee_done').toList(),
-      'client_approved':  tasks.where((t) => t.status == 'client_approved').toList(),
-      'client_rejected': tasks.where((t) => t.status == 'client_rejected').toList(),
-      'completed':       tasks.where((t) => t.status == 'completed').toList(),
-      'on_hold':         tasks.where((t) => t.status == 'on_hold').toList(),
+      'not_started': tasks.where((t) => t.status == 'not_started').toList(),
+      'in_progress': tasks.where((t) => t.status == 'in_progress').toList(),
+      'employee_done': tasks.where((t) => t.status == 'employee_done').toList(),
+      'client_approved': tasks
+          .where((t) => t.status == 'client_approved')
+          .toList(),
+      'client_rejected': tasks
+          .where((t) => t.status == 'client_rejected')
+          .toList(),
+      'completed': tasks.where((t) => t.status == 'completed').toList(),
+      'on_hold': tasks.where((t) => t.status == 'on_hold').toList(),
     };
   }
 
@@ -361,7 +380,9 @@ class TaskRepository {
     try {
       final data = await _client
           .from('tasks')
-          .select('*, task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url))')
+          .select(
+            '*, task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url))',
+          )
           .eq('id', taskId)
           .single();
       return data;
@@ -407,10 +428,10 @@ class TaskRepository {
   ) async {
     try {
       await _client.from('task_audit_log').insert({
-        'task_id':  taskId,
+        'task_id': taskId,
         'actor_id': editedBy,
-        'action':   'edit',
-        'notes':    summary,
+        'action': 'edit',
+        'notes': summary,
       });
     } catch (_) {}
   }
@@ -423,7 +444,9 @@ class TaskRepository {
     try {
       final data = await _client
           .from('task_comments')
-          .select('id, content, is_internal, created_at, author:profiles(full_name)')
+          .select(
+            'id, content, is_internal, created_at, author:profiles(full_name)',
+          )
           .eq('task_id', taskId)
           .order('created_at', ascending: true);
       return (data as List)
@@ -442,9 +465,9 @@ class TaskRepository {
   }) async {
     try {
       await _client.from('task_comments').insert({
-        'task_id':     taskId,
-        'author_id':   authorId,
-        'content':     content,
+        'task_id': taskId,
+        'author_id': authorId,
+        'content': content,
         'is_internal': isInternal,
       });
       return true;
@@ -459,16 +482,20 @@ class TaskRepository {
 
   static Future<void> updateTaskStatus(String taskId, String newStatus) async {
     try {
-      await _client.from('tasks').update({'status': newStatus}).eq('id', taskId);
+      await _client
+          .from('tasks')
+          .update({'status': newStatus})
+          .eq('id', taskId);
     } on PostgrestException catch (e) {
       throw Exception('Status update failed [${e.code}]: ${e.message}');
     }
   }
 
   static Future<void> updateTaskProgress(String taskId, int pct) async {
-    await _client.from('tasks').update({
-      'completion_percentage': pct,
-    }).eq('id', taskId);
+    await _client
+        .from('tasks')
+        .update({'completion_percentage': pct})
+        .eq('id', taskId);
   }
 
   static Future<String?> createTask({
@@ -481,16 +508,20 @@ class TaskRepository {
     String? dueDate,
   }) async {
     try {
-      final result = await _client.from('tasks').insert({
-        'title':       title,
-        'created_by':  createdBy,
-        'team_id':     teamId,
-        'client_id':   clientId,
-        'description': description,
-        'priority':    priority,
-        'due_date':    dueDate,
-        'status':      'not_started',
-      }).select('id').single();
+      final result = await _client
+          .from('tasks')
+          .insert({
+            'title': title,
+            'created_by': createdBy,
+            'team_id': teamId,
+            'client_id': clientId,
+            'description': description,
+            'priority': priority,
+            'due_date': dueDate,
+            'status': 'not_started',
+          })
+          .select('id')
+          .single();
       return result['id'] as String;
     } catch (_) {
       return null;
@@ -516,10 +547,10 @@ class TaskRepository {
   }) async {
     try {
       final payload = <String, dynamic>{
-        'title':                title,
-        'priority':             priority,
-        'status':               status,
-        'due_date':             dueDate,
+        'title': title,
+        'priority': priority,
+        'status': status,
+        'due_date': dueDate,
         'completion_percentage': completionPercentage,
         // explicit null clears the FK; only set when admin chose to change it
         if (clientId != null || clearClient) 'client_id': clientId,
@@ -552,10 +583,13 @@ class TaskRepository {
     String? editedBy,
   }) async {
     try {
-      await _client.from('tasks').update({
-        'status':                status,
-        'completion_percentage': completionPercentage,
-      }).eq('id', id);
+      await _client
+          .from('tasks')
+          .update({
+            'status': status,
+            'completion_percentage': completionPercentage,
+          })
+          .eq('id', id);
 
       if (editedBy != null) {
         await logTaskEdit(id, editedBy, 'Status / progress updated');
@@ -585,12 +619,16 @@ class TaskRepository {
     try {
       await _client.from('task_assignees').delete().eq('task_id', taskId);
       if (profileIds.isNotEmpty) {
-        final inserts = profileIds.map((pId) => {
-          'task_id':     taskId,
-          'profile_id':  pId,
-          'is_lead':     pId == profileIds.first,
-          'assigned_by': assignedBy,
-        }).toList();
+        final inserts = profileIds
+            .map(
+              (pId) => {
+                'task_id': taskId,
+                'profile_id': pId,
+                'is_lead': pId == profileIds.first,
+                'assigned_by': assignedBy,
+              },
+            )
+            .toList();
         await _client.from('task_assignees').insert(inserts);
       }
 
@@ -619,7 +657,9 @@ class TaskRepository {
           if (teamId != null) {
             final team = await TeamRepository.fetchById(teamId);
             final teamLeadId = team?.teamLeadId;
-            if (teamLeadId != null && teamLeadId != assignedBy && !profileIds.contains(teamLeadId)) {
+            if (teamLeadId != null &&
+                teamLeadId != assignedBy &&
+                !profileIds.contains(teamLeadId)) {
               await NotificationRepository.createNotification(
                 recipientId: teamLeadId,
                 type: 'task_assigned',

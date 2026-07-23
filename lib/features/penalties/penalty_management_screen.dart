@@ -12,7 +12,8 @@ import '../../core/theme/app_theme.dart';
 class PenaltyManagementScreen extends StatefulWidget {
   const PenaltyManagementScreen({super.key});
   @override
-  State<PenaltyManagementScreen> createState() => _PenaltyManagementScreenState();
+  State<PenaltyManagementScreen> createState() =>
+      _PenaltyManagementScreenState();
 }
 
 class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
@@ -41,7 +42,9 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
     setState(() => _loading = true);
     final profile = context.read<AuthNotifier>().profile;
     await context.read<TeamPrivilegesNotifier>().reload();
-    final canManage = profile?.isAdmin == true ||
+    if (!mounted) return;
+    final canManage =
+        profile?.isAdmin == true ||
         context.read<TeamPrivilegesNotifier>().canManagePenalties;
     // Admin sees everyone; a manager (or granted staff) sees only their team.
     final scopeTeamId = profile?.isAdmin == true ? null : profile?.teamId;
@@ -51,18 +54,22 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
     } else {
       data = await PenaltyRepository.fetchForEmployee(profile?.id ?? '');
     }
-    if (mounted) setState(() { _penalties = data; _loading = false; });
+    if (mounted)
+      setState(() {
+        _penalties = data;
+        _loading = false;
+      });
   }
 
   @override
   Widget build(BuildContext context) {
-    final profile   = context.watch<AuthNotifier>().profile;
-    final privs     = context.watch<TeamPrivilegesNotifier>();
+    final profile = context.watch<AuthNotifier>().profile;
+    final privs = context.watch<TeamPrivilegesNotifier>();
     // "Manager view" = admin, a manager with the privilege, or a granted employee.
     final isManager = profile?.isAdmin == true || privs.canManagePenalties;
     final canManagePenalties = isManager;
-    final applied   = _penalties.where((p) => p.isApplied).length;
-    final pending   = _penalties.length - applied;
+    final applied = _penalties.where((p) => p.isApplied).length;
+    final pending = _penalties.length - applied;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -79,98 +86,152 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
               child: const Icon(Icons.add, color: AppColors.gold),
             )
           : null,
-      body: Column(children: [
-        // Summary row
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Row(children: [
-            _SummaryTile(label: 'Total',   value: '${_penalties.length}', color: AppColors.gold),
-            const SizedBox(width: 12),
-            _SummaryTile(label: 'Pending', value: '$pending', color: AppColors.statusInProgress),
-            const SizedBox(width: 12),
-            _SummaryTile(label: 'Applied', value: '$applied', color: AppColors.statusDone),
-          ]),
-        ),
-        if (!isManager)
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.gold.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.gold.withValues(alpha: 0.2)),
+      body: Column(
+        children: [
+          // Summary row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                _SummaryTile(
+                  label: 'Total',
+                  value: '${_penalties.length}',
+                  color: AppColors.gold,
+                ),
+                const SizedBox(width: 12),
+                _SummaryTile(
+                  label: 'Pending',
+                  value: '$pending',
+                  color: AppColors.statusInProgress,
+                ),
+                const SizedBox(width: 12),
+                _SummaryTile(
+                  label: 'Applied',
+                  value: '$applied',
+                  color: AppColors.statusDone,
+                ),
+              ],
             ),
-            child: Row(children: [
-              const Icon(Icons.info_outline, size: 16, color: AppColors.gold),
-              const SizedBox(width: 8),
-              Expanded(child: Text(
-                'Only your penalties are shown here.',
-                style: AppTextStyles.bodySm.copyWith(color: AppColors.gold),
-              )),
-            ]),
           ),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
-              : _penalties.isEmpty
-                  ? Center(
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.gavel_outlined, size: 64, color: AppColors.outlineVariant),
-                        const SizedBox(height: 16),
-                        Text(
-                          isManager ? 'No penalties recorded' : 'No penalties on your record',
-                          style: AppTextStyles.labelMd,
-                        ),
-                      ]))
-                  : RefreshIndicator(
-                      color: AppColors.gold,
-                      onRefresh: _load,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                        itemCount: _penalties.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (_, i) => _PenaltyCard(
-                          penalty:   _penalties[i],
-                          isManager: isManager,
-                          currentUserId: profile?.id ?? '',
-                          onApply: isManager ? () async {
-                            await PenaltyRepository.applyPenalty(_penalties[i].id);
-                            _load();
-                          } : null,
-                          onDelete: isManager ? () async {
-                            final ok = await _confirmDelete(context);
-                            if (ok) {
-                              await PenaltyRepository.deletePenalty(_penalties[i].id);
-                              _load();
-                            }
-                          } : null,
-                        ),
+          if (!isManager)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.gold.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.gold.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: AppColors.gold,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Only your penalties are shown here.',
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.gold,
                       ),
                     ),
-        ),
-      ]),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: _loading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.gold),
+                  )
+                : _penalties.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.gavel_outlined,
+                          size: 64,
+                          color: AppColors.outlineVariant,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          isManager
+                              ? 'No penalties recorded'
+                              : 'No penalties on your record',
+                          style: AppTextStyles.labelMd,
+                        ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    color: AppColors.gold,
+                    onRefresh: _load,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      itemCount: _penalties.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) => _PenaltyCard(
+                        penalty: _penalties[i],
+                        isManager: isManager,
+                        currentUserId: profile?.id ?? '',
+                        onApply: isManager
+                            ? () async {
+                                await PenaltyRepository.applyPenalty(
+                                  _penalties[i].id,
+                                );
+                                _load();
+                              }
+                            : null,
+                        onDelete: isManager
+                            ? () async {
+                                final ok = await _confirmDelete(context);
+                                if (ok) {
+                                  await PenaltyRepository.deletePenalty(
+                                    _penalties[i].id,
+                                  );
+                                  _load();
+                                }
+                              }
+                            : null,
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
   Future<bool> _confirmDelete(BuildContext context) async {
     return await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Penalty'),
-        content: const Text('Are you sure you want to delete this penalty record?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Delete', style: TextStyle(color: AppColors.error)),
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Delete Penalty'),
+            content: const Text(
+              'Are you sure you want to delete this penalty record?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text('Delete', style: TextStyle(color: AppColors.error)),
+              ),
+            ],
           ),
-        ],
-      ),
-    ) ?? false;
+        ) ??
+        false;
   }
 
   Future<void> _showAddDialog(String approvedBy) async {
-    List<Map<String, dynamic>> types     = [];
+    List<Map<String, dynamic>> types = [];
     List<Map<String, dynamic>> employees = [];
 
     // Manager: restrict the employee picker to their own team. Admin: everyone.
@@ -182,13 +243,15 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
       PenaltyRepository.fetchTypes(),
       PenaltyRepository.fetchEmployees(teamId: scopeTeamId),
     ]);
-    types     = results[0];
+    types = results[0];
     employees = results[1];
 
     if (!mounted) return;
     if (types.isEmpty || employees.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not load penalty types or employees')),
+        const SnackBar(
+          content: Text('Could not load penalty types or employees'),
+        ),
       );
       return;
     }
@@ -196,10 +259,10 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
     await showDialog(
       context: context,
       builder: (_) => _AddPenaltyDialog(
-        types:      types,
-        employees:  employees,
+        types: types,
+        employees: employees,
         approvedBy: approvedBy,
-        onSaved:    _load,
+        onSaved: _load,
       ),
     );
   }
@@ -224,7 +287,7 @@ class _AddPenaltyDialog extends StatefulWidget {
 }
 
 class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
-  final _formKey    = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
   final _reasonCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
 
@@ -257,12 +320,12 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
 
     setState(() => _saving = true);
     await PenaltyRepository.createPenalty(
-      employeeId:    _selectedEmployee!,
+      employeeId: _selectedEmployee!,
       penaltyTypeId: _selectedType!,
-      reason:        _reasonCtrl.text.trim(),
-      amount:        double.tryParse(_amountCtrl.text.trim()) ?? 0,
-      approvedBy:    widget.approvedBy,
-      date:          _date.toIso8601String().substring(0, 10),
+      reason: _reasonCtrl.text.trim(),
+      amount: double.tryParse(_amountCtrl.text.trim()) ?? 0,
+      approvedBy: widget.approvedBy,
+      date: _date.toIso8601String().substring(0, 10),
     );
     if (mounted) {
       Navigator.pop(context);
@@ -279,72 +342,93 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              // Employee picker
-              DropdownButtonFormField<String>(
-                value: _selectedEmployee,
-                decoration: const InputDecoration(labelText: 'Employee'),
-                items: widget.employees.map((e) => DropdownMenuItem<String>(
-                  value: e['id'] as String,
-                  child: Text(e['full_name'] as String? ?? ''),
-                )).toList(),
-                onChanged: (v) => setState(() => _selectedEmployee = v),
-                validator: (v) => v == null ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Employee picker
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedEmployee,
+                  decoration: const InputDecoration(labelText: 'Employee'),
+                  items: widget.employees
+                      .map(
+                        (e) => DropdownMenuItem<String>(
+                          value: e['id'] as String,
+                          child: Text(e['full_name'] as String? ?? ''),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedEmployee = v),
+                  validator: (v) => v == null ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
 
-              // Type picker
-              DropdownButtonFormField<String>(
-                value: _selectedType,
-                decoration: const InputDecoration(labelText: 'Penalty Type'),
-                items: widget.types.map((t) => DropdownMenuItem<String>(
-                  value: t['id'] as String,
-                  child: Text(t['name'] as String? ?? ''),
-                )).toList(),
-                onChanged: (v) => setState(() => _selectedType = v),
-                validator: (v) => v == null ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
+                // Type picker
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedType,
+                  decoration: const InputDecoration(labelText: 'Penalty Type'),
+                  items: widget.types
+                      .map(
+                        (t) => DropdownMenuItem<String>(
+                          value: t['id'] as String,
+                          child: Text(t['name'] as String? ?? ''),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedType = v),
+                  validator: (v) => v == null ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
 
-              // Amount
-              TextFormField(
-                controller: _amountCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Amount (EGP)', prefixText: 'EGP '),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  if (double.tryParse(v) == null) return 'Enter a valid number';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
+                // Amount
+                TextFormField(
+                  controller: _amountCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Amount (EGP)',
+                    prefixText: 'EGP ',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    if (double.tryParse(v) == null)
+                      return 'Enter a valid number';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
 
-              // Reason
-              TextFormField(
-                controller: _reasonCtrl,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Reason'),
-                validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
+                // Reason
+                TextFormField(
+                  controller: _reasonCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Reason'),
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
 
-              // Date picker
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text('Date: ${DateFormat('d MMM y').format(_date)}',
-                  style: AppTextStyles.bodyMd),
-                trailing: const Icon(Icons.calendar_today_outlined, color: AppColors.gold),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _date,
-                    firstDate: DateTime(2024),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) setState(() => _date = picked);
-                },
-              ),
-            ]),
+                // Date picker
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Date: ${DateFormat('d MMM y').format(_date)}',
+                    style: AppTextStyles.bodyMd,
+                  ),
+                  trailing: const Icon(
+                    Icons.calendar_today_outlined,
+                    color: AppColors.gold,
+                  ),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _date,
+                      firstDate: DateTime(2024),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) setState(() => _date = picked);
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -356,8 +440,14 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
         ElevatedButton(
           onPressed: _saving ? null : _save,
           child: _saving
-              ? const SizedBox(width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
               : const Text('Add Penalty'),
         ),
       ],
@@ -368,7 +458,11 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
 // ── Widgets ────────────────────────────────────────────────────────────────
 
 class _SummaryTile extends StatelessWidget {
-  const _SummaryTile({required this.label, required this.value, required this.color});
+  const _SummaryTile({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
   final String label, value;
   final Color color;
 
@@ -381,10 +475,15 @@ class _SummaryTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
-      child: Column(children: [
-        Text(value, style: AppTextStyles.dataLg.copyWith(color: color, fontSize: 22)),
-        Text(label, style: AppTextStyles.labelCaps.copyWith(color: color)),
-      ]),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: AppTextStyles.dataLg.copyWith(color: color, fontSize: 22),
+          ),
+          Text(label, style: AppTextStyles.labelCaps.copyWith(color: color)),
+        ],
+      ),
     ),
   );
 }
@@ -413,50 +512,92 @@ class _PenaltyCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          TAvatar(name: penalty.employeeName, size: 38),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(penalty.employeeName, style: AppTextStyles.labelMd),
-            Text(penalty.penaltyType,
-              style: AppTextStyles.bodySm.copyWith(color: AppColors.error)),
-          ])),
-          Text('EGP ${penalty.amount.toStringAsFixed(0)}',
-            style: AppTextStyles.dataLg.copyWith(color: AppColors.error, fontSize: 18)),
-          if (isManager && onDelete != null && !isOwnPenalty) ...[
-            const SizedBox(width: 8),
-            IconButton(
-              icon: Icon(Icons.delete_outline, size: 18, color: AppColors.onSurfaceVariant),
-              onPressed: onDelete,
-              tooltip: 'Delete',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              TAvatar(name: penalty.employeeName, size: 38),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(penalty.employeeName, style: AppTextStyles.labelMd),
+                    Text(
+                      penalty.penaltyType,
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.error,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                'EGP ${penalty.amount.toStringAsFixed(0)}',
+                style: AppTextStyles.dataLg.copyWith(
+                  color: AppColors.error,
+                  fontSize: 18,
+                ),
+              ),
+              if (isManager && onDelete != null && !isOwnPenalty) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  onPressed: onDelete,
+                  tooltip: 'Delete',
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(penalty.reason, style: AppTextStyles.bodySm),
+          if (penalty.approvedByName.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Approved by: ${penalty.approvedByName}',
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.onSurfaceVariant,
+                fontSize: 11,
+              ),
             ),
           ],
-        ]),
-        const SizedBox(height: 8),
-        Text(penalty.reason, style: AppTextStyles.bodySm),
-        if (penalty.approvedByName.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text('Approved by: ${penalty.approvedByName}',
-            style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant, fontSize: 11)),
-        ],
-        const SizedBox(height: 10),
-        Row(children: [
-          TStatusChip(
-            label: penalty.isApplied ? 'Applied' : 'Pending',
-            color: penalty.isApplied ? AppColors.statusDone : AppColors.statusInProgress,
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              TStatusChip(
+                label: penalty.isApplied ? 'Applied' : 'Pending',
+                color: penalty.isApplied
+                    ? AppColors.statusDone
+                    : AppColors.statusInProgress,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                penalty.date,
+                style: AppTextStyles.bodySm.copyWith(fontSize: 11),
+              ),
+              const Spacer(),
+              if (isManager &&
+                  !penalty.isApplied &&
+                  onApply != null &&
+                  !isOwnPenalty)
+                TextButton(
+                  onPressed: onApply,
+                  child: Text(
+                    'Apply Deduction',
+                    style: AppTextStyles.labelMd.copyWith(
+                      color: AppColors.gold,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text(penalty.date, style: AppTextStyles.bodySm.copyWith(fontSize: 11)),
-          const Spacer(),
-          if (isManager && !penalty.isApplied && onApply != null && !isOwnPenalty)
-            TextButton(
-              onPressed: onApply,
-              child: Text('Apply Deduction',
-                style: AppTextStyles.labelMd.copyWith(color: AppColors.gold)),
-            ),
-        ]),
-      ]),
+        ],
+      ),
     );
   }
 }

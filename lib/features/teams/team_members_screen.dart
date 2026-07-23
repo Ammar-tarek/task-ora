@@ -33,7 +33,8 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
   bool _emailValid = false;
   bool _searching = false;
   ProfileModel? _foundUser;
-  String? _searchMessage; // null = no search yet, 'not_found', 'already_member', 'other_team'
+  String?
+  _searchMessage; // null = no search yet, 'not_found', 'already_member', 'other_team'
   bool _adding = false;
 
   @override
@@ -88,7 +89,9 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
       _searchMessage = null;
     });
 
-    final profile = await ProfileRepository.fetchByEmail(_emailCtrl.text.trim());
+    final profile = await ProfileRepository.fetchByEmail(
+      _emailCtrl.text.trim(),
+    );
 
     if (!mounted) return;
 
@@ -122,7 +125,10 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
   Future<void> _addFoundUser() async {
     if (_foundUser == null) return;
     setState(() => _adding = true);
-    final ok = await TeamRepository.setTeamForUser(_foundUser!.id, widget.teamId);
+    final ok = await TeamRepository.setTeamForUser(
+      _foundUser!.id,
+      widget.teamId,
+    );
     if (!mounted) return;
     if (ok) {
       // Clear search & refresh list
@@ -137,7 +143,9 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
     } else {
       setState(() => _adding = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to add member. Please try again.')),
+        const SnackBar(
+          content: Text('Failed to add member. Please try again.'),
+        ),
       );
     }
   }
@@ -150,7 +158,10 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceContainerLowest,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('Remove ${user.firstName}?', style: AppTextStyles.headlineSm),
+        title: Text(
+          'Remove ${user.firstName}?',
+          style: AppTextStyles.headlineSm,
+        ),
         content: Text(
           '${user.fullName} will be unassigned from "${widget.teamName}".',
           style: AppTextStyles.bodyMd,
@@ -179,7 +190,9 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
         _loadMembers();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to remove member. Please try again.')),
+          const SnackBar(
+            content: Text('Failed to remove member. Please try again.'),
+          ),
         );
       }
     }
@@ -223,7 +236,8 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
             foundUser: _foundUser,
             searchMessage: _searchMessage,
             onSearch: _emailValid && !_searching ? _searchByEmail : null,
-            onAdd: (_foundUser != null &&
+            onAdd:
+                (_foundUser != null &&
                     _searchMessage != 'already_member' &&
                     !_adding)
                 ? _addFoundUser
@@ -239,34 +253,40 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
           // ── Members label
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-            child: Row(children: [
-              Icon(Icons.people_outline, size: 16, color: AppColors.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Text('Current Members', style: AppTextStyles.labelMd),
-            ]),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.people_outline,
+                  size: 16,
+                  color: AppColors.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Text('Current Members', style: AppTextStyles.labelMd),
+              ],
+            ),
           ),
 
           // ── Members list
           Expanded(
             child: _loadingMembers
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold))
+                    child: CircularProgressIndicator(color: AppColors.gold),
+                  )
                 : _members.isEmpty
-                    ? _buildEmptyMembers()
-                    : RefreshIndicator(
-                        color: AppColors.gold,
-                        onRefresh: _loadMembers,
-                        child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                          itemCount: _members.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (_, i) => _MemberCard(
-                            user: _members[i],
-                            onRemove: () => _removeMember(_members[i]),
-                          ),
-                        ),
+                ? _buildEmptyMembers()
+                : RefreshIndicator(
+                    color: AppColors.gold,
+                    onRefresh: _loadMembers,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      itemCount: _members.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) => _MemberCard(
+                        user: _members[i],
+                        onRemove: () => _removeMember(_members[i]),
                       ),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -274,24 +294,24 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
   }
 
   Widget _buildEmptyMembers() => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.person_search_outlined,
-              size: 48,
-              color: AppColors.outlineVariant,
-            ),
-            const SizedBox(height: 12),
-            Text('No members yet', style: AppTextStyles.labelMd),
-            const SizedBox(height: 4),
-            Text(
-              'Search by email above to add members.',
-              style: AppTextStyles.bodySm,
-            ),
-          ],
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.person_search_outlined,
+          size: 48,
+          color: AppColors.outlineVariant,
         ),
-      );
+        const SizedBox(height: 12),
+        Text('No members yet', style: AppTextStyles.labelMd),
+        const SizedBox(height: 4),
+        Text(
+          'Search by email above to add members.',
+          style: AppTextStyles.bodySm,
+        ),
+      ],
+    ),
+  );
 }
 
 // ── Email Search Panel ────────────────────────────────────────────────────────
@@ -329,57 +349,71 @@ class _EmailSearchPanel extends StatelessWidget {
           const SizedBox(height: 10),
 
           // ── Email field + Search button
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(
-              child: TextField(
-                controller: emailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                autocorrect: false,
-                decoration: InputDecoration(
-                  hintText: 'user@example.com',
-                  prefixIcon: const Icon(Icons.email_outlined, size: 18),
-                  suffixIcon: emailCtrl.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 16),
-                          onPressed: () => emailCtrl.clear(),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  decoration: InputDecoration(
+                    hintText: 'user@example.com',
+                    prefixIcon: const Icon(Icons.email_outlined, size: 18),
+                    suffixIcon: emailCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () => emailCtrl.clear(),
+                          )
+                        : null,
+                  ),
+                  onSubmitted: (_) => onSearch?.call(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: onSearch,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    backgroundColor: emailValid
+                        ? AppColors.primary
+                        : AppColors.outlineVariant,
+                  ),
+                  child: searching
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
-                      : null,
+                      : const Icon(Icons.search, color: Colors.white, size: 20),
                 ),
-                onSubmitted: (_) => onSearch?.call(),
               ),
-            ),
-            const SizedBox(width: 10),
-            SizedBox(
-              height: 52,
-              child: ElevatedButton(
-                onPressed: onSearch,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  backgroundColor: emailValid ? AppColors.primary : AppColors.outlineVariant,
-                ),
-                child: searching
-                    ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.search, color: Colors.white, size: 20),
-              ),
-            ),
-          ]),
+            ],
+          ),
 
           // ── Validation hint
           if (!emailValid && emailCtrl.text.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6, left: 4),
-              child: Row(children: [
-                Icon(Icons.info_outline, size: 13, color: AppColors.onSurfaceVariant),
-                const SizedBox(width: 4),
-                Text(
-                  'Enter a valid email address (e.g. name@company.com)',
-                  style: AppTextStyles.bodySm.copyWith(fontSize: 11),
-                ),
-              ]),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 13,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Enter a valid email address (e.g. name@company.com)',
+                    style: AppTextStyles.bodySm.copyWith(fontSize: 11),
+                  ),
+                ],
+              ),
             ),
 
           // ── Search result
@@ -415,11 +449,16 @@ class _SearchResult extends StatelessWidget {
 
   Color get _roleColor {
     switch (user?.role) {
-      case 'admin':    return AppColors.primary;
-      case 'manager':  return AppColors.gold;
-      case 'employee': return AppColors.statusInProgress;
-      case 'client':   return AppColors.statusMedium;
-      default:         return AppColors.onSurfaceVariant;
+      case 'admin':
+        return AppColors.primary;
+      case 'manager':
+        return AppColors.gold;
+      case 'employee':
+        return AppColors.statusInProgress;
+      case 'client':
+        return AppColors.statusMedium;
+      default:
+        return AppColors.onSurfaceVariant;
     }
   }
 
@@ -434,24 +473,34 @@ class _SearchResult extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
         ),
-        child: Row(children: [
-          const Icon(Icons.person_off_outlined, color: AppColors.error, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('No account found',
-                    style: AppTextStyles.labelMd.copyWith(color: AppColors.error)),
-                const SizedBox(height: 2),
-                Text(
-                  'No user is registered with this email. Check the address and try again.',
-                  style: AppTextStyles.bodySm,
-                ),
-              ],
+        child: Row(
+          children: [
+            const Icon(
+              Icons.person_off_outlined,
+              color: AppColors.error,
+              size: 20,
             ),
-          ),
-        ]),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No account found',
+                    style: AppTextStyles.labelMd.copyWith(
+                      color: AppColors.error,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'No user is registered with this email. Check the address and try again.',
+                    style: AppTextStyles.bodySm,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       );
     }
 
@@ -462,25 +511,42 @@ class _SearchResult extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.statusInProgress.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.statusInProgress.withValues(alpha: 0.25)),
-        ),
-        child: Row(children: [
-          TAvatar(name: user!.fullName, size: 42),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(user!.fullName, style: AppTextStyles.labelMd,
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 3),
-              Text(
-                'Already a member of this team',
-                style: AppTextStyles.bodySm.copyWith(
-                  color: AppColors.statusInProgress, fontWeight: FontWeight.w600),
-              ),
-            ]),
+          border: Border.all(
+            color: AppColors.statusInProgress.withValues(alpha: 0.25),
           ),
-          const Icon(Icons.check_circle, color: AppColors.statusInProgress, size: 22),
-        ]),
+        ),
+        child: Row(
+          children: [
+            TAvatar(name: user!.fullName, size: 42),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user!.fullName,
+                    style: AppTextStyles.labelMd,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Already a member of this team',
+                    style: AppTextStyles.bodySm.copyWith(
+                      color: AppColors.statusInProgress,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.check_circle,
+              color: AppColors.statusInProgress,
+              size: 22,
+            ),
+          ],
+        ),
       );
     }
 
@@ -498,48 +564,72 @@ class _SearchResult extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              TAvatar(name: user!.fullName, size: 46),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(user!.fullName, style: AppTextStyles.labelMd,
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  Wrap(spacing: 6, children: [
-                    TStatusChip(label: user!.role, color: _roleColor),
-                    TStatusChip(
-                      label: user!.isActive ? 'Active' : 'Inactive',
-                      color: user!.isActive
-                          ? AppColors.statusDone
-                          : AppColors.onSurfaceVariant,
-                    ),
-                  ]),
-                ]),
-              ),
-              const Icon(Icons.person_outline, color: AppColors.gold, size: 22),
-            ]),
+            Row(
+              children: [
+                TAvatar(name: user!.fullName, size: 46),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user!.fullName,
+                        style: AppTextStyles.labelMd,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        children: [
+                          TStatusChip(label: user!.role, color: _roleColor),
+                          TStatusChip(
+                            label: user!.isActive ? 'Active' : 'Inactive',
+                            color: user!.isActive
+                                ? AppColors.statusDone
+                                : AppColors.onSurfaceVariant,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.person_outline,
+                  color: AppColors.gold,
+                  size: 22,
+                ),
+              ],
+            ),
 
             // Warning if user belongs to another team
             if (inOtherTeam) ...[
               const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.statusMedium.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Row(children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      size: 14, color: AppColors.statusMedium),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'This user is assigned to another team. Adding them here will move them to this team.',
-                      style: AppTextStyles.bodySm.copyWith(fontSize: 12),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      size: 14,
+                      color: AppColors.statusMedium,
                     ),
-                  ),
-                ]),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'This user is assigned to another team. Adding them here will move them to this team.',
+                        style: AppTextStyles.bodySm.copyWith(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
 
@@ -550,16 +640,20 @@ class _SearchResult extends StatelessWidget {
                 onPressed: adding ? null : onAdd,
                 icon: adding
                     ? const SizedBox(
-                        width: 16, height: 16,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Icon(Icons.person_add_outlined, size: 18),
                 label: Text(
                   adding
                       ? 'Adding…'
                       : inOtherTeam
-                          ? 'Move to This Team'
-                          : 'Add to Team',
+                      ? 'Move to This Team'
+                      : 'Add to Team',
                 ),
               ),
             ),
@@ -581,11 +675,16 @@ class _MemberCard extends StatelessWidget {
 
   Color get _roleColor {
     switch (user.role) {
-      case 'admin':    return AppColors.primary;
-      case 'manager':  return AppColors.gold;
-      case 'employee': return AppColors.statusInProgress;
-      case 'client':   return AppColors.statusMedium;
-      default:         return AppColors.onSurfaceVariant;
+      case 'admin':
+        return AppColors.primary;
+      case 'manager':
+        return AppColors.gold;
+      case 'employee':
+        return AppColors.statusInProgress;
+      case 'client':
+        return AppColors.statusMedium;
+      default:
+        return AppColors.onSurfaceVariant;
     }
   }
 
@@ -598,58 +697,81 @@ class _MemberCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Row(children: [
-        TAvatar(name: user.fullName, size: 44),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(user.fullName, style: AppTextStyles.labelMd,
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Row(children: [
-              TStatusChip(label: user.role, color: _roleColor),
-              const SizedBox(width: 6),
-              TStatusChip(
-                label: user.isActive ? 'Active' : 'Inactive',
-                color: user.isActive ? AppColors.statusDone : AppColors.onSurfaceVariant,
+      child: Row(
+        children: [
+          TAvatar(name: user.fullName, size: 44),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user.fullName,
+                  style: AppTextStyles.labelMd,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    TStatusChip(label: user.role, color: _roleColor),
+                    const SizedBox(width: 6),
+                    TStatusChip(
+                      label: user.isActive ? 'Active' : 'Inactive',
+                      color: user.isActive
+                          ? AppColors.statusDone
+                          : AppColors.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Options',
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            icon: Icon(Icons.more_vert, color: AppColors.onSurfaceVariant),
+            onSelected: (val) {
+              if (val == 'privileges') {
+                context.push(
+                  '/users/${user.id}/privileges',
+                  extra: {'userName': user.fullName, 'role': user.role},
+                );
+              } else if (val == 'remove') {
+                onRemove();
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'privileges',
+                child: Row(
+                  children: [
+                    Icon(Icons.tune_outlined, size: 16, color: AppColors.gold),
+                    SizedBox(width: 10),
+                    Text('Edit Privileges'),
+                  ],
+                ),
               ),
-            ]),
-          ]),
-        ),
-        PopupMenuButton<String>(
-          tooltip: 'Options',
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          icon: Icon(Icons.more_vert, color: AppColors.onSurfaceVariant),
-          onSelected: (val) {
-            if (val == 'privileges') {
-              context.push('/users/${user.id}/privileges', extra: {
-                'userName': user.fullName,
-                'role':     user.role,
-              });
-            } else if (val == 'remove') {
-              onRemove();
-            }
-          },
-          itemBuilder: (_) => [
-            const PopupMenuItem(
-              value: 'privileges',
-              child: Row(children: [
-                Icon(Icons.tune_outlined, size: 16, color: AppColors.gold),
-                SizedBox(width: 10),
-                Text('Edit Privileges'),
-              ]),
-            ),
-            const PopupMenuItem(
-              value: 'remove',
-              child: Row(children: [
-                Icon(Icons.person_remove_outlined, size: 16, color: AppColors.error),
-                SizedBox(width: 10),
-                Text('Remove from team'),
-              ]),
-            ),
-          ],
-        ),
-      ]),
+              const PopupMenuItem(
+                value: 'remove',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.person_remove_outlined,
+                      size: 16,
+                      color: AppColors.error,
+                    ),
+                    SizedBox(width: 10),
+                    Text('Remove from team'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

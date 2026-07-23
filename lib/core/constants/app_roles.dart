@@ -5,10 +5,10 @@
 //   ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'manager';
 
 class AppRoles {
-  static const String admin    = 'admin';
-  static const String manager  = 'manager';
+  static const String admin = 'admin';
+  static const String manager = 'manager';
   static const String employee = 'employee';
-  static const String client   = 'client';
+  static const String client = 'client';
 
   /// All four roles in the DB enum.
   static const List<String> all = [admin, manager, employee, client];

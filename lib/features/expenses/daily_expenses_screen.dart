@@ -17,9 +17,9 @@ class DailyExpensesScreen extends StatefulWidget {
 }
 
 class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
-  List<ExpenseItem> _all    = [];
+  List<ExpenseItem> _all = [];
   List<Map<String, dynamic>> _categories = [];
-  String _cat  = 'All';
+  String _cat = 'All';
   bool _loading = true;
   TeamFilterNotifier? _teamFilter;
 
@@ -56,6 +56,7 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
     final profile = context.read<AuthNotifier>().profile;
     // Refresh privileges so grants/restrictions take effect immediately.
     await context.read<TeamPrivilegesNotifier>().reload();
+    if (!mounted) return;
 
     // Determine team scope: admin uses switcher, manager uses their own team
     String? teamId;
@@ -71,16 +72,15 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
     ]);
     if (mounted) {
       setState(() {
-        _all        = results[0] as List<ExpenseItem>;
+        _all = results[0] as List<ExpenseItem>;
         _categories = results[1] as List<Map<String, dynamic>>;
-        _loading    = false;
+        _loading = false;
       });
     }
   }
 
-  List<ExpenseItem> get _filtered => _cat == 'All'
-      ? _all
-      : _all.where((e) => e.categoryName == _cat).toList();
+  List<ExpenseItem> get _filtered =>
+      _cat == 'All' ? _all : _all.where((e) => e.categoryName == _cat).toList();
 
   double get _total => _filtered.fold(0, (s, e) => s + e.amount);
 
@@ -91,13 +91,20 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
 
   IconData _categoryIcon(String cat) {
     switch (cat.toLowerCase()) {
-      case 'food':           return Icons.restaurant_outlined;
-      case 'infrastructure': return Icons.construction_outlined;
-      case 'software':       return Icons.computer_outlined;
-      case 'office':         return Icons.business_outlined;
-      case 'transport':      return Icons.directions_car_outlined;
-      case 'training':       return Icons.school_outlined;
-      default:               return Icons.receipt_long_outlined;
+      case 'food':
+        return Icons.restaurant_outlined;
+      case 'infrastructure':
+        return Icons.construction_outlined;
+      case 'software':
+        return Icons.computer_outlined;
+      case 'office':
+        return Icons.business_outlined;
+      case 'transport':
+        return Icons.directions_car_outlined;
+      case 'training':
+        return Icons.school_outlined;
+      default:
+        return Icons.receipt_long_outlined;
     }
   }
 
@@ -135,8 +142,8 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final profile   = context.watch<AuthNotifier>().profile;
-    final privs     = context.watch<TeamPrivilegesNotifier>();
+    final profile = context.watch<AuthNotifier>().profile;
+    final privs = context.watch<TeamPrivilegesNotifier>();
     // "Manager view" = admin, a manager with the privilege, or a granted employee.
     final isManager = profile?.isAdmin == true || privs.canManageExpenses;
     final canManageExpenses = isManager;
@@ -167,82 +174,124 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
           const TeamFilterChip(),
           Expanded(
             child: _loading
-              ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
-              : Column(children: [
-              // Total banner
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                color: AppColors.primary,
-                child: Column(children: [
-                  Text('TOTAL EXPENSES',
-                    style: AppTextStyles.labelCaps.copyWith(color: Colors.white54)),
-                  const SizedBox(height: 4),
-                  Text('${_total.toStringAsFixed(2)} EGP',
-                    style: AppTextStyles.dataLg.copyWith(
-                      color: AppColors.gold, fontSize: 28)),
-                  Text('${_filtered.length} record${_filtered.length == 1 ? '' : 's'}',
-                    style: AppTextStyles.bodySm.copyWith(color: Colors.white54)),
-                ]),
-              ),
-
-              // Category chips
-              Container(
-                color: AppColors.surfaceContainerLowest,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _catLabels.map((c) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(c),
-                        selected: _cat == c,
-                        onSelected: (_) => setState(() => _cat = c),
-                        selectedColor: AppColors.primary,
-                        labelStyle: AppTextStyles.bodySm.copyWith(
-                          color: _cat == c ? Colors.white : AppColors.onSurface,
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.gold),
+                  )
+                : Column(
+                    children: [
+                      // Total banner
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        color: AppColors.primary,
+                        child: Column(
+                          children: [
+                            Text(
+                              'TOTAL EXPENSES',
+                              style: AppTextStyles.labelCaps.copyWith(
+                                color: Colors.white54,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${_total.toStringAsFixed(2)} EGP',
+                              style: AppTextStyles.dataLg.copyWith(
+                                color: AppColors.gold,
+                                fontSize: 28,
+                              ),
+                            ),
+                            Text(
+                              '${_filtered.length} record${_filtered.length == 1 ? '' : 's'}',
+                              style: AppTextStyles.bodySm.copyWith(
+                                color: Colors.white54,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    )).toList(),
+
+                      // Category chips
+                      Container(
+                        color: AppColors.surfaceContainerLowest,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: _catLabels
+                                .map(
+                                  (c) => Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ChoiceChip(
+                                      label: Text(c),
+                                      selected: _cat == c,
+                                      onSelected: (_) =>
+                                          setState(() => _cat = c),
+                                      selectedColor: AppColors.primary,
+                                      labelStyle: AppTextStyles.bodySm.copyWith(
+                                        color: _cat == c
+                                            ? Colors.white
+                                            : AppColors.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1),
+
+                      // List
+                      Expanded(
+                        child: _filtered.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.receipt_long_outlined,
+                                      size: 64,
+                                      color: AppColors.outlineVariant,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'No expenses found',
+                                      style: AppTextStyles.labelMd,
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : RefreshIndicator(
+                                color: AppColors.gold,
+                                onRefresh: _load,
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: _filtered.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 8),
+                                  itemBuilder: (_, i) {
+                                    final e = _filtered[i];
+                                    return _ExpenseCard(
+                                      item: e,
+                                      isManager: isManager,
+                                      icon: _categoryIcon(e.categoryName),
+                                      onApprove:
+                                          (isManager && e.status != 'approved')
+                                          ? () => _approveExpense(e)
+                                          : null,
+                                      onDelete: isManager
+                                          ? () => _deleteExpense(e)
+                                          : null,
+                                    );
+                                  },
+                                ),
+                              ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              const Divider(height: 1),
-
-              // List
-              Expanded(
-                child: _filtered.isEmpty
-                    ? Center(
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.receipt_long_outlined,
-                            size: 64, color: AppColors.outlineVariant),
-                          const SizedBox(height: 12),
-                          Text('No expenses found', style: AppTextStyles.labelMd),
-                        ]))
-                    : RefreshIndicator(
-                        color: AppColors.gold,
-                        onRefresh: _load,
-                        child: ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _filtered.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (_, i) {
-                            final e = _filtered[i];
-                            return _ExpenseCard(
-                              item:      e,
-                              isManager: isManager,
-                              icon:      _categoryIcon(e.categoryName),
-                              onApprove: (isManager && e.status != 'approved')
-                                  ? () => _approveExpense(e)
-                                  : null,
-                              onDelete:  isManager ? () => _deleteExpense(e) : null,
-                            );
-                          },
-                        ),
-                      ),
-              ),
-            ]),
           ),
         ],
       ),
@@ -252,10 +301,8 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
   Future<void> _showManageCategories(BuildContext context) async {
     await showDialog(
       context: context,
-      builder: (_) => _ManageCategoriesDialog(
-        categories: _categories,
-        onChanged:  _load,
-      ),
+      builder: (_) =>
+          _ManageCategoriesDialog(categories: _categories, onChanged: _load),
     );
   }
 
@@ -263,9 +310,11 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
     if (_categories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isManager
-              ? 'No categories yet. Use the category button to add some.'
-              : 'No categories available. Please ask your admin to create categories.'),
+          content: Text(
+            isManager
+                ? 'No categories yet. Use the category button to add some.'
+                : 'No categories available. Please ask your admin to create categories.',
+          ),
         ),
       );
       return;
@@ -275,7 +324,7 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
       builder: (_) => _AddExpenseDialog(
         categories: _categories,
         recordedBy: context.read<AuthNotifier>().profile?.id ?? '',
-        onSaved:    _load,
+        onSaved: _load,
       ),
     );
   }
@@ -310,72 +359,114 @@ class _ExpenseCard extends StatelessWidget {
               : AppColors.outlineVariant,
         ),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.gold.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: AppColors.gold, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Text(item.description.isNotEmpty
-                  ? item.description : item.categoryName,
-                style: AppTextStyles.labelMd),
-              const SizedBox(height: 2),
-              Row(children: [
-                TStatusChip(label: item.categoryName, color: AppColors.secondary),
-                const SizedBox(width: 6),
-                Text('· ${item.date}', style: AppTextStyles.bodySm),
-              ]),
-              if (item.recordedByName.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text('By: ${item.recordedByName}',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.onSurfaceVariant, fontSize: 11)),
-              ],
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: AppColors.gold, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.description.isNotEmpty
+                          ? item.description
+                          : item.categoryName,
+                      style: AppTextStyles.labelMd,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        TStatusChip(
+                          label: item.categoryName,
+                          color: AppColors.secondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text('· ${item.date}', style: AppTextStyles.bodySm),
+                      ],
+                    ),
+                    if (item.recordedByName.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'By: ${item.recordedByName}',
+                        style: AppTextStyles.bodySm.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${item.amount.toStringAsFixed(2)} EGP',
+                    style: AppTextStyles.dataMd.copyWith(
+                      color: AppColors.statusHigh,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  _ExpenseStatusBadge(status: item.status),
+                ],
+              ),
             ],
-          )),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('${item.amount.toStringAsFixed(2)} EGP',
-              style: AppTextStyles.dataMd.copyWith(
-                color: AppColors.statusHigh, fontSize: 15)),
-            const SizedBox(height: 4),
-            _ExpenseStatusBadge(status: item.status),
-          ]),
-        ]),
+          ),
 
-        // Admin / manager actions
-        if (isManager) ...[
-          const SizedBox(height: 10),
-          const Divider(height: 1),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            if (onApprove != null)
-              TextButton.icon(
-                icon: const Icon(Icons.check_circle_outline,
-                  size: 16, color: AppColors.statusDone),
-                label: Text('Approve',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.statusDone)),
-                onPressed: onApprove,
-              ),
-            if (onDelete != null)
-              TextButton.icon(
-                icon: const Icon(Icons.delete_outline,
-                  size: 16, color: AppColors.error),
-                label: Text('Delete',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.error)),
-                onPressed: onDelete,
-              ),
-          ]),
+          // Admin / manager actions
+          if (isManager) ...[
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (onApprove != null)
+                  TextButton.icon(
+                    icon: const Icon(
+                      Icons.check_circle_outline,
+                      size: 16,
+                      color: AppColors.statusDone,
+                    ),
+                    label: Text(
+                      'Approve',
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.statusDone,
+                      ),
+                    ),
+                    onPressed: onApprove,
+                  ),
+                if (onDelete != null)
+                  TextButton.icon(
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      size: 16,
+                      color: AppColors.error,
+                    ),
+                    label: Text(
+                      'Delete',
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.error,
+                      ),
+                    ),
+                    onPressed: onDelete,
+                  ),
+              ],
+            ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 }
@@ -410,8 +501,10 @@ class _ExpenseStatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
-      child: Text(label,
-        style: AppTextStyles.bodySm.copyWith(color: color, fontSize: 10)),
+      child: Text(
+        label,
+        style: AppTextStyles.bodySm.copyWith(color: color, fontSize: 10),
+      ),
     );
   }
 }
@@ -494,7 +587,10 @@ class _ManageCategoriesDialogState extends State<_ManageCategoriesDialog> {
     );
     ctrl.dispose();
     if (result != null && result.isNotEmpty) {
-      await ExpenseRepository.updateCategory(id: cat['id'] as String, name: result);
+      await ExpenseRepository.updateCategory(
+        id: cat['id'] as String,
+        name: result,
+      );
       final updated = await ExpenseRepository.fetchCategories();
       if (mounted) setState(() => _cats = updated);
       widget.onChanged();
@@ -507,68 +603,86 @@ class _ManageCategoriesDialogState extends State<_ManageCategoriesDialog> {
       title: const Text('Manage Categories'),
       content: SizedBox(
         width: 360,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // Add new
-          Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _nameCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'New Category Name',
-                  hintText: 'e.g. Marketing',
-                ),
-                onSubmitted: (_) => _addCategory(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _saving ? null : _addCategory,
-              child: _saving
-                  ? const SizedBox(
-                      width: 16, height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Add'),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          const Divider(),
-          const SizedBox(height: 4),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 300),
-            child: _cats.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('No categories yet'),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _cats.length,
-                    itemBuilder: (_, i) {
-                      final cat = _cats[i];
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(cat['name'] as String? ?? '',
-                          style: AppTextStyles.bodyMd),
-                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined,
-                              size: 18, color: AppColors.gold),
-                            tooltip: 'Rename',
-                            onPressed: () => _editCategory(cat),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline,
-                              size: 18, color: AppColors.error),
-                            tooltip: 'Remove',
-                            onPressed: () => _deleteCategory(
-                              cat['id'] as String),
-                          ),
-                        ]),
-                      );
-                    },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Add new
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'New Category Name',
+                      hintText: 'e.g. Marketing',
+                    ),
+                    onSubmitted: (_) => _addCategory(),
                   ),
-          ),
-        ]),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _saving ? null : _addCategory,
+                  child: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(),
+            const SizedBox(height: 4),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: _cats.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('No categories yet'),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _cats.length,
+                      itemBuilder: (_, i) {
+                        final cat = _cats[i];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            cat['name'] as String? ?? '',
+                            style: AppTextStyles.bodyMd,
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  size: 18,
+                                  color: AppColors.gold,
+                                ),
+                                tooltip: 'Rename',
+                                onPressed: () => _editCategory(cat),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                  color: AppColors.error,
+                                ),
+                                tooltip: 'Remove',
+                                onPressed: () =>
+                                    _deleteCategory(cat['id'] as String),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
       actions: [
         ElevatedButton(
@@ -597,10 +711,10 @@ class _AddExpenseDialog extends StatefulWidget {
 }
 
 class _AddExpenseDialogState extends State<_AddExpenseDialog> {
-  final _formKey    = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
-  final _descCtrl   = TextEditingController();
-  final _paidCtrl   = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _paidCtrl = TextEditingController();
 
   String? _catId;
   DateTime _date = DateTime.now();
@@ -626,11 +740,11 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
     if (!_formKey.currentState!.validate() || _catId == null) return;
     setState(() => _saving = true);
     await ExpenseRepository.createExpense(
-      categoryId:  _catId!,
-      amount:      double.tryParse(_amountCtrl.text.trim()) ?? 0,
+      categoryId: _catId!,
+      amount: double.tryParse(_amountCtrl.text.trim()) ?? 0,
       description: _descCtrl.text.trim(),
-      recordedBy:  widget.recordedBy,
-      date:        _date.toIso8601String().substring(0, 10),
+      recordedBy: widget.recordedBy,
+      date: _date.toIso8601String().substring(0, 10),
       paidTo: _paidCtrl.text.trim().isEmpty ? null : _paidCtrl.text.trim(),
     );
     if (mounted) {
@@ -648,69 +762,81 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              DropdownButtonFormField<String>(
-                value: _catId,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: widget.categories.map((c) => DropdownMenuItem<String>(
-                  value: c['id'] as String,
-                  child: Text(c['name'] as String? ?? ''),
-                )).toList(),
-                onChanged: (v) => setState(() => _catId = v),
-                validator: (v) => v == null ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-
-              TextFormField(
-                controller: _amountCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Amount (EGP)', prefixText: 'EGP '),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  if (double.tryParse(v) == null) return 'Enter a valid number';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-
-              TextFormField(
-                controller: _descCtrl,
-                maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Description'),
-                validator: (v) =>
-                    (v == null || v.isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-
-              TextFormField(
-                controller: _paidCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Paid To (optional)',
-                  hintText: 'Vendor / supplier name',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: _catId,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: widget.categories
+                      .map(
+                        (c) => DropdownMenuItem<String>(
+                          value: c['id'] as String,
+                          child: Text(c['name'] as String? ?? ''),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _catId = v),
+                  validator: (v) => v == null ? 'Required' : null,
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Date: ${_date.day}/${_date.month}/${_date.year}',
-                  style: AppTextStyles.bodyMd,
+                TextFormField(
+                  controller: _amountCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Amount (EGP)',
+                    prefixText: 'EGP ',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    if (double.tryParse(v) == null)
+                      return 'Enter a valid number';
+                    return null;
+                  },
                 ),
-                trailing: const Icon(Icons.calendar_today_outlined,
-                  color: AppColors.gold),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _date,
-                    firstDate: DateTime(2024),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) setState(() => _date = picked);
-                },
-              ),
-            ]),
+                const SizedBox(height: 12),
+
+                TextFormField(
+                  controller: _descCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+
+                TextFormField(
+                  controller: _paidCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Paid To (optional)',
+                    hintText: 'Vendor / supplier name',
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Date: ${_date.day}/${_date.month}/${_date.year}',
+                    style: AppTextStyles.bodyMd,
+                  ),
+                  trailing: const Icon(
+                    Icons.calendar_today_outlined,
+                    color: AppColors.gold,
+                  ),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _date,
+                      firstDate: DateTime(2024),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) setState(() => _date = picked);
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -723,9 +849,13 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
           onPressed: _saving ? null : _save,
           child: _saving
               ? const SizedBox(
-                  width: 16, height: 16,
+                  width: 16,
+                  height: 16,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
               : const Text('Save'),
         ),
       ],

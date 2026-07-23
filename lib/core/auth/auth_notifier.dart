@@ -17,10 +17,10 @@ class AuthNotifier extends ChangeNotifier {
   ProfileModel? _profile;
   String? _error;
 
-  AuthStatus get status    => _status;
+  AuthStatus get status => _status;
   ProfileModel? get profile => _profile;
-  String? get error        => _error;
-  bool get isLoggedIn      => _status == AuthStatus.authenticated;
+  String? get error => _error;
+  bool get isLoggedIn => _status == AuthStatus.authenticated;
 
   AuthNotifier() {
     SupabaseService.auth.onAuthStateChange.listen((data) {
@@ -33,8 +33,8 @@ class AuthNotifier extends ChangeNotifier {
         _fetchProfile();
       } else if (event == AuthChangeEvent.signedOut) {
         _profile = null;
-        _status  = AuthStatus.unauthenticated;
-        _error   = null;
+        _status = AuthStatus.unauthenticated;
+        _error = null;
         notifyListeners();
       }
     });
@@ -67,13 +67,15 @@ class AuthNotifier extends ChangeNotifier {
             .single();
 
         _profile = ProfileModel.fromMap(data);
-        _status  = AuthStatus.authenticated;
-        _error   = null;
+        _status = AuthStatus.authenticated;
+        _error = null;
 
         // Update last_login_at (fire-and-forget)
-        SupabaseService.client.from('profiles').update({
-          'last_login_at': DateTime.now().toIso8601String(),
-        }).eq('id', userId).then((_) {}, onError: (_) {});
+        SupabaseService.client
+            .from('profiles')
+            .update({'last_login_at': DateTime.now().toIso8601String()})
+            .eq('id', userId)
+            .then((_) {}, onError: (_) {});
 
         notifyListeners();
         return; // ← success, stop retrying
@@ -84,7 +86,8 @@ class AuthNotifier extends ChangeNotifier {
           continue;
         }
         // All retries exhausted
-        _error  = 'Could not load your profile. Please contact your administrator.';
+        _error =
+            'Could not load your profile. Please contact your administrator.';
         _status = AuthStatus.unauthenticated;
       }
     }
@@ -113,9 +116,11 @@ class AuthNotifier extends ChangeNotifier {
         updates['full_name'] = fullName.trim();
       }
       if (avatarBytes != null) {
-        final ext  = (avatarExt ?? 'jpg').toLowerCase();
+        final ext = (avatarExt ?? 'jpg').toLowerCase();
         final path = '$userId/avatar.$ext';
-        await SupabaseService.adminClient.storage.from('avatars').uploadBinary(
+        await SupabaseService.adminClient.storage
+            .from('avatars')
+            .uploadBinary(
               path,
               Uint8List.fromList(avatarBytes),
               fileOptions: const FileOptions(upsert: true),
@@ -124,7 +129,8 @@ class AuthNotifier extends ChangeNotifier {
             .from('avatars')
             .getPublicUrl(path);
         // Cache-bust so the new image shows immediately.
-        updates['avatar_url'] = '$url?v=${DateTime.now().millisecondsSinceEpoch}';
+        updates['avatar_url'] =
+            '$url?v=${DateTime.now().millisecondsSinceEpoch}';
       }
       if (updates.isNotEmpty) {
         await SupabaseService.adminClient
@@ -141,7 +147,8 @@ class AuthNotifier extends ChangeNotifier {
 
   /// Change the current user's password. Returns null on success.
   Future<String?> updatePassword(String newPassword) async {
-    if (newPassword.length < 6) return 'Password must be at least 6 characters.';
+    if (newPassword.length < 6)
+      return 'Password must be at least 6 characters.';
     try {
       await SupabaseService.auth.updateUser(
         UserAttributes(password: newPassword),
@@ -198,10 +205,7 @@ class AuthNotifier extends ChangeNotifier {
       final response = await SupabaseService.auth.signUp(
         email: email.trim(),
         password: password,
-        data: {
-          'full_name': fullName.trim(),
-          'role':      role,
-        },
+        data: {'full_name': fullName.trim(), 'role': role},
       );
 
       // If Supabase immediately returns a session (email confirmation OFF),
@@ -227,7 +231,7 @@ class AuthNotifier extends ChangeNotifier {
       await SupabaseService.auth.signOut();
     } catch (_) {
       _profile = null;
-      _status  = AuthStatus.unauthenticated;
+      _status = AuthStatus.unauthenticated;
       notifyListeners();
     }
   }

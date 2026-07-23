@@ -12,9 +12,18 @@ class RealtimeService {
   static final RealtimeService instance = RealtimeService._();
 
   static const _tables = [
-    'tasks', 'task_assignees', 'attendance', 'expenses', 'penalties',
-    'crm_entries', 'profiles', 'events', 'client_profiles',
-    'app_settings', 'team_privileges', 'user_privileges',
+    'tasks',
+    'task_assignees',
+    'attendance',
+    'expenses',
+    'penalties',
+    'crm_entries',
+    'profiles',
+    'events',
+    'client_profiles',
+    'app_settings',
+    'team_privileges',
+    'user_privileges',
   ];
 
   RealtimeChannel? _channel;
@@ -43,7 +52,9 @@ class RealtimeService {
     _debounce[table] = Timer(const Duration(milliseconds: 400), () {
       final cbs = List.of(_listeners[table] ?? const <void Function()>[]);
       for (final cb in cbs) {
-        try { cb(); } catch (_) {}
+        try {
+          cb();
+        } catch (_) {}
       }
     });
   }

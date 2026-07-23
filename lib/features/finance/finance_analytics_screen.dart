@@ -11,9 +11,9 @@ class FinanceAnalyticsScreen extends StatefulWidget {
 }
 
 class _FinanceAnalyticsScreenState extends State<FinanceAnalyticsScreen> {
-  FinanceSummary             _summary    = const FinanceSummary();
-  List<Map<String, dynamic>> _monthly    = [];
-  List<Map<String, dynamic>> _expCats    = [];
+  FinanceSummary _summary = const FinanceSummary();
+  List<Map<String, dynamic>> _monthly = [];
+  List<Map<String, dynamic>> _expCats = [];
   List<Map<String, dynamic>> _topClients = [];
   bool _loading = true;
 
@@ -33,11 +33,11 @@ class _FinanceAnalyticsScreenState extends State<FinanceAnalyticsScreen> {
     ]);
     if (mounted) {
       setState(() {
-        _summary    = results[0] as FinanceSummary;
-        _monthly    = results[1] as List<Map<String, dynamic>>;
-        _expCats    = results[2] as List<Map<String, dynamic>>;
+        _summary = results[0] as FinanceSummary;
+        _monthly = results[1] as List<Map<String, dynamic>>;
+        _expCats = results[2] as List<Map<String, dynamic>>;
         _topClients = results[3] as List<Map<String, dynamic>>;
-        _loading    = false;
+        _loading = false;
       });
     }
   }
@@ -70,73 +70,99 @@ class _FinanceAnalyticsScreenState extends State<FinanceAnalyticsScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.gold),
+            )
           : RefreshIndicator(
               onRefresh: _load,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  // ── KPI row ────────────────────────────────────────────────
-                  Row(children: [
-                    Expanded(child: _KpiCard(
-                        label: 'GROSS REVENUE',
-                        value: _fmtAmount(_summary.grossRevenue),
-                        trend: _revenueTrend,
-                        up: _trendUp)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _KpiCard(
-                        label: 'NET PROFIT',
-                        value: _fmtAmount(_summary.netProfit),
-                        trend: _summary.netProfit >= 0 ? 'Positive' : 'Negative',
-                        up: _summary.netProfit >= 0)),
-                  ]),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(child: _KpiCard(
-                        label: 'TOTAL EXPENSES',
-                        value: _fmtAmount(_summary.totalExpenses),
-                        trend: 'All time',
-                        up: false)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _KpiCard(
-                        label: 'OUTSTANDING',
-                        value: _fmtAmount(_summary.outstanding),
-                        trend: '${_summary.pendingInvoices} invoices',
-                        up: false)),
-                  ]),
-                  const SizedBox(height: 24),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── KPI row ────────────────────────────────────────────────
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _KpiCard(
+                            label: 'GROSS REVENUE',
+                            value: _fmtAmount(_summary.grossRevenue),
+                            trend: _revenueTrend,
+                            up: _trendUp,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _KpiCard(
+                            label: 'NET PROFIT',
+                            value: _fmtAmount(_summary.netProfit),
+                            trend: _summary.netProfit >= 0
+                                ? 'Positive'
+                                : 'Negative',
+                            up: _summary.netProfit >= 0,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _KpiCard(
+                            label: 'TOTAL EXPENSES',
+                            value: _fmtAmount(_summary.totalExpenses),
+                            trend: 'All time',
+                            up: false,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _KpiCard(
+                            label: 'OUTSTANDING',
+                            value: _fmtAmount(_summary.outstanding),
+                            trend: '${_summary.pendingInvoices} invoices',
+                            up: false,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
 
-                  // ── Revenue chart ──────────────────────────────────────────
-                  Text('MONTHLY REVENUE (TASKS + MEETINGS)',
-                      style: AppTextStyles.labelCaps),
-                  const SizedBox(height: 12),
-                  _monthly.isEmpty
-                      ? _EmptySection(message: 'No revenue data yet.')
-                      : _LineChart(data: _monthly),
-                  const SizedBox(height: 24),
+                    // ── Revenue chart ──────────────────────────────────────────
+                    Text(
+                      'MONTHLY REVENUE (TASKS + MEETINGS)',
+                      style: AppTextStyles.labelCaps,
+                    ),
+                    const SizedBox(height: 12),
+                    _monthly.isEmpty
+                        ? _EmptySection(message: 'No revenue data yet.')
+                        : _LineChart(data: _monthly),
+                    const SizedBox(height: 24),
 
-                  // ── Expense breakdown ──────────────────────────────────────
-                  Text('EXPENSE BREAKDOWN', style: AppTextStyles.labelCaps),
-                  const SizedBox(height: 12),
-                  _expCats.isEmpty
-                      ? _EmptySection(message: 'No expenses recorded yet.')
-                      : _ExpenseBreakdown(categories: _expCats),
-                  const SizedBox(height: 24),
+                    // ── Expense breakdown ──────────────────────────────────────
+                    Text('EXPENSE BREAKDOWN', style: AppTextStyles.labelCaps),
+                    const SizedBox(height: 12),
+                    _expCats.isEmpty
+                        ? _EmptySection(message: 'No expenses recorded yet.')
+                        : _ExpenseBreakdown(categories: _expCats),
+                    const SizedBox(height: 24),
 
-                  // ── Top clients ────────────────────────────────────────────
-                  Text('TOP CLIENTS BY TASK REVENUE',
-                      style: AppTextStyles.labelCaps),
-                  const SizedBox(height: 12),
-                  _topClients.isEmpty
-                      ? _EmptySection(message: 'No client task revenue yet.')
-                      : Column(
-                          children: _topClients
-                              .map((c) => _ClientRow(client: c))
-                              .toList()),
-                ]),
+                    // ── Top clients ────────────────────────────────────────────
+                    Text(
+                      'TOP CLIENTS BY TASK REVENUE',
+                      style: AppTextStyles.labelCaps,
+                    ),
+                    const SizedBox(height: 12),
+                    _topClients.isEmpty
+                        ? _EmptySection(message: 'No client task revenue yet.')
+                        : Column(
+                            children: _topClients
+                                .map((c) => _ClientRow(client: c))
+                                .toList(),
+                          ),
+                  ],
+                ),
               ),
             ),
     );
@@ -145,7 +171,7 @@ class _FinanceAnalyticsScreenState extends State<FinanceAnalyticsScreen> {
 
 String _fmtAmount(double v) {
   if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
-  if (v >= 1000)    return '${(v / 1000).toStringAsFixed(1)}k';
+  if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
   return v.toStringAsFixed(0);
 }
 
@@ -169,22 +195,32 @@ class _KpiCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: AppTextStyles.labelCaps),
-        const SizedBox(height: 8),
-        Text(value, style: AppTextStyles.dataLg.copyWith(fontSize: 22)),
-        const SizedBox(height: 8),
-        Row(children: [
-          Icon(up ? Icons.trending_up : Icons.trending_down,
-              size: 14,
-              color: up ? AppColors.statusDone : AppColors.statusHigh),
-          const SizedBox(width: 4),
-          Text(trend,
-              style: AppTextStyles.bodySm.copyWith(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppTextStyles.labelCaps),
+          const SizedBox(height: 8),
+          Text(value, style: AppTextStyles.dataLg.copyWith(fontSize: 22)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                up ? Icons.trending_up : Icons.trending_down,
+                size: 14,
+                color: up ? AppColors.statusDone : AppColors.statusHigh,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                trend,
+                style: AppTextStyles.bodySm.copyWith(
                   color: up ? AppColors.statusDone : AppColors.statusHigh,
-                  fontWeight: FontWeight.w600)),
-        ]),
-      ]),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -196,8 +232,9 @@ class _LineChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxVal =
-        data.map((d) => d['value'] as double).fold(0.0, (a, b) => a > b ? a : b);
+    final maxVal = data
+        .map((d) => d['value'] as double)
+        .fold(0.0, (a, b) => a > b ? a : b);
     final safeMax = maxVal == 0 ? 1.0 : maxVal;
     const h = 120.0;
     return Container(
@@ -207,31 +244,36 @@ class _LineChart extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Column(children: [
-        SizedBox(
-          height: h,
-          child: CustomPaint(
-            size: const Size(double.infinity, h),
-            painter: _LinePainter(
-              values: data
-                  .map((d) => (d['value'] as double) / safeMax)
-                  .toList(),
+      child: Column(
+        children: [
+          SizedBox(
+            height: h,
+            child: CustomPaint(
+              size: const Size(double.infinity, h),
+              painter: _LinePainter(
+                values: data
+                    .map((d) => (d['value'] as double) / safeMax)
+                    .toList(),
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: data
-              .map((d) => Expanded(
+          const SizedBox(height: 8),
+          Row(
+            children: data
+                .map(
+                  (d) => Expanded(
                     child: Center(
-                      child: Text(d['month'] as String,
-                          style:
-                              AppTextStyles.bodySm.copyWith(fontSize: 10)),
+                      child: Text(
+                        d['month'] as String,
+                        style: AppTextStyles.bodySm.copyWith(fontSize: 10),
+                      ),
                     ),
-                  ))
-              .toList(),
-        ),
-      ]),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -259,7 +301,7 @@ class _LinePainter extends CustomPainter {
 
     final n = values.length;
     if (n < 2) return;
-    final path     = Path();
+    final path = Path();
     final fillPath = Path();
     for (var i = 0; i < n; i++) {
       final x = (i / (n - 1)) * size.width;
@@ -281,11 +323,14 @@ class _LinePainter extends CustomPainter {
       final x = (i / (n - 1)) * size.width;
       final y = size.height - values[i] * size.height * 0.9;
       canvas.drawCircle(Offset(x, y), 4, Paint()..color = AppColors.gold);
-      canvas.drawCircle(Offset(x, y), 4,
-          Paint()
-            ..color = Colors.white
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2);
+      canvas.drawCircle(
+        Offset(x, y),
+        4,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
     }
   }
 
@@ -316,36 +361,46 @@ class _ExpenseBreakdown extends StatelessWidget {
       ),
       child: Column(
         children: categories.asMap().entries.map((e) {
-          final idx   = e.key;
-          final cat   = e.value;
-          final pct   = (cat['value'] as double).clamp(0.0, 100.0);
+          final idx = e.key;
+          final cat = e.value;
+          final pct = (cat['value'] as double).clamp(0.0, 100.0);
           final color = colors[idx % colors.length];
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: Row(children: [
-              Container(
-                  width: 10, height: 10,
-                  decoration:
-                      BoxDecoration(color: color, shape: BoxShape.circle)),
-              const SizedBox(width: 10),
-              Expanded(child: Text(cat['label'] as String,
-                  style: AppTextStyles.bodyMd)),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 120,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: pct / 100,
-                    minHeight: 6,
-                    backgroundColor: AppColors.outlineVariant,
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
                     color: color,
+                    shape: BoxShape.circle,
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text('${pct.toInt()}%', style: AppTextStyles.dataSm),
-            ]),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    cat['label'] as String,
+                    style: AppTextStyles.bodyMd,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 120,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: pct / 100,
+                      minHeight: 6,
+                      backgroundColor: AppColors.outlineVariant,
+                      color: color,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text('${pct.toInt()}%', style: AppTextStyles.dataSm),
+              ],
+            ),
           );
         }).toList(),
       ),
@@ -368,17 +423,25 @@ class _ClientRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Row(children: [
-        TAvatar(name: client['name'] as String, size: 36),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(client['name'] as String, style: AppTextStyles.labelMd),
-          Text('${client['tasks']} task(s)',
-              style: AppTextStyles.bodySm),
-        ])),
-        Text('${_fmtAmount(client['revenue'] as double)} EGP',
-            style: AppTextStyles.dataMd),
-      ]),
+      child: Row(
+        children: [
+          TAvatar(name: client['name'] as String, size: 36),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(client['name'] as String, style: AppTextStyles.labelMd),
+                Text('${client['tasks']} task(s)', style: AppTextStyles.bodySm),
+              ],
+            ),
+          ),
+          Text(
+            '${_fmtAmount(client['revenue'] as double)} EGP',
+            style: AppTextStyles.dataMd,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -397,10 +460,11 @@ class _EmptySection extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Text(message,
-          style:
-              AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
-          textAlign: TextAlign.center),
+      child: Text(
+        message,
+        style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 }

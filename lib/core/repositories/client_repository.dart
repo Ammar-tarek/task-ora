@@ -35,24 +35,28 @@ class CalEventData {
     final client = m['client'] as Map<String, dynamic>?;
     final attendees = (m['event_attendees'] as List<dynamic>? ?? []);
     return CalEventData(
-      id:            m['id'] as String,
-      title:         m['title'] as String? ?? '',
-      start:         DateTime.tryParse(m['start_time'] as String? ?? '') ?? DateTime.now(),
-      end:           DateTime.tryParse(m['end_time'] as String? ?? '') ?? DateTime.now(),
-      clientId:      m['client_id'] as String?,
-      clientName:    client?['company_name'] as String?,
-      cost:          (m['cost'] as num?)?.toDouble(),
-      roomName:      m['location'] as String?,
-      attendeeNames: attendees.map((a) {
-        final p = a['profile'] as Map<String, dynamic>?;
-        return p?['full_name'] as String? ?? '';
-      }).where((n) => n.isNotEmpty).toList(),
+      id: m['id'] as String,
+      title: m['title'] as String? ?? '',
+      start:
+          DateTime.tryParse(m['start_time'] as String? ?? '') ?? DateTime.now(),
+      end: DateTime.tryParse(m['end_time'] as String? ?? '') ?? DateTime.now(),
+      clientId: m['client_id'] as String?,
+      clientName: client?['company_name'] as String?,
+      cost: (m['cost'] as num?)?.toDouble(),
+      roomName: m['location'] as String?,
+      attendeeNames: attendees
+          .map((a) {
+            final p = a['profile'] as Map<String, dynamic>?;
+            return p?['full_name'] as String? ?? '';
+          })
+          .where((n) => n.isNotEmpty)
+          .toList(),
     );
   }
 }
 
 class ClientRepository {
-  static final _db      = SupabaseService.client;
+  static final _db = SupabaseService.client;
   static final _adminDb = SupabaseService.adminClient;
   static SupabaseClient get adminDb => _adminDb;
 
@@ -95,16 +99,20 @@ class ClientRepository {
     String? notes,
   }) async {
     try {
-      final data = await _db.from('client_profiles').insert({
-        'id':             profileId,
-        'company_name':   companyName,
-        'contact_person': contactPerson,
-        'email':          email,
-        'phone':          phone,
-        'whatsapp_number': whatsappNumber,
-        'address':        address,
-        'notes':          notes,
-      }).select().single();
+      final data = await _db
+          .from('client_profiles')
+          .insert({
+            'id': profileId,
+            'company_name': companyName,
+            'contact_person': contactPerson,
+            'email': email,
+            'phone': phone,
+            'whatsapp_number': whatsappNumber,
+            'address': address,
+            'notes': notes,
+          })
+          .select()
+          .single();
       return ClientModel.fromMap(data);
     } catch (_) {
       return null;
@@ -114,7 +122,8 @@ class ClientRepository {
   /// Creates auth user + profile + client_profile in one call.
   /// Returns the new [ClientModel] or null on failure.
   /// [error] is set to a human-readable message when it fails.
-  static Future<({ClientModel? client, String? error})> createClientWithAccount({
+  static Future<({ClientModel? client, String? error})>
+  createClientWithAccount({
     required String fullName,
     required String email,
     required String password,
@@ -143,23 +152,28 @@ class ClientRepository {
 
       // 2. Upsert profile row (trigger may have already created it)
       await _adminDb.from('profiles').upsert({
-        'id':        userId,
+        'id': userId,
         'full_name': fullName,
-        'role':      'client',
+        'role': 'client',
       });
 
       // 3. Insert client_profiles row
-      final data = await _adminDb.from('client_profiles').insert({
-        'id':             userId,
-        'company_name':   companyName,
-        'contact_person': contactPerson,
-        'email':          email,
-        'phone':          phone,
-        'whatsapp_number': whatsappNumber,
-        'address':        address,
-        'notes':          notes,
-        if (clientType != null && clientType.isNotEmpty) 'client_type': clientType,
-      }).select().single();
+      final data = await _adminDb
+          .from('client_profiles')
+          .insert({
+            'id': userId,
+            'company_name': companyName,
+            'contact_person': contactPerson,
+            'email': email,
+            'phone': phone,
+            'whatsapp_number': whatsappNumber,
+            'address': address,
+            'notes': notes,
+            if (clientType != null && clientType.isNotEmpty)
+              'client_type': clientType,
+          })
+          .select()
+          .single();
 
       return (client: ClientModel.fromMap(data), error: null);
     } on AuthException catch (e) {
@@ -172,7 +186,8 @@ class ClientRepository {
   /// Updates company details + optionally changes email / password via admin API.
   /// Pass [newPassword] only when the admin wants to reset the password.
   /// Pass [newEmail] only when the email should change.
-  static Future<({ClientModel? client, String? error})> updateClientWithAccount({
+  static Future<({ClientModel? client, String? error})>
+  updateClientWithAccount({
     required String clientId,
     required String fullName,
     required String email,
@@ -199,27 +214,38 @@ class ClientRepository {
         await _adminDb.auth.admin.updateUserById(
           clientId,
           attributes: AdminUserAttributes(
-            email:    authAttrs['email'] as String?,
+            email: authAttrs['email'] as String?,
             password: authAttrs['password'] as String?,
           ),
         );
       }
 
       // 2. Update profiles full_name
-      await _adminDb.from('profiles').update({'full_name': fullName}).eq('id', clientId);
+      await _adminDb
+          .from('profiles')
+          .update({'full_name': fullName})
+          .eq('id', clientId);
 
       // 3. Update client_profiles
-      final effectiveEmail = (newEmail != null && newEmail.isNotEmpty) ? newEmail : email;
-      final data = await _adminDb.from('client_profiles').update({
-        'company_name':    companyName,
-        'contact_person':  contactPerson,
-        'email':           effectiveEmail,
-        'phone':           phone,
-        'whatsapp_number': whatsappNumber,
-        'address':         address,
-        'notes':           notes,
-        if (clientType != null && clientType.isNotEmpty) 'client_type': clientType,
-      }).eq('id', clientId).select().single();
+      final effectiveEmail = (newEmail != null && newEmail.isNotEmpty)
+          ? newEmail
+          : email;
+      final data = await _adminDb
+          .from('client_profiles')
+          .update({
+            'company_name': companyName,
+            'contact_person': contactPerson,
+            'email': effectiveEmail,
+            'phone': phone,
+            'whatsapp_number': whatsappNumber,
+            'address': address,
+            'notes': notes,
+            if (clientType != null && clientType.isNotEmpty)
+              'client_type': clientType,
+          })
+          .eq('id', clientId)
+          .select()
+          .single();
 
       return (client: ClientModel.fromMap(data), error: null);
     } on AuthException catch (e) {
@@ -242,10 +268,12 @@ class ClientRepository {
 
       return (all as List)
           .where((r) => !linkedIds.contains(r['id'] as String))
-          .map((r) => {
-                'id':        r['id'] as String,
-                'full_name': r['full_name'] as String? ?? '',
-              })
+          .map(
+            (r) => {
+              'id': r['id'] as String,
+              'full_name': r['full_name'] as String? ?? '',
+            },
+          )
           .toList();
     } catch (_) {
       return [];
@@ -256,7 +284,9 @@ class ClientRepository {
     try {
       final data = await _adminDb
           .from('tasks')
-          .select('*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name)), task_comments(id, content, is_internal, created_at, author:profiles!task_comments_author_id_fkey(full_name))')
+          .select(
+            '*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name)), task_comments(id, content, is_internal, created_at, author:profiles!task_comments_author_id_fkey(full_name))',
+          )
           .eq('client_id', clientId)
           .order('created_at', ascending: false);
       return (data as List).map((m) => TaskModel.fromMap(m)).toList();
@@ -264,7 +294,9 @@ class ClientRepository {
       try {
         final data = await _adminDb
             .from('tasks')
-            .select('*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name))')
+            .select(
+              '*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name))',
+            )
             .eq('client_id', clientId)
             .order('created_at', ascending: false);
         return (data as List).map((m) => TaskModel.fromMap(m)).toList();
@@ -278,7 +310,9 @@ class ClientRepository {
     try {
       final data = await _adminDb
           .from('events')
-          .select('*, client:client_profiles(company_name), event_attendees(profile_id, profile:profiles(full_name))')
+          .select(
+            '*, client:client_profiles(company_name), event_attendees(profile_id, profile:profiles(full_name))',
+          )
           .order('start_time', ascending: true);
       return (data as List).map((m) => CalEventData.fromMap(m)).toList();
     } catch (_) {
@@ -290,7 +324,9 @@ class ClientRepository {
     try {
       final data = await _adminDb
           .from('events')
-          .select('*, client:client_profiles(company_name), event_attendees(profile_id, profiles(full_name))')
+          .select(
+            '*, client:client_profiles(company_name), event_attendees(profile_id, profiles(full_name))',
+          )
           .eq('client_id', clientId)
           .order('start_time', ascending: false);
       return (data as List).map((m) => CalEventData.fromMap(m)).toList();
@@ -326,21 +362,29 @@ class ClientRepository {
     String? roomName,
   }) async {
     try {
-      final event = await _adminDb.from('events').insert({
-        'title':      title,
-        'start_time': start.toIso8601String(),
-        'end_time':   end.toIso8601String(),
-        'client_id':  clientId,
-        'cost':       cost,
-        'created_by': createdBy,
-        'location':   roomName,
-      }).select('id').single();
+      final event = await _adminDb
+          .from('events')
+          .insert({
+            'title': title,
+            'start_time': start.toIso8601String(),
+            'end_time': end.toIso8601String(),
+            'client_id': clientId,
+            'cost': cost,
+            'created_by': createdBy,
+            'location': roomName,
+          })
+          .select('id')
+          .single();
 
       final eventId = event['id'] as String;
       if (attendeeIds.isNotEmpty) {
-        await _adminDb.from('event_attendees').insert(
-          attendeeIds.map((pid) => {'event_id': eventId, 'profile_id': pid}).toList(),
-        );
+        await _adminDb
+            .from('event_attendees')
+            .insert(
+              attendeeIds
+                  .map((pid) => {'event_id': eventId, 'profile_id': pid})
+                  .toList(),
+            );
 
         // Notify assigned employees / managers about the calendar event!
         final dateStr = '${start.day}/${start.month}/${start.year}';
@@ -351,7 +395,8 @@ class ClientRepository {
               recipientId: recipientId,
               type: 'calendar_event',
               title: 'Calendar Event Assigned',
-              body: 'You have been assigned to event "$title" on $dateStr ($timeStr).',
+              body:
+                  'You have been assigned to event "$title" on $dateStr ($timeStr).',
               referenceType: 'calendar',
               referenceId: eventId,
             );
@@ -363,13 +408,13 @@ class ClientRepository {
       if (clientId != null && cost != null && cost > 0) {
         try {
           await _adminDb.from('crm_entries').insert({
-            'client_id':   clientId,
-            'title':       '$title – Meeting Booking',
-            'amount':      cost,
+            'client_id': clientId,
+            'title': '$title – Meeting Booking',
+            'amount': cost,
             'paid_amount': 0,
-            'status':      'unpaid',
+            'status': 'unpaid',
             'source_type': 'room_booking',
-            'currency':    'USD',
+            'currency': 'USD',
           });
         } catch (_) {}
       }
@@ -388,20 +433,27 @@ class ClientRepository {
     List<String> attendeeIds = const [],
   }) async {
     try {
-      await _adminDb.from('events').update({
-        'title':      title,
-        'start_time': start.toIso8601String(),
-        'end_time':   end.toIso8601String(),
-        'client_id':  clientId,
-        'cost':       cost,
-        'location':   roomName,
-      }).eq('id', eventId);
+      await _adminDb
+          .from('events')
+          .update({
+            'title': title,
+            'start_time': start.toIso8601String(),
+            'end_time': end.toIso8601String(),
+            'client_id': clientId,
+            'cost': cost,
+            'location': roomName,
+          })
+          .eq('id', eventId);
 
       await _adminDb.from('event_attendees').delete().eq('event_id', eventId);
       if (attendeeIds.isNotEmpty) {
-        await _adminDb.from('event_attendees').insert(
-          attendeeIds.map((pid) => {'event_id': eventId, 'profile_id': pid}).toList(),
-        );
+        await _adminDb
+            .from('event_attendees')
+            .insert(
+              attendeeIds
+                  .map((pid) => {'event_id': eventId, 'profile_id': pid})
+                  .toList(),
+            );
 
         // Notify assigned attendees of updated event details!
         final dateStr = '${start.day}/${start.month}/${start.year}';

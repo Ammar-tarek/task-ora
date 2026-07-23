@@ -10,12 +10,13 @@ class TaskModel {
   final String? clientId;
   final String? clientName;
   final String? teamId;
-  final String? handoffToTeamId;   // pending handoff → target dept manager
+  final String? handoffToTeamId; // pending handoff → target dept manager
   final String? handoffFromTeamId; // source dept
   final String? parentTaskId;
   final String createdBy;
-  final String status;       // 'not_started' | 'in_progress' | 'employee_done' | 'client_approved' | 'client_rejected' | 'completed' | 'on_hold'
-  final String priority;     // 'low' | 'medium' | 'high' | 'critical'
+  final String
+  status; // 'not_started' | 'in_progress' | 'employee_done' | 'client_approved' | 'client_rejected' | 'completed' | 'on_hold'
+  final String priority; // 'low' | 'medium' | 'high' | 'critical'
   final String? dueDate;
   final double? cost;
   final int completionPercentage;
@@ -52,27 +53,28 @@ class TaskModel {
 
   factory TaskModel.fromMap(Map<String, dynamic> m) {
     final rawAssignees = m['task_assignees'] as List<dynamic>? ?? [];
-    final rawComments  = m['task_comments']  as List<dynamic>? ?? [];
-    final rawEditLogs  = m['task_edit_logs'] as List<dynamic>? ?? [];
+    final rawComments = m['task_comments'] as List<dynamic>? ?? [];
+    final rawEditLogs = m['task_edit_logs'] as List<dynamic>? ?? [];
     return TaskModel(
-      id:                   m['id'] as String,
-      title:                m['title'] as String? ?? '',
-      description:          m['description'] as String?,
-      clientId:             m['client_id'] as String?,
-      clientName:           (m['client'] as Map<String, dynamic>?)?['company_name'] as String?,
-      teamId:               m['team_id'] as String?,
-      handoffToTeamId:      m['handoff_to_team_id'] as String?,
-      handoffFromTeamId:    m['handoff_from_team_id'] as String?,
-      parentTaskId:         m['parent_task_id'] as String?,
-      createdBy:            m['created_by'] as String? ?? '',
-      status:               m['status'] as String? ?? 'not_started',
-      priority:             m['priority'] as String? ?? 'medium',
-      dueDate:              m['due_date'] as String?,
-      cost:                 (m['cost'] as num?)?.toDouble(),
+      id: m['id'] as String,
+      title: m['title'] as String? ?? '',
+      description: m['description'] as String?,
+      clientId: m['client_id'] as String?,
+      clientName:
+          (m['client'] as Map<String, dynamic>?)?['company_name'] as String?,
+      teamId: m['team_id'] as String?,
+      handoffToTeamId: m['handoff_to_team_id'] as String?,
+      handoffFromTeamId: m['handoff_from_team_id'] as String?,
+      parentTaskId: m['parent_task_id'] as String?,
+      createdBy: m['created_by'] as String? ?? '',
+      status: m['status'] as String? ?? 'not_started',
+      priority: m['priority'] as String? ?? 'medium',
+      dueDate: m['due_date'] as String?,
+      cost: (m['cost'] as num?)?.toDouble(),
       completionPercentage: m['completion_percentage'] as int? ?? 0,
-      boardId:              m['board_id'] as String?,
-      boardColumnId:        m['board_column_id'] as String?,
-      createdAt:            m['created_at'] as String? ?? '',
+      boardId: m['board_id'] as String?,
+      boardColumnId: m['board_column_id'] as String?,
+      createdAt: m['created_at'] as String? ?? '',
       assignees: rawAssignees
           .map((a) => TaskAssignee.fromMap(a as Map<String, dynamic>))
           .toList(),
@@ -87,24 +89,37 @@ class TaskModel {
 
   String get statusLabel {
     switch (status) {
-      case 'not_started':     return 'To Do';
-      case 'in_progress':     return 'In Progress';
-      case 'employee_done':   return 'Employee Done';
-      case 'client_approved':  return 'Client Approved';
-      case 'client_rejected': return 'Client Rejected';
-      case 'completed':       return 'Completed';
-      case 'on_hold':         return 'On Hold';
-      default:                return status;
+      case 'not_started':
+        return 'To Do';
+      case 'in_progress':
+        return 'In Progress';
+      case 'employee_done':
+        return 'Employee Done';
+      case 'client_approved':
+        return 'Client Approved';
+      case 'client_rejected':
+        return 'Client Rejected';
+      case 'completed':
+        return 'Completed';
+      case 'on_hold':
+        return 'On Hold';
+      default:
+        return status;
     }
   }
 
   String get priorityLabel {
     switch (priority) {
-      case 'low':      return 'Low';
-      case 'medium':   return 'Medium';
-      case 'high':     return 'High';
-      case 'critical': return 'Critical';
-      default:         return priority;
+      case 'low':
+        return 'Low';
+      case 'medium':
+        return 'Medium';
+      case 'high':
+        return 'High';
+      case 'critical':
+        return 'Critical';
+      default:
+        return priority;
     }
   }
 
@@ -112,8 +127,20 @@ class TaskModel {
     if (dueDate == null) return '—';
     try {
       final dt = AppTime.cairo(DateTime.parse(dueDate!));
-      const months = ['Jan','Feb','Mar','Apr','May','Jun',
-                      'Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       return '${months[dt.month - 1]} ${dt.day}';
     } catch (_) {
       return dueDate!;
@@ -130,16 +157,24 @@ class TaskModel {
     List<TaskEditLog>? editLogs,
   }) {
     return TaskModel(
-      id: id, title: title, description: description,
-      clientId: clientId, clientName: clientName, teamId: teamId,
-      handoffToTeamId: handoffToTeamId, handoffFromTeamId: handoffFromTeamId,
+      id: id,
+      title: title,
+      description: description,
+      clientId: clientId,
+      clientName: clientName,
+      teamId: teamId,
+      handoffToTeamId: handoffToTeamId,
+      handoffFromTeamId: handoffFromTeamId,
       parentTaskId: parentTaskId,
       createdBy: createdBy,
       status: status ?? this.status,
       priority: priority,
-      dueDate: dueDate, cost: cost,
+      dueDate: dueDate,
+      cost: cost,
       completionPercentage: completionPercentage ?? this.completionPercentage,
-      boardId: boardId, boardColumnId: boardColumnId, createdAt: createdAt,
+      boardId: boardId,
+      boardColumnId: boardColumnId,
+      createdAt: createdAt,
       assignees: assignees,
       comments: comments ?? this.comments,
       editLogs: editLogs ?? this.editLogs,
@@ -164,8 +199,8 @@ class TaskAssignee {
     final profile = m['profile'] as Map<String, dynamic>?;
     return TaskAssignee(
       profileId: m['profile_id'] as String? ?? '',
-      fullName:  profile?['full_name'] as String? ?? 'Unknown',
-      isLead:    m['is_lead'] as bool? ?? false,
+      fullName: profile?['full_name'] as String? ?? 'Unknown',
+      isLead: m['is_lead'] as bool? ?? false,
     );
   }
 }
@@ -190,10 +225,10 @@ class TaskComment {
   factory TaskComment.fromMap(Map<String, dynamic> m) {
     final author = m['author'] as Map<String, dynamic>?;
     return TaskComment(
-      id:         m['id'] as String? ?? '',
-      content:    m['content'] as String? ?? '',
+      id: m['id'] as String? ?? '',
+      content: m['content'] as String? ?? '',
       isInternal: m['is_internal'] as bool? ?? true,
-      createdAt:  m['created_at'] as String? ?? '',
+      createdAt: m['created_at'] as String? ?? '',
       authorName: author?['full_name'] as String? ?? 'Unknown',
     );
   }
@@ -201,8 +236,20 @@ class TaskComment {
   String get timeDisplay {
     try {
       final dt = AppTime.cairo(DateTime.parse(createdAt));
-      const months = ['Jan','Feb','Mar','Apr','May','Jun',
-                      'Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       return '${months[dt.month - 1]} ${dt.day}, '
           '${AppTime.hm(dt)}';
     } catch (_) {
@@ -230,21 +277,36 @@ class TaskEditLog {
     // Supports both legacy task_edit_logs and current task_audit_log schemas.
     final editor = (m['editor'] ?? m['actor']) as Map<String, dynamic>?;
     return TaskEditLog(
-      id:         m['id'] as String? ?? '',
-      editorName: editor?['full_name'] as String? ??
-                  m['editor_name'] as String? ?? 'Unknown',
-      editedAt:   m['edited_at'] as String? ??
-                  m['created_at'] as String? ?? '',
-      summary:    m['summary'] as String? ??
-                  m['notes'] as String? ?? m['action'] as String?,
+      id: m['id'] as String? ?? '',
+      editorName:
+          editor?['full_name'] as String? ??
+          m['editor_name'] as String? ??
+          'Unknown',
+      editedAt: m['edited_at'] as String? ?? m['created_at'] as String? ?? '',
+      summary:
+          m['summary'] as String? ??
+          m['notes'] as String? ??
+          m['action'] as String?,
     );
   }
 
   String get timeDisplay {
     try {
       final dt = AppTime.cairo(DateTime.parse(editedAt));
-      const months = ['Jan','Feb','Mar','Apr','May','Jun',
-                      'Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       return '${months[dt.month - 1]} ${dt.day}, '
           '${AppTime.hm(dt)}';
     } catch (_) {

@@ -41,8 +41,12 @@ class AppTime {
 
   static bool _isDst(DateTime u) {
     final y = u.year;
-    final start = _lastWeekday(y, 4, DateTime.friday);   // last Fri Apr, 00:00 UTC-ish
-    final end   = _lastWeekday(y, 10, DateTime.thursday); // last Thu Oct
+    final start = _lastWeekday(
+      y,
+      4,
+      DateTime.friday,
+    ); // last Fri Apr, 00:00 UTC-ish
+    final end = _lastWeekday(y, 10, DateTime.thursday); // last Thu Oct
     return u.isAfter(start) && u.isBefore(end);
   }
 

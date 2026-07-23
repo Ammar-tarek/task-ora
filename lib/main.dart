@@ -22,7 +22,7 @@ void main() async {
   RealtimeService.instance.init(); // live auto-refresh across the app
   await LocalNotificationService.init(); // device push-notification setup
 
-  final auth      = AuthNotifier();
+  final auth = AuthNotifier();
   final teamPrivs = TeamPrivilegesNotifier(auth);
 
   // Create the router exactly once — must live outside the widget tree

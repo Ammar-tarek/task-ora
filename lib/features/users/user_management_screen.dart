@@ -23,16 +23,16 @@ class UserManagementScreen extends StatefulWidget {
 class _UserManagementScreenState extends State<UserManagementScreen>
     with SingleTickerProviderStateMixin {
   // ── State ────────────────────────────────────────────────────────────────
-  bool _loading   = true;
+  bool _loading = true;
   bool _pickingTeam = false; // true = admin is on the team-picker screen
   TeamModel? _myTeam;
-  List<ProfileModel> _members  = [];
+  List<ProfileModel> _members = [];
   List<ProfileModel> _filtered = [];
-  List<TeamModel>   _allTeams  = [];
+  List<TeamModel> _allTeams = [];
   final _search = TextEditingController();
 
   late AnimationController _fadeCtrl;
-  late Animation<double>   _fadeAnim;
+  late Animation<double> _fadeAnim;
 
   @override
   void initState() {
@@ -70,12 +70,12 @@ class _UserManagementScreenState extends State<UserManagementScreen>
       final allTeams = await TeamRepository.fetchAll(activeOnly: true);
       if (mounted) {
         setState(() {
-          _allTeams    = allTeams;
-          _myTeam      = null;       // clear any previously selected team
-          _members     = [];
-          _filtered    = [];
-          _pickingTeam = true;       // show team-picker, not auto-select
-          _loading     = false;
+          _allTeams = allTeams;
+          _myTeam = null; // clear any previously selected team
+          _members = [];
+          _filtered = [];
+          _pickingTeam = true; // show team-picker, not auto-select
+          _loading = false;
         });
         _fadeCtrl.forward(from: 0);
       }
@@ -98,11 +98,11 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     if (team == null) {
       if (mounted) {
         setState(() {
-          _myTeam      = null;
+          _myTeam = null;
           _pickingTeam = false;
-          _members     = [];
-          _filtered    = [];
-          _loading     = false;
+          _members = [];
+          _filtered = [];
+          _loading = false;
         });
         _fadeCtrl.forward(from: 0);
       }
@@ -123,12 +123,12 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     final allTeams = await TeamRepository.fetchAll(activeOnly: true);
     if (mounted) {
       setState(() {
-        _myTeam      = team;
-        _members     = members;
-        _filtered    = members;
-        _allTeams    = allTeams;
+        _myTeam = team;
+        _members = members;
+        _filtered = members;
+        _allTeams = allTeams;
         _pickingTeam = false;
-        _loading     = false;
+        _loading = false;
       });
       _filter();
       _fadeCtrl.forward(from: 0);
@@ -138,7 +138,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   /// Admin goes back to the team-picker.
   void _backToTeamPicker() {
     setState(() {
-      _myTeam      = null;
+      _myTeam = null;
       _pickingTeam = true;
     });
     _fadeCtrl.forward(from: 0);
@@ -148,9 +148,11 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     final q = _search.text.toLowerCase();
     setState(() {
       _filtered = _members
-          .where((u) =>
-              u.fullName.toLowerCase().contains(q) ||
-              u.role.toLowerCase().contains(q))
+          .where(
+            (u) =>
+                u.fullName.toLowerCase().contains(q) ||
+                u.role.toLowerCase().contains(q),
+          )
           .toList();
     });
   }
@@ -172,22 +174,28 @@ class _UserManagementScreenState extends State<UserManagementScreen>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlg) => AlertDialog(
           backgroundColor: AppColors.surfaceContainerLowest,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppColors.gold.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.group_add_outlined,
+                  color: AppColors.gold,
+                  size: 20,
+                ),
               ),
-              child: const Icon(Icons.group_add_outlined,
-                  color: AppColors.gold, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Text('Create Your Team', style: AppTextStyles.headlineSm),
-          ]),
+              const SizedBox(width: 12),
+              Text('Create Your Team', style: AppTextStyles.headlineSm),
+            ],
+          ),
           content: SizedBox(
             width: 380,
             child: Form(
@@ -245,8 +253,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                       if (!formKey.currentState!.validate()) return;
                       setDlg(() => saving = true);
 
-                      final profile =
-                          context.read<AuthNotifier>().profile;
+                      final profile = context.read<AuthNotifier>().profile;
                       final created = await TeamRepository.create(
                         name: nameCtrl.text,
                         description: descCtrl.text,
@@ -261,7 +268,9 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Text('Create Team'),
             ),
@@ -280,7 +289,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   @override
   Widget build(BuildContext context) {
     final profile = context.watch<AuthNotifier>().profile;
-    final privs   = context.watch<TeamPrivilegesNotifier>();
+    final privs = context.watch<TeamPrivilegesNotifier>();
     final isAdmin = profile?.isAdmin == true;
     // Admin, a manager with the privilege, or an employee explicitly granted it.
     final canCreateUser = isAdmin || privs.canCreateEmployees;
@@ -322,10 +331,10 @@ class _UserManagementScreenState extends State<UserManagementScreen>
       floatingActionButton: (canCreateUser && !_pickingTeam)
           ? FloatingActionButton.extended(
               onPressed: () async {
-                await context.push('/create-user', extra: {
-                  'teamId':   _myTeam?.id,
-                  'teamName': _myTeam?.name,
-                });
+                await context.push(
+                  '/create-user',
+                  extra: {'teamId': _myTeam?.id, 'teamName': _myTeam?.name},
+                );
                 // Re-enter load so new user appears
                 if (_myTeam != null) {
                   await _loadTeamMembers(_myTeam!);
@@ -341,12 +350,13 @@ class _UserManagementScreenState extends State<UserManagementScreen>
           : null,
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: AppColors.gold))
+              child: CircularProgressIndicator(color: AppColors.gold),
+            )
           : _pickingTeam
-              ? _buildTeamPicker()
-              : _myTeam == null
-                  ? _buildNoTeamState()
-                  : _buildTeamView(isAdmin),
+          ? _buildTeamPicker()
+          : _myTeam == null
+          ? _buildNoTeamState()
+          : _buildTeamView(isAdmin),
     );
   }
 
@@ -364,8 +374,9 @@ class _UserManagementScreenState extends State<UserManagementScreen>
         children: [
           Text(
             'Choose a team to manage',
-            style: AppTextStyles.bodyMd
-                .copyWith(color: AppColors.onSurfaceVariant),
+            style: AppTextStyles.bodyMd.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 12),
           // Admin: create a brand-new team.
@@ -378,10 +389,9 @@ class _UserManagementScreenState extends State<UserManagementScreen>
             ),
           ),
           const SizedBox(height: 16),
-          ..._allTeams.map((t) => _TeamPickerCard(
-                team: t,
-                onTap: () => _selectTeam(t),
-              )),
+          ..._allTeams.map(
+            (t) => _TeamPickerCard(team: t, onTap: () => _selectTeam(t)),
+          ),
           const SizedBox(height: 80),
         ],
       ),
@@ -418,16 +428,20 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                     width: 1.5,
                   ),
                 ),
-                child: const Icon(Icons.group_add_outlined,
-                    size: 44, color: AppColors.gold),
+                child: const Icon(
+                  Icons.group_add_outlined,
+                  size: 44,
+                  color: AppColors.gold,
+                ),
               ),
               const SizedBox(height: 24),
               Text('No team yet', style: AppTextStyles.headlineMd),
               const SizedBox(height: 8),
               Text(
                 'Create your team first, then start adding members to collaborate on tasks together.',
-                style: AppTextStyles.bodyMd
-                    .copyWith(color: AppColors.onSurfaceVariant),
+                style: AppTextStyles.bodyMd.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
@@ -454,131 +468,148 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   Widget _buildTeamView(bool isAdmin) {
     return FadeTransition(
       opacity: _fadeAnim,
-      child: Column(children: [
-        // Team info banner
-        Container(
-          width: double.infinity,
-          color: AppColors.surfaceContainerLowest,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Row(children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.gold.withValues(alpha: 0.2),
-                    AppColors.gold.withValues(alpha: 0.05),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(10),
-                border:
-                    Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
-              ),
-              child: const Icon(Icons.group_outlined,
-                  color: AppColors.gold, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_myTeam!.name, style: AppTextStyles.labelMd),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${_members.length} member${_members.length != 1 ? 's' : ''}'
-                    '${_myTeam!.department != null && _myTeam!.department!.isNotEmpty ? ' · ${_myTeam!.department}' : ''}',
-                    style: AppTextStyles.bodySm,
+      child: Column(
+        children: [
+          // Team info banner
+          Container(
+            width: double.infinity,
+            color: AppColors.surfaceContainerLowest,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.gold.withValues(alpha: 0.2),
+                        AppColors.gold.withValues(alpha: 0.05),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppColors.gold.withValues(alpha: 0.3),
+                    ),
                   ),
-                ],
-              ),
-            ),
-            // Manage members button → go to the dedicated members screen
-            IconButton(
-              onPressed: () async {
-                await context.push(
-                  '/teams/${_myTeam!.id}/members',
-                  extra: _myTeam!.name,
-                );
-                // Refresh this team's members only — don't reset to picker
-                if (mounted && _myTeam != null) _loadTeamMembers(_myTeam!);
-              },
-              icon: const Icon(Icons.person_add_outlined,
-                  color: AppColors.gold, size: 20),
-              tooltip: 'Add Members',
-            ),
-            // Privileges button — admin only
-            if (isAdmin)
-              IconButton(
-                onPressed: () => context.push(
-                  '/teams/${_myTeam!.id}/privileges',
-                  extra: _myTeam!.name,
+                  child: const Icon(
+                    Icons.group_outlined,
+                    color: AppColors.gold,
+                    size: 20,
+                  ),
                 ),
-                icon: Icon(Icons.admin_panel_settings_outlined,
-                    color: AppColors.onSurfaceVariant, size: 20),
-                tooltip: 'Team Privileges',
-              ),
-          ]),
-        ),
-        const Divider(height: 1),
-
-        // Search bar
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: TextField(
-            controller: _search,
-            decoration: const InputDecoration(
-              hintText: 'Search by name or role…',
-              prefixIcon: Icon(Icons.search, size: 20),
-            ),
-          ),
-        ),
-
-        // Members list
-        Expanded(
-          child: _filtered.isEmpty
-              ? Center(
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.person_search_outlined,
-                          size: 48, color: AppColors.outlineVariant),
-                      const SizedBox(height: 12),
+                      Text(_myTeam!.name, style: AppTextStyles.labelMd),
+                      const SizedBox(height: 2),
                       Text(
-                        _search.text.isNotEmpty
-                            ? 'No matching members'
-                            : 'No members yet',
-                        style: AppTextStyles.labelMd,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _search.text.isNotEmpty
-                            ? 'Try a different search term'
-                            : 'Tap + above to add members to your team',
+                        '${_members.length} member${_members.length != 1 ? 's' : ''}'
+                        '${_myTeam!.department != null && _myTeam!.department!.isNotEmpty ? ' · ${_myTeam!.department}' : ''}',
                         style: AppTextStyles.bodySm,
                       ),
                     ],
                   ),
-                )
-              : RefreshIndicator(
-                  color: AppColors.gold,
-                  onRefresh: _load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    itemCount: _filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _UserCard(
-                      user: _filtered[i],
-                      teams: _allTeams,
-                      onRefresh: _load,
-                      isAdmin: isAdmin,
+                ),
+                // Manage members button → go to the dedicated members screen
+                IconButton(
+                  onPressed: () async {
+                    await context.push(
+                      '/teams/${_myTeam!.id}/members',
+                      extra: _myTeam!.name,
+                    );
+                    // Refresh this team's members only — don't reset to picker
+                    if (mounted && _myTeam != null) _loadTeamMembers(_myTeam!);
+                  },
+                  icon: const Icon(
+                    Icons.person_add_outlined,
+                    color: AppColors.gold,
+                    size: 20,
+                  ),
+                  tooltip: 'Add Members',
+                ),
+                // Privileges button — admin only
+                if (isAdmin)
+                  IconButton(
+                    onPressed: () => context.push(
+                      '/teams/${_myTeam!.id}/privileges',
+                      extra: _myTeam!.name,
+                    ),
+                    icon: Icon(
+                      Icons.admin_panel_settings_outlined,
+                      color: AppColors.onSurfaceVariant,
+                      size: 20,
+                    ),
+                    tooltip: 'Team Privileges',
+                  ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+
+          // Search bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                hintText: 'Search by name or role…',
+                prefixIcon: Icon(Icons.search, size: 20),
+              ),
+            ),
+          ),
+
+          // Members list
+          Expanded(
+            child: _filtered.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.person_search_outlined,
+                          size: 48,
+                          color: AppColors.outlineVariant,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _search.text.isNotEmpty
+                              ? 'No matching members'
+                              : 'No members yet',
+                          style: AppTextStyles.labelMd,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _search.text.isNotEmpty
+                              ? 'Try a different search term'
+                              : 'Tap + above to add members to your team',
+                          style: AppTextStyles.bodySm,
+                        ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    color: AppColors.gold,
+                    onRefresh: _load,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      itemCount: _filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) => _UserCard(
+                        user: _filtered[i],
+                        teams: _allTeams,
+                        onRefresh: _load,
+                        isAdmin: isAdmin,
+                      ),
                     ),
                   ),
-                ),
-        ),
-      ]),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -615,16 +646,25 @@ class _UserCardState extends State<_UserCard> {
     if (widget.user.teamId == null) return;
     setState(() => _loadingTeam = true);
     final name = await ProfileRepository.fetchTeamName(widget.user.teamId);
-    if (mounted) setState(() { _teamName = name; _loadingTeam = false; });
+    if (mounted)
+      setState(() {
+        _teamName = name;
+        _loadingTeam = false;
+      });
   }
 
   Color get _roleColor {
     switch (widget.user.role) {
-      case 'admin':    return AppColors.primary;
-      case 'manager':  return AppColors.gold;
-      case 'employee': return AppColors.statusInProgress;
-      case 'client':   return AppColors.statusMedium;
-      default:         return AppColors.onSurfaceVariant;
+      case 'admin':
+        return AppColors.primary;
+      case 'manager':
+        return AppColors.gold;
+      case 'employee':
+        return AppColors.statusInProgress;
+      case 'client':
+        return AppColors.statusMedium;
+      default:
+        return AppColors.onSurfaceVariant;
     }
   }
 
@@ -638,7 +678,10 @@ class _UserCardState extends State<_UserCard> {
       builder: (ctx) => _TeamPickerSheet(
         teams: widget.teams,
         currentTeamId: widget.user.teamId,
-        onSelected: (t) { chosen = t; Navigator.pop(ctx); },
+        onSelected: (t) {
+          chosen = t;
+          Navigator.pop(ctx);
+        },
         onClear: () async {
           await TeamRepository.setTeamForUser(widget.user.id, null);
           widget.onRefresh();
@@ -664,125 +707,165 @@ class _UserCardState extends State<_UserCard> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Row(children: [
-        TAvatar(name: u.fullName, size: 44),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(u.fullName, style: AppTextStyles.labelMd,
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Wrap(spacing: 6, runSpacing: 4, children: [
-              TStatusChip(label: u.role, color: _roleColor),
-              TStatusChip(
-                label: u.isActive ? 'Active' : 'Inactive',
-                color: u.isActive ? AppColors.statusDone : AppColors.onSurfaceVariant,
-              ),
-            ]),
-            const SizedBox(height: 4),
-            // Team assignment indicator
-            Row(children: [
-              Icon(
-                u.teamId != null ? Icons.group_outlined : Icons.group_off_outlined,
-                size: 13,
-                color: u.teamId != null ? AppColors.gold : AppColors.onSurfaceVariant,
-              ),
-              const SizedBox(width: 4),
-              _loadingTeam
-                  ? const SizedBox(
-                      width: 10, height: 10,
-                      child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.gold),
-                    )
-                  : Text(
-                      u.teamId != null
-                          ? (_teamName ?? 'Assigned')
-                          : 'Unassigned',
-                      style: AppTextStyles.bodySm.copyWith(
-                        color: u.teamId != null ? AppColors.gold : AppColors.onSurfaceVariant,
-                        fontSize: 12,
-                      ),
-                    ),
-            ]),
-          ]),
-        ),
-        PopupMenuButton<String>(
-          icon: Icon(Icons.more_vert, color: AppColors.onSurfaceVariant),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          onSelected: (val) async {
-            if (val == 'activate' || val == 'deactivate') {
-              final newStatus = val == 'activate' ? 'active' : 'inactive';
-              await ProfileRepository.setStatus(u.id, newStatus);
-              widget.onRefresh();
-            } else if (val == 'assign_team') {
-              await _assignTeam();
-            } else if (val == 'privileges') {
-              context.push('/users/${u.id}/privileges', extra: {
-                'userName': u.fullName,
-                'role':     u.role,
-              });
-            } else if (val == 'edit') {
-              if (!context.mounted) return;
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => _EditEmployeeSheet(
-                  user: widget.user,
-                  onSaved: widget.onRefresh,
+      child: Row(
+        children: [
+          TAvatar(name: u.fullName, size: 44),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  u.fullName,
+                  style: AppTextStyles.labelMd,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              );
-            }
-          },
-          itemBuilder: (_) => [
-            if (widget.isAdmin)
-              const PopupMenuItem(
-                value: 'edit',
-                child: Row(children: [
-                  Icon(Icons.edit_outlined, size: 16),
-                  SizedBox(width: 10),
-                  Text('Edit Details'),
-                ]),
-              ),
-            // Privileges editable for staff (not clients).
-            if (u.role != 'client')
-              const PopupMenuItem(
-                value: 'privileges',
-                child: Row(children: [
-                  Icon(Icons.tune_outlined, size: 16),
-                  SizedBox(width: 10),
-                  Text('Edit Privileges'),
-                ]),
-              ),
-            if (widget.isAdmin || u.role != 'client') const PopupMenuDivider(),
-            if (!u.isActive)
-              const PopupMenuItem(
-                value: 'activate',
-                child: Row(children: [
-                  Icon(Icons.check_circle_outline, size: 16),
-                  SizedBox(width: 10),
-                  Text('Activate'),
-                ]),
-              ),
-            if (u.isActive)
-              const PopupMenuItem(
-                value: 'deactivate',
-                child: Row(children: [
-                  Icon(Icons.block_outlined, size: 16),
-                  SizedBox(width: 10),
-                  Text('Deactivate'),
-                ]),
-              ),
-            const PopupMenuItem(
-              value: 'assign_team',
-              child: Row(children: [
-                Icon(Icons.group_outlined, size: 16),
-                SizedBox(width: 10),
-                Text('Assign Team'),
-              ]),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    TStatusChip(label: u.role, color: _roleColor),
+                    TStatusChip(
+                      label: u.isActive ? 'Active' : 'Inactive',
+                      color: u.isActive
+                          ? AppColors.statusDone
+                          : AppColors.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                // Team assignment indicator
+                Row(
+                  children: [
+                    Icon(
+                      u.teamId != null
+                          ? Icons.group_outlined
+                          : Icons.group_off_outlined,
+                      size: 13,
+                      color: u.teamId != null
+                          ? AppColors.gold
+                          : AppColors.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    _loadingTeam
+                        ? const SizedBox(
+                            width: 10,
+                            height: 10,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: AppColors.gold,
+                            ),
+                          )
+                        : Text(
+                            u.teamId != null
+                                ? (_teamName ?? 'Assigned')
+                                : 'Unassigned',
+                            style: AppTextStyles.bodySm.copyWith(
+                              color: u.teamId != null
+                                  ? AppColors.gold
+                                  : AppColors.onSurfaceVariant,
+                              fontSize: 12,
+                            ),
+                          ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
-      ]),
+          ),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, color: AppColors.onSurfaceVariant),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            onSelected: (val) async {
+              if (val == 'activate' || val == 'deactivate') {
+                final newStatus = val == 'activate' ? 'active' : 'inactive';
+                await ProfileRepository.setStatus(u.id, newStatus);
+                widget.onRefresh();
+              } else if (val == 'assign_team') {
+                await _assignTeam();
+              } else if (val == 'privileges') {
+                context.push(
+                  '/users/${u.id}/privileges',
+                  extra: {'userName': u.fullName, 'role': u.role},
+                );
+              } else if (val == 'edit') {
+                if (!context.mounted) return;
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => _EditEmployeeSheet(
+                    user: widget.user,
+                    onSaved: widget.onRefresh,
+                  ),
+                );
+              }
+            },
+            itemBuilder: (_) => [
+              if (widget.isAdmin)
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_outlined, size: 16),
+                      SizedBox(width: 10),
+                      Text('Edit Details'),
+                    ],
+                  ),
+                ),
+              // Privileges editable for staff (not clients).
+              if (u.role != 'client')
+                const PopupMenuItem(
+                  value: 'privileges',
+                  child: Row(
+                    children: [
+                      Icon(Icons.tune_outlined, size: 16),
+                      SizedBox(width: 10),
+                      Text('Edit Privileges'),
+                    ],
+                  ),
+                ),
+              if (widget.isAdmin || u.role != 'client')
+                const PopupMenuDivider(),
+              if (!u.isActive)
+                const PopupMenuItem(
+                  value: 'activate',
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_outline, size: 16),
+                      SizedBox(width: 10),
+                      Text('Activate'),
+                    ],
+                  ),
+                ),
+              if (u.isActive)
+                const PopupMenuItem(
+                  value: 'deactivate',
+                  child: Row(
+                    children: [
+                      Icon(Icons.block_outlined, size: 16),
+                      SizedBox(width: 10),
+                      Text('Deactivate'),
+                    ],
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'assign_team',
+                child: Row(
+                  children: [
+                    Icon(Icons.group_outlined, size: 16),
+                    SizedBox(width: 10),
+                    Text('Assign Team'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -808,38 +891,50 @@ class _TeamPickerCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.outlineVariant),
           ),
-          child: Row(children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.gold.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: AppColors.gold.withValues(alpha: 0.3)),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppColors.gold.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.group_outlined,
+                  color: AppColors.gold,
+                  size: 22,
+                ),
               ),
-              child: const Icon(Icons.group_outlined,
-                  color: AppColors.gold, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(team.name, style: AppTextStyles.labelMd),
-                  if (team.department != null &&
-                      team.department!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(team.department!,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(team.name, style: AppTextStyles.labelMd),
+                    if (team.department != null &&
+                        team.department!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        team.department!,
                         style: AppTextStyles.bodySm.copyWith(
-                            color: AppColors.onSurfaceVariant)),
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            Icon(Icons.chevron_right,
-                color: AppColors.onSurfaceVariant, size: 20),
-          ]),
+              Icon(
+                Icons.chevron_right,
+                color: AppColors.onSurfaceVariant,
+                size: 20,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -867,92 +962,122 @@ class _TeamPickerSheet extends StatelessWidget {
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        // Handle
-        Container(
-          margin: const EdgeInsets.only(top: 12),
-          width: 40, height: 4,
-          decoration: BoxDecoration(
-            color: AppColors.outlineVariant,
-            borderRadius: BorderRadius.circular(2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-          child: Row(children: [
-            Text('Assign to Team', style: AppTextStyles.headlineSm),
-            const Spacer(),
-            if (currentTeamId != null)
-              TextButton.icon(
-                onPressed: onClear,
-                icon: const Icon(Icons.clear, size: 16, color: AppColors.error),
-                label: Text('Remove',
-                  style: AppTextStyles.labelMd.copyWith(color: AppColors.error)),
-              ),
-          ]),
-        ),
-        if (teams.isEmpty)
           Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('No active teams found', style: AppTextStyles.bodySm),
-          )
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            itemCount: teams.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 6),
-            itemBuilder: (_, i) {
-              final t = teams[i];
-              final isCurrent = t.id == currentTeamId;
-              return InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () => onSelected(t),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isCurrent
-                        ? AppColors.gold.withValues(alpha: 0.08)
-                        : AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isCurrent
-                          ? AppColors.gold.withValues(alpha: 0.5)
-                          : AppColors.outlineVariant,
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Row(
+              children: [
+                Text('Assign to Team', style: AppTextStyles.headlineSm),
+                const Spacer(),
+                if (currentTeamId != null)
+                  TextButton.icon(
+                    onPressed: onClear,
+                    icon: const Icon(
+                      Icons.clear,
+                      size: 16,
+                      color: AppColors.error,
+                    ),
+                    label: Text(
+                      'Remove',
+                      style: AppTextStyles.labelMd.copyWith(
+                        color: AppColors.error,
+                      ),
                     ),
                   ),
-                  child: Row(children: [
-                    Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.gold.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.group_outlined,
-                          size: 18, color: AppColors.gold),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(t.name, style: AppTextStyles.labelMd),
-                          if (t.department != null && t.department!.isNotEmpty)
-                            Text(t.department!, style: AppTextStyles.bodySm),
-                        ],
-                      ),
-                    ),
-                    if (isCurrent)
-                      const Icon(Icons.check_circle,
-                          color: AppColors.gold, size: 20),
-                  ]),
-                ),
-              );
-            },
+              ],
+            ),
           ),
-        const SizedBox(height: 24),
-      ]),
+          if (teams.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('No active teams found', style: AppTextStyles.bodySm),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              itemCount: teams.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 6),
+              itemBuilder: (_, i) {
+                final t = teams[i];
+                final isCurrent = t.id == currentTeamId;
+                return InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => onSelected(t),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isCurrent
+                          ? AppColors.gold.withValues(alpha: 0.08)
+                          : AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isCurrent
+                            ? AppColors.gold.withValues(alpha: 0.5)
+                            : AppColors.outlineVariant,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.gold.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.group_outlined,
+                            size: 18,
+                            color: AppColors.gold,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(t.name, style: AppTextStyles.labelMd),
+                              if (t.department != null &&
+                                  t.department!.isNotEmpty)
+                                Text(
+                                  t.department!,
+                                  style: AppTextStyles.bodySm,
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (isCurrent)
+                          const Icon(
+                            Icons.check_circle,
+                            color: AppColors.gold,
+                            size: 20,
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          const SizedBox(height: 24),
+        ],
+      ),
     );
   }
 }
@@ -969,15 +1094,15 @@ class _EditEmployeeSheet extends StatefulWidget {
 }
 
 class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
-  final _nameCtrl  = TextEditingController();
+  final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-  final _passCtrl  = TextEditingController();
+  final _passCtrl = TextEditingController();
 
-  bool    _loadingEmail = true;
-  bool    _saving       = false;
-  bool    _obscurePass  = true;
-  bool    _isActive     = true;
+  bool _loadingEmail = true;
+  bool _saving = false;
+  bool _obscurePass = true;
+  bool _isActive = true;
   String? _selectedRole;
   String? _errorMsg;
 
@@ -987,10 +1112,10 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
   void initState() {
     super.initState();
     final u = widget.user;
-    _nameCtrl.text  = u.fullName;
+    _nameCtrl.text = u.fullName;
     _phoneCtrl.text = u.phone ?? '';
-    _isActive       = u.isActive;
-    _selectedRole   = _editableRoles.contains(u.role) ? u.role : u.role;
+    _isActive = u.isActive;
+    _selectedRole = _editableRoles.contains(u.role) ? u.role : u.role;
     _fetchEmail();
   }
 
@@ -999,7 +1124,7 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
     if (mounted) {
       setState(() {
         _emailCtrl.text = email ?? '';
-        _loadingEmail   = false;
+        _loadingEmail = false;
       });
     }
   }
@@ -1027,16 +1152,19 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
       return;
     }
 
-    setState(() { _saving = true; _errorMsg = null; });
+    setState(() {
+      _saving = true;
+      _errorMsg = null;
+    });
 
     final error = await ProfileRepository.updateEmployee(
-      userId:      widget.user.id,
-      fullName:    _nameCtrl.text.trim(),
-      email:       _emailCtrl.text.trim(),
-      phone:       _phoneCtrl.text.trim(),
+      userId: widget.user.id,
+      fullName: _nameCtrl.text.trim(),
+      email: _emailCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
       newPassword: _passCtrl.text.isEmpty ? null : _passCtrl.text,
-      role:        _selectedRole,
-      status:      _isActive ? 'active' : 'inactive',
+      role: _selectedRole,
+      status: _isActive ? 'active' : 'inactive',
     );
 
     if (!mounted) return;
@@ -1066,199 +1194,229 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.only(
-        left: 24, right: 24, top: 20,
+        left: 24,
+        right: 24,
+        top: 20,
         bottom: MediaQuery.of(context).viewInsets.bottom + 32,
       ),
       child: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // Drag handle
-          Container(
-            width: 40, height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Header
-          Row(children: [
-            TAvatar(name: widget.user.fullName, size: 40),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Edit Account', style: AppTextStyles.headlineSm),
-                Text(
-                  widget.user.fullName,
-                  style: AppTextStyles.bodySm
-                      .copyWith(color: AppColors.onSurfaceVariant),
-                ),
-              ]),
-            ),
-          ]),
-          const SizedBox(height: 20),
-
-          // Error banner
-          if (_errorMsg != null) ...[
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              width: 40,
+              height: 4,
               decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                color: AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
               ),
-              child: Row(children: [
-                const Icon(Icons.error_outline,
-                    color: AppColors.error, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(_errorMsg!,
-                      style: AppTextStyles.bodySm
-                          .copyWith(color: AppColors.error)),
-                ),
-              ]),
             ),
             const SizedBox(height: 16),
-          ],
 
-          // ── ACCOUNT ─────────────────────────────────────────────────
-          _SheetLabel('ACCOUNT'),
-          const SizedBox(height: 10),
-
-          _SheetField(
-            controller: _nameCtrl,
-            label: 'Full name *',
-            icon: Icons.person_outline,
-          ),
-          const SizedBox(height: 12),
-
-          _loadingEmail
-              ? const LinearProgressIndicator(color: AppColors.gold)
-              : _SheetField(
-                  controller: _emailCtrl,
-                  label: 'Email *',
-                  icon: Icons.email_outlined,
-                  keyboardType: TextInputType.emailAddress,
-                ),
-          const SizedBox(height: 12),
-
-          // Password field
-          TextField(
-            controller: _passCtrl,
-            obscureText: _obscurePass,
-            decoration: InputDecoration(
-              labelText: 'New password (leave blank to keep current)',
-              prefixIcon: const Icon(Icons.lock_outline, size: 20),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscurePass
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  size: 18,
-                  color: AppColors.onSurfaceVariant,
-                ),
-                onPressed: () =>
-                    setState(() => _obscurePass = !_obscurePass),
-              ),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ── PERSONAL ─────────────────────────────────────────────────
-          _SheetLabel('PERSONAL'),
-          const SizedBox(height: 10),
-
-          _SheetField(
-            controller: _phoneCtrl,
-            label: 'Phone',
-            icon: Icons.phone_outlined,
-            keyboardType: TextInputType.phone,
-          ),
-          const SizedBox(height: 20),
-
-          // ── ACCESS ───────────────────────────────────────────────────
-          _SheetLabel('ACCESS'),
-          const SizedBox(height: 10),
-
-          // Role selector (hidden for admin accounts — can't demote admin here)
-          if (!isAdminRole) ...[
-            DropdownButtonFormField<String>(
-              initialValue: _selectedRole,
-              decoration: InputDecoration(
-                labelText: 'ROLE',
-                prefixIcon:
-                    const Icon(Icons.badge_outlined, size: 20),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 12),
-              ),
-              items: const [
-                DropdownMenuItem(
-                  value: 'employee',
-                  child: Text('Employee'),
-                ),
-                DropdownMenuItem(
-                  value: 'manager',
-                  child: Text('Manager'),
+            // Header
+            Row(
+              children: [
+                TAvatar(name: widget.user.fullName, size: 40),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Edit Account', style: AppTextStyles.headlineSm),
+                      Text(
+                        widget.user.fullName,
+                        style: AppTextStyles.bodySm.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
-              onChanged: (v) => setState(() => _selectedRole = v),
+            ),
+            const SizedBox(height: 20),
+
+            // Error banner
+            if (_errorMsg != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: AppColors.error,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMsg!,
+                        style: AppTextStyles.bodySm.copyWith(
+                          color: AppColors.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ── ACCOUNT ─────────────────────────────────────────────────
+            _SheetLabel('ACCOUNT'),
+            const SizedBox(height: 10),
+
+            _SheetField(
+              controller: _nameCtrl,
+              label: 'Full name *',
+              icon: Icons.person_outline,
             ),
             const SizedBox(height: 12),
-          ],
 
-          // Status toggle
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.outlineVariant),
-            ),
-            child: SwitchListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-              title: Text('Account Status', style: AppTextStyles.labelMd),
-              subtitle: Text(
-                _isActive ? 'Active — can log in' : 'Inactive — login disabled',
-                style: AppTextStyles.bodySm
-                    .copyWith(color: AppColors.onSurfaceVariant),
-              ),
-              value: _isActive,
-              onChanged: (v) => setState(() => _isActive = v),
-              activeThumbColor: AppColors.gold,
-            ),
-          ),
-          const SizedBox(height: 28),
+            _loadingEmail
+                ? const LinearProgressIndicator(color: AppColors.gold)
+                : _SheetField(
+                    controller: _emailCtrl,
+                    label: 'Email *',
+                    icon: Icons.email_outlined,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+            const SizedBox(height: 12),
 
-          // Save button
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _saving ? null : _save,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+            // Password field
+            TextField(
+              controller: _passCtrl,
+              obscureText: _obscurePass,
+              decoration: InputDecoration(
+                labelText: 'New password (leave blank to keep current)',
+                prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePass
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 18,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  onPressed: () => setState(() => _obscurePass = !_obscurePass),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
               ),
-              child: _saving
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppColors.gold))
-                  : const Text(
-                      'Save Changes',
-                      style: TextStyle(
+            ),
+            const SizedBox(height: 20),
+
+            // ── PERSONAL ─────────────────────────────────────────────────
+            _SheetLabel('PERSONAL'),
+            const SizedBox(height: 10),
+
+            _SheetField(
+              controller: _phoneCtrl,
+              label: 'Phone',
+              icon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 20),
+
+            // ── ACCESS ───────────────────────────────────────────────────
+            _SheetLabel('ACCESS'),
+            const SizedBox(height: 10),
+
+            // Role selector (hidden for admin accounts — can't demote admin here)
+            if (!isAdminRole) ...[
+              DropdownButtonFormField<String>(
+                initialValue: _selectedRole,
+                decoration: InputDecoration(
+                  labelText: 'ROLE',
+                  prefixIcon: const Icon(Icons.badge_outlined, size: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'employee', child: Text('Employee')),
+                  DropdownMenuItem(value: 'manager', child: Text('Manager')),
+                ],
+                onChanged: (v) => setState(() => _selectedRole = v),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Status toggle
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.outlineVariant),
+              ),
+              child: SwitchListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 2,
+                ),
+                title: Text('Account Status', style: AppTextStyles.labelMd),
+                subtitle: Text(
+                  _isActive
+                      ? 'Active — can log in'
+                      : 'Inactive — login disabled',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+                value: _isActive,
+                onChanged: (v) => setState(() => _isActive = v),
+                activeThumbColor: AppColors.gold,
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // Save button
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _saving ? null : _save,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: _saving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
                           color: AppColors.gold,
-                          fontWeight: FontWeight.w600),
-                    ),
+                        ),
+                      )
+                    : const Text(
+                        'Save Changes',
+                        style: TextStyle(
+                          color: AppColors.gold,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -1270,17 +1428,17 @@ class _SheetLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          label,
-          style: AppTextStyles.bodySm.copyWith(
-            color: AppColors.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.8,
-            fontSize: 11,
-          ),
-        ),
-      );
+    alignment: Alignment.centerLeft,
+    child: Text(
+      label,
+      style: AppTextStyles.bodySm.copyWith(
+        color: AppColors.onSurfaceVariant,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.8,
+        fontSize: 11,
+      ),
+    ),
+  );
 }
 
 class _SheetField extends StatelessWidget {
@@ -1291,21 +1449,19 @@ class _SheetField extends StatelessWidget {
     this.keyboardType,
   });
   final TextEditingController controller;
-  final String                label;
-  final IconData              icon;
-  final TextInputType?        keyboardType;
+  final String label;
+  final IconData icon;
+  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) => TextField(
-        controller:   controller,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, size: 20),
-          border:
-              OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        ),
-      );
+    controller: controller,
+    keyboardType: keyboardType,
+    decoration: InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, size: 20),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    ),
+  );
 }

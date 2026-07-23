@@ -24,12 +24,12 @@ class CreateUserScreen extends StatefulWidget {
 
 class _CreateUserScreenState extends State<CreateUserScreen> {
   // ── New-account form ────────────────────────────────────────────────────
-  final _formKey   = GlobalKey<FormState>();
-  final _namCtrl   = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _namCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
-  final _passCtrl  = TextEditingController();
-  bool    _saving       = false;
-  bool    _obscurePass  = true;
+  final _passCtrl = TextEditingController();
+  bool _saving = false;
+  bool _obscurePass = true;
   String? _errorMsg;
   String? _successMsg;
 
@@ -37,9 +37,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
   int _tab = 0; // 0 = New Account, 1 = Promote Employee
 
   // ── Promote-employee tab ─────────────────────────────────────────────────
-  bool              _loadingEmployees = false;
-  List<ProfileModel> _employees        = [];
-  List<ProfileModel> _filteredEmployees= [];
+  bool _loadingEmployees = false;
+  List<ProfileModel> _employees = [];
+  List<ProfileModel> _filteredEmployees = [];
   final _promoteSearch = TextEditingController();
   String? _promotingId;
   String? _promoteError;
@@ -76,29 +76,37 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _saving = true; _errorMsg = null; _successMsg = null; });
+    setState(() {
+      _saving = true;
+      _errorMsg = null;
+      _successMsg = null;
+    });
 
-    final role  = _targetRole;
+    final role = _targetRole;
     final email = _emailCtrl.text.trim();
     final error = await ProfileRepository.createUser(
-      email:    email,
+      email: email,
       password: _passCtrl.text,
       fullName: _namCtrl.text.trim(),
-      role:     role,
-      teamId:   widget.teamId,
+      role: role,
+      teamId: widget.teamId,
     );
 
     if (!mounted) return;
 
     if (error != null) {
-      setState(() { _saving = false; _errorMsg = error; });
+      setState(() {
+        _saving = false;
+        _errorMsg = error;
+      });
     } else {
       final teamSuffix = widget.teamName != null
           ? ' and assigned to ${widget.teamName}.'
           : '.';
       setState(() {
-        _saving     = false;
-        _successMsg = '${role == 'manager' ? 'Manager' : 'Employee'} account '
+        _saving = false;
+        _successMsg =
+            '${role == 'manager' ? 'Manager' : 'Employee'} account '
             'created for $email$teamSuffix';
       });
       _namCtrl.clear();
@@ -114,9 +122,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     final list = await ProfileRepository.fetchPromotable();
     if (!mounted) return;
     setState(() {
-      _employees         = list;
+      _employees = list;
       _filteredEmployees = list;
-      _loadingEmployees  = false;
+      _loadingEmployees = false;
     });
   }
 
@@ -126,8 +134,8 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       _filteredEmployees = q.isEmpty
           ? List.of(_employees)
           : _employees
-              .where((e) => e.fullName.toLowerCase().contains(q))
-              .toList();
+                .where((e) => e.fullName.toLowerCase().contains(q))
+                .toList();
     });
   }
 
@@ -157,8 +165,8 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     if (confirmed != true) return;
 
     setState(() {
-      _promotingId    = employee.id;
-      _promoteError   = null;
+      _promotingId = employee.id;
+      _promoteError = null;
       _promoteSuccess = null;
     });
 
@@ -168,7 +176,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     if (error != null) {
       setState(() {
         _promoteError = error;
-        _promotingId  = null;
+        _promotingId = null;
       });
     } else {
       // Auto-assign the newly promoted manager to the current team
@@ -180,8 +188,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
           ? ' and assigned to ${widget.teamName}.'
           : '.';
       setState(() {
-        _promoteSuccess = '${employee.fullName} has been promoted to Manager$teamSuffix';
-        _promotingId    = null;
+        _promoteSuccess =
+            '${employee.fullName} has been promoted to Manager$teamSuffix';
+        _promotingId = null;
         _employees.removeWhere((e) => e.id == employee.id);
         _filteredEmployees.removeWhere((e) => e.id == employee.id);
       });
@@ -240,49 +249,54 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.gold.withValues(alpha: 0.2)),
       ),
-      child: Row(children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.gold.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(10),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.gold.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              isAdmin
+                  ? (isNew
+                        ? Icons.manage_accounts_outlined
+                        : Icons.upgrade_outlined)
+                  : Icons.person_add_outlined,
+              color: AppColors.gold,
+              size: 22,
+            ),
           ),
-          child: Icon(
-            isAdmin
-                ? (isNew
-                    ? Icons.manage_accounts_outlined
-                    : Icons.upgrade_outlined)
-                : Icons.person_add_outlined,
-            color: AppColors.gold,
-            size: 22,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isAdmin
+                      ? (isNew
+                            ? 'Create Manager Account'
+                            : 'Promote to Manager')
+                      : 'Create Employee Account',
+                  style: AppTextStyles.labelMd,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isAdmin
+                      ? (isNew
+                            ? 'Creates a brand-new account with manager privileges.'
+                            : 'Upgrade an existing employee to manager role.')
+                      : 'New account can view and update tasks for their team.',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isAdmin
-                    ? (isNew ? 'Create Manager Account' : 'Promote to Manager')
-                    : 'Create Employee Account',
-                style: AppTextStyles.labelMd,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                isAdmin
-                    ? (isNew
-                        ? 'Creates a brand-new account with manager privileges.'
-                        : 'Upgrade an existing employee to manager role.')
-                    : 'New account can view and update tasks for their team.',
-                style: AppTextStyles.bodySm
-                    .copyWith(color: AppColors.onSurfaceVariant),
-              ),
-            ],
-          ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 
@@ -294,18 +308,20 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
         border: Border.all(color: AppColors.outlineVariant),
       ),
       padding: const EdgeInsets.all(4),
-      child: Row(children: [
-        _TabChip(
-          label: 'New Account',
-          selected: _tab == 0,
-          onTap: () => setState(() => _tab = 0),
-        ),
-        _TabChip(
-          label: 'Promote Employee',
-          selected: _tab == 1,
-          onTap: () => setState(() => _tab = 1),
-        ),
-      ]),
+      child: Row(
+        children: [
+          _TabChip(
+            label: 'New Account',
+            selected: _tab == 0,
+            onTap: () => setState(() => _tab = 0),
+          ),
+          _TabChip(
+            label: 'Promote Employee',
+            selected: _tab == 1,
+            onTap: () => setState(() => _tab = 1),
+          ),
+        ],
+      ),
     );
   }
 
@@ -349,7 +365,8 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                 prefixIcon: Icon(Icons.person_outline, size: 18),
               ),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Full name is required';
+                if (v == null || v.trim().isEmpty)
+                  return 'Full name is required';
                 if (v.trim().length < 2) return 'Name is too short';
                 return null;
               },
@@ -391,8 +408,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                     size: 18,
                     color: AppColors.onSurfaceVariant,
                   ),
-                  onPressed: () =>
-                      setState(() => _obscurePass = !_obscurePass),
+                  onPressed: () => setState(() => _obscurePass = !_obscurePass),
                 ),
               ),
               validator: (v) {
@@ -407,8 +423,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
               'Share these credentials directly with the new '
               '${_targetRole == 'manager' ? 'manager' : 'employee'}. '
               'They can change their password after logging in.',
-              style: AppTextStyles.bodySm
-                  .copyWith(color: AppColors.onSurfaceVariant),
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
             ),
 
             const SizedBox(height: 32),
@@ -425,10 +442,13 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : Text(
-                        'Create ${_targetRole == 'manager' ? 'Manager' : 'Employee'}'),
+                        'Create ${_targetRole == 'manager' ? 'Manager' : 'Employee'}',
+                      ),
               ),
             ),
           ],
@@ -475,23 +495,23 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
         Expanded(
           child: _loadingEmployees
               ? const Center(
-                  child: CircularProgressIndicator(color: AppColors.gold))
+                  child: CircularProgressIndicator(color: AppColors.gold),
+                )
               : _filteredEmployees.isEmpty
-                  ? _buildEmptyEmployees()
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                      itemCount: _filteredEmployees.length,
-                      separatorBuilder: (_, __) =>
-                          const SizedBox(height: 8),
-                      itemBuilder: (_, i) {
-                        final e = _filteredEmployees[i];
-                        return _EmployeePromoteCard(
-                          employee: e,
-                          isPromoting: _promotingId == e.id,
-                          onPromote: () => _promote(e),
-                        );
-                      },
-                    ),
+              ? _buildEmptyEmployees()
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  itemCount: _filteredEmployees.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) {
+                    final e = _filteredEmployees[i];
+                    return _EmployeePromoteCard(
+                      employee: e,
+                      isPromoting: _promotingId == e.id,
+                      onPromote: () => _promote(e),
+                    );
+                  },
+                ),
         ),
       ],
     );
@@ -503,8 +523,11 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.person_search_outlined,
-              size: 52, color: AppColors.outlineVariant),
+          Icon(
+            Icons.person_search_outlined,
+            size: 52,
+            color: AppColors.outlineVariant,
+          ),
           const SizedBox(height: 12),
           Text(
             hasSearch ? 'No matching employees' : 'No employees to promote',
@@ -515,8 +538,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
             hasSearch
                 ? 'Try a different name'
                 : 'All active employees have already been promoted.',
-            style: AppTextStyles.bodySm
-                .copyWith(color: AppColors.onSurfaceVariant),
+            style: AppTextStyles.bodySm.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -533,7 +557,7 @@ class _EmployeePromoteCard extends StatelessWidget {
     required this.onPromote,
   });
   final ProfileModel employee;
-  final bool         isPromoting;
+  final bool isPromoting;
   final VoidCallback onPromote;
 
   @override
@@ -545,39 +569,46 @@ class _EmployeePromoteCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Row(children: [
-        TAvatar(name: employee.fullName, size: 40),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(employee.fullName,
+      child: Row(
+        children: [
+          TAvatar(name: employee.fullName, size: 40),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  employee.fullName,
                   style: AppTextStyles.labelMd,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
-              Text(
-                'Employee${employee.teamId != null ? ' · Assigned to team' : ' · Unassigned'}',
-                style: AppTextStyles.bodySm
-                    .copyWith(color: AppColors.onSurfaceVariant),
-              ),
-            ],
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  'Employee${employee.teamId != null ? ' · Assigned to team' : ' · Unassigned'}',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        isPromoting
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: AppColors.gold),
-              )
-            : TextButton(
-                onPressed: onPromote,
-                style: TextButton.styleFrom(foregroundColor: AppColors.gold),
-                child: const Text('Promote'),
-              ),
-      ]),
+          const SizedBox(width: 8),
+          isPromoting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.gold,
+                  ),
+                )
+              : TextButton(
+                  onPressed: onPromote,
+                  style: TextButton.styleFrom(foregroundColor: AppColors.gold),
+                  child: const Text('Promote'),
+                ),
+        ],
+      ),
     );
   }
 }
@@ -590,8 +621,8 @@ class _TabChip extends StatelessWidget {
     required this.selected,
     required this.onTap,
   });
-  final String   label;
-  final bool     selected;
+  final String label;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
@@ -627,8 +658,8 @@ class _Banner extends StatelessWidget {
     required this.color,
     required this.icon,
   });
-  final String   message;
-  final Color    color;
+  final String message;
+  final Color color;
   final IconData icon;
 
   @override
@@ -641,14 +672,18 @@ class _Banner extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
-      child: Row(children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(message,
-              style: AppTextStyles.bodySm.copyWith(color: color)),
-        ),
-      ]),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTextStyles.bodySm.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

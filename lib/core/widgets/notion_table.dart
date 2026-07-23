@@ -42,8 +42,10 @@ class NotionTable extends StatefulWidget {
   final VoidCallback? onAddRow;
   final VoidCallback? onAddColumn;
   final void Function(String rowId)? onRowTap;
+
   /// Called with the row ID when the user swipes a row to delete.
   final void Function(String rowId)? onRowDelete;
+
   /// Called with the new ordered list of row IDs after a drag-to-reorder.
   final void Function(List<String> orderedIds)? onRowReorder;
   final String emptyMessage;
@@ -159,13 +161,20 @@ class _NotionTableState extends State<NotionTable>
               ),
               itemBuilder: (ctx, i) {
                 final row = _orderedRows[i];
-                return _buildDraggableRow(key: ValueKey(row.id), index: i, row: row, cols: cols);
+                return _buildDraggableRow(
+                  key: ValueKey(row.id),
+                  index: i,
+                  row: row,
+                  cols: cols,
+                );
               },
             );
           } else {
             tableBody = Column(
               mainAxisSize: MainAxisSize.min,
-              children: _orderedRows.asMap().entries
+              children: _orderedRows
+                  .asMap()
+                  .entries
                   .map((e) => _buildRow(e.key, e.value, cols))
                   .toList(),
             );
@@ -255,7 +264,10 @@ class _NotionTableState extends State<NotionTable>
       curve: Curves.easeOut,
       builder: (_, val, child) => Opacity(
         opacity: val,
-        child: Transform.translate(offset: Offset(0, 8 * (1 - val)), child: child),
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - val)),
+          child: child,
+        ),
       ),
       child: _buildRowContent(index, row, cols, showHandle: false),
     );
@@ -318,13 +330,17 @@ class _NotionTableState extends State<NotionTable>
                 ),
               ),
             ],
-            ...cols.map((col) => Expanded(
-                  flex: col.flex,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                    child: row.cells[col.key] ?? Text('—', style: AppTextStyles.bodySm),
-                  ),
-                )),
+            ...cols.map(
+              (col) => Expanded(
+                flex: col.flex,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                  child:
+                      row.cells[col.key] ??
+                      Text('—', style: AppTextStyles.bodySm),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -343,7 +359,10 @@ class _NotionTableState extends State<NotionTable>
         children: [
           const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
           const SizedBox(width: 6),
-          Text('Delete', style: AppTextStyles.labelMd.copyWith(color: AppColors.error)),
+          Text(
+            'Delete',
+            style: AppTextStyles.labelMd.copyWith(color: AppColors.error),
+          ),
         ],
       ),
     );
@@ -354,7 +373,9 @@ class _NotionTableState extends State<NotionTable>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Task'),
-        content: const Text('Are you sure you want to delete this task permanently?'),
+        content: const Text(
+          'Are you sure you want to delete this task permanently?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -391,30 +412,36 @@ class _NotionTableState extends State<NotionTable>
         children: [
           // Spacer matching drag handle width in reorder mode
           if (canReorder) SizedBox(width: isMobile ? 18 : 24),
-          ...cols.map((col) => Expanded(
-                flex: col.flex,
-                child: GestureDetector(
-                  onTap: () => _showColumnOptions(col),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(col.icon, size: isMobile ? 11 : 13, color: AppColors.gold),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          col.label.toUpperCase(),
-                          style: AppTextStyles.labelCaps.copyWith(
-                            color: AppColors.onSurface,
-                            fontSize: isMobile ? 8.5 : 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+          ...cols.map(
+            (col) => Expanded(
+              flex: col.flex,
+              child: GestureDetector(
+                onTap: () => _showColumnOptions(col),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      col.icon,
+                      size: isMobile ? 11 : 13,
+                      color: AppColors.gold,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        col.label.toUpperCase(),
+                        style: AppTextStyles.labelCaps.copyWith(
+                          color: AppColors.onSurface,
+                          fontSize: isMobile ? 8.5 : 10,
+                          fontWeight: FontWeight.w600,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              )),
+              ),
+            ),
+          ),
           if (widget.onAddColumn != null)
             GestureDetector(
               onTap: widget.onAddColumn,
@@ -425,7 +452,11 @@ class _NotionTableState extends State<NotionTable>
                   color: AppColors.primary.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Icon(Icons.add, size: isMobile ? 12 : 14, color: AppColors.gold),
+                child: Icon(
+                  Icons.add,
+                  size: isMobile ? 12 : 14,
+                  color: AppColors.gold,
+                ),
               ),
             ),
         ],
@@ -442,11 +473,19 @@ class _NotionTableState extends State<NotionTable>
         children: [
           Icon(widget.emptyIcon, size: 40, color: AppColors.outlineVariant),
           const SizedBox(height: 12),
-          Text(widget.emptyMessage,
-              style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
+          Text(
+            widget.emptyMessage,
+            style: AppTextStyles.bodyMd.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text('Tap + to create one',
-              style: AppTextStyles.bodySm.copyWith(color: AppColors.outlineVariant)),
+          Text(
+            'Tap + to create one',
+            style: AppTextStyles.bodySm.copyWith(
+              color: AppColors.outlineVariant,
+            ),
+          ),
         ],
       ),
     );
@@ -458,13 +497,20 @@ class _NotionTableState extends State<NotionTable>
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.outlineVariant, width: 0.5)),
+          border: Border(
+            top: BorderSide(color: AppColors.outlineVariant, width: 0.5),
+          ),
         ),
         child: Row(
           children: [
             Icon(Icons.add, size: 15, color: AppColors.onSurfaceVariant),
             const SizedBox(width: 6),
-            Text('New', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
+            Text(
+              'New',
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
       ),
@@ -477,10 +523,7 @@ class _ColumnOptionsSheet extends StatefulWidget {
   final List<NotionColumn> columns;
   final VoidCallback onChanged;
 
-  const _ColumnOptionsSheet({
-    required this.columns,
-    required this.onChanged,
-  });
+  const _ColumnOptionsSheet({required this.columns, required this.onChanged});
 
   @override
   State<_ColumnOptionsSheet> createState() => _ColumnOptionsSheetState();
@@ -508,23 +551,25 @@ class _ColumnOptionsSheetState extends State<_ColumnOptionsSheet> {
           Text('Toggle which columns are visible', style: AppTextStyles.bodySm),
           const SizedBox(height: 12),
           const Divider(),
-          ...widget.columns.map((col) => SwitchListTile(
-                value: col.visible,
-                onChanged: (v) {
-                  setState(() => col.visible = v);
-                  widget.onChanged();
-                },
-                title: Row(
-                  children: [
-                    Icon(col.icon, size: 16, color: AppColors.gold),
-                    const SizedBox(width: 8),
-                    Text(col.label, style: AppTextStyles.bodyMd),
-                  ],
-                ),
-                activeColor: AppColors.gold,
-                activeTrackColor: AppColors.primary,
-                contentPadding: EdgeInsets.zero,
-              )),
+          ...widget.columns.map(
+            (col) => SwitchListTile(
+              value: col.visible,
+              onChanged: (v) {
+                setState(() => col.visible = v);
+                widget.onChanged();
+              },
+              title: Row(
+                children: [
+                  Icon(col.icon, size: 16, color: AppColors.gold),
+                  const SizedBox(width: 8),
+                  Text(col.label, style: AppTextStyles.bodyMd),
+                ],
+              ),
+              activeThumbColor: AppColors.gold,
+              activeTrackColor: AppColors.primary,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
           const SizedBox(height: 8),
         ],
       ),

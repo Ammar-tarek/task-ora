@@ -9,14 +9,16 @@ import '../services/supabase_service.dart';
 
 class TeamRepository {
   static final _client = SupabaseService.client;
-  static final _admin  = SupabaseService.adminClient;
+  static final _admin = SupabaseService.adminClient;
 
   // ── Teams ──────────────────────────────────────────────────────────────────
 
   /// All teams bypassing RLS — needed where a manager must see OTHER teams
   /// (e.g. the department-handoff picker). Managers' RLS limits them to their
   /// own team, so the normal [fetchAll] would return only one team.
-  static Future<List<TeamModel>> fetchAllAdmin({bool activeOnly = false}) async {
+  static Future<List<TeamModel>> fetchAllAdmin({
+    bool activeOnly = false,
+  }) async {
     try {
       var query = _admin.from('teams').select();
       if (activeOnly) query = query.eq('is_active', true);
@@ -57,15 +59,19 @@ class TeamRepository {
     String? teamLeadId,
   }) async {
     try {
-      final data = await _client.from('teams').insert({
-        'name': name.trim(),
-        if (description != null && description.trim().isNotEmpty)
-          'description': description.trim(),
-        if (department != null && department.trim().isNotEmpty)
-          'department': department.trim(),
-        if (teamLeadId != null) 'team_lead_id': teamLeadId,
-        'is_active': true,
-      }).select().single();
+      final data = await _client
+          .from('teams')
+          .insert({
+            'name': name.trim(),
+            if (description != null && description.trim().isNotEmpty)
+              'description': description.trim(),
+            if (department != null && department.trim().isNotEmpty)
+              'department': department.trim(),
+            if (teamLeadId != null) 'team_lead_id': teamLeadId,
+            'is_active': true,
+          })
+          .select()
+          .single();
       return TeamModel.fromMap(data);
     } catch (_) {
       return null;
@@ -82,17 +88,21 @@ class TeamRepository {
     bool? isActive,
   }) async {
     try {
-      await _client.from('teams').update({
-        'name': name.trim(),
-        'description': (description != null && description.trim().isNotEmpty)
-            ? description.trim()
-            : null,
-        'department': (department != null && department.trim().isNotEmpty)
-            ? department.trim()
-            : null,
-        'team_lead_id': teamLeadId,
-        if (isActive != null) 'is_active': isActive,
-      }).eq('id', id);
+      await _client
+          .from('teams')
+          .update({
+            'name': name.trim(),
+            'description':
+                (description != null && description.trim().isNotEmpty)
+                ? description.trim()
+                : null,
+            'department': (department != null && department.trim().isNotEmpty)
+                ? department.trim()
+                : null,
+            'team_lead_id': teamLeadId,
+            if (isActive != null) 'is_active': isActive,
+          })
+          .eq('id', id);
       return true;
     } catch (_) {
       return false;
@@ -102,10 +112,7 @@ class TeamRepository {
   /// Deactivate a team (soft delete — sets is_active = false).
   static Future<bool> deactivate(String id) async {
     try {
-      await _client
-          .from('teams')
-          .update({'is_active': false})
-          .eq('id', id);
+      await _client.from('teams').update({'is_active': false}).eq('id', id);
       return true;
     } catch (_) {
       return false;

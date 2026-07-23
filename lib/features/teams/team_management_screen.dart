@@ -51,8 +51,8 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
     final nameCtrl = TextEditingController(text: team?.name ?? '');
     final descCtrl = TextEditingController(text: team?.description ?? '');
     final deptCtrl = TextEditingController(text: team?.department ?? '');
-    final formKey  = GlobalKey<FormState>();
-    bool saving    = false;
+    final formKey = GlobalKey<FormState>();
+    bool saving = false;
 
     TeamModel? createdTeam;
 
@@ -62,22 +62,31 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlg) => AlertDialog(
           backgroundColor: AppColors.surfaceContainerLowest,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: AppColors.gold.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.group_add_outlined,
+                  color: AppColors.gold,
+                  size: 20,
+                ),
               ),
-              child: const Icon(Icons.group_add_outlined, color: AppColors.gold, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              team == null ? 'Create Team' : 'Edit Team',
-              style: AppTextStyles.headlineSm,
-            ),
-          ]),
+              const SizedBox(width: 12),
+              Text(
+                team == null ? 'Create Team' : 'Edit Team',
+                style: AppTextStyles.headlineSm,
+              ),
+            ],
+          ),
           content: SizedBox(
             width: 380,
             child: Form(
@@ -94,8 +103,9 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                       hintText: 'e.g. Engineering',
                       prefixIcon: Icon(Icons.group_outlined, size: 18),
                     ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Team name is required' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Team name is required'
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -135,8 +145,7 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                       setDlg(() => saving = true);
 
                       if (team == null) {
-                        final profile =
-                            context.read<AuthNotifier>().profile;
+                        final profile = context.read<AuthNotifier>().profile;
                         final created = await TeamRepository.create(
                           name: nameCtrl.text,
                           description: descCtrl.text,
@@ -155,15 +164,21 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (!ok && mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Failed to save team')),
+                            const SnackBar(
+                              content: Text('Failed to save team'),
+                            ),
                           );
                         }
                       }
                     },
               child: saving
                   ? const SizedBox(
-                      width: 16, height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : Text(team == null ? 'Create & Add Members' : 'Save'),
             ),
@@ -222,9 +237,9 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
       if (ok) {
         _load();
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to delete team')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to delete team')));
       }
     }
   }
@@ -256,31 +271,33 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
             )
           : null,
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.gold),
+            )
           : _teams.isEmpty
-              ? _buildFirstTimeEmpty()
-              : RefreshIndicator(
-                  color: AppColors.gold,
-                  onRefresh: _load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                    itemCount: _teams.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) => _TeamCard(
-                      team: _teams[i],
-                      memberCount: _memberCounts[_teams[i].id] ?? 0,
-                      onEdit: () => _openTeamDialog(team: _teams[i]),
-                      onDelete: () => _confirmDelete(_teams[i]),
-                      onManageMembers: () async {
-                        await context.push(
-                          '/teams/${_teams[i].id}/members',
-                          extra: _teams[i].name,
-                        );
-                        _load();
-                      },
-                    ),
-                  ),
+          ? _buildFirstTimeEmpty()
+          : RefreshIndicator(
+              color: AppColors.gold,
+              onRefresh: _load,
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                itemCount: _teams.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (_, i) => _TeamCard(
+                  team: _teams[i],
+                  memberCount: _memberCounts[_teams[i].id] ?? 0,
+                  onEdit: () => _openTeamDialog(team: _teams[i]),
+                  onDelete: () => _confirmDelete(_teams[i]),
+                  onManageMembers: () async {
+                    await context.push(
+                      '/teams/${_teams[i].id}/members',
+                      extra: _teams[i].name,
+                    );
+                    _load();
+                  },
                 ),
+              ),
+            ),
     );
   }
 
@@ -294,7 +311,8 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
           children: [
             // Illustration circle
             Container(
-              width: 96, height: 96,
+              width: 96,
+              height: 96,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -310,14 +328,20 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                   width: 1.5,
                 ),
               ),
-              child: const Icon(Icons.group_add_outlined, size: 44, color: AppColors.gold),
+              child: const Icon(
+                Icons.group_add_outlined,
+                size: 44,
+                color: AppColors.gold,
+              ),
             ),
             const SizedBox(height: 24),
             Text('No teams yet', style: AppTextStyles.headlineMd),
             const SizedBox(height: 8),
             Text(
               'Create your first team and start adding members to it.',
-              style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+              style: AppTextStyles.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
@@ -373,93 +397,128 @@ class _TeamCard extends StatelessWidget {
           // ── Header row
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 14, 8, 10),
-            child: Row(children: [
-              Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.gold.withValues(alpha: 0.2),
-                      AppColors.gold.withValues(alpha: 0.05),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
-                ),
-                child: const Icon(Icons.group_outlined, color: AppColors.gold, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Flexible(
-                        child: Text(
-                          team.name,
-                          style: AppTextStyles.labelMd,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (!team.isActive) ...[ 
-                        const SizedBox(width: 6),
-                        TStatusChip(label: 'Inactive', color: AppColors.onSurfaceVariant),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.gold.withValues(alpha: 0.2),
+                        AppColors.gold.withValues(alpha: 0.05),
                       ],
-                    ]),
-                    const SizedBox(height: 3),
-                    Wrap(spacing: 8, children: [
-                      if (team.department != null && team.department!.isNotEmpty)
-                        _MetaChip(
-                          icon: Icons.business_outlined,
-                          label: team.department!,
-                        ),
-                      _MetaChip(
-                        icon: Icons.people_outline,
-                        label: '$memberCount member${memberCount != 1 ? 's' : ''}',
-                      ),
-                    ]),
-                  ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppColors.gold.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.group_outlined,
+                    color: AppColors.gold,
+                    size: 22,
+                  ),
                 ),
-              ),
-              PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert, color: AppColors.onSurfaceVariant, size: 20),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(children: [
-                      Icon(Icons.edit_outlined, size: 16),
-                      SizedBox(width: 10),
-                      Text('Edit Team'),
-                    ]),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              team.name,
+                              style: AppTextStyles.labelMd,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (!team.isActive) ...[
+                            const SizedBox(width: 6),
+                            TStatusChip(
+                              label: 'Inactive',
+                              color: AppColors.onSurfaceVariant,
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          if (team.department != null &&
+                              team.department!.isNotEmpty)
+                            _MetaChip(
+                              icon: Icons.business_outlined,
+                              label: team.department!,
+                            ),
+                          _MetaChip(
+                            icon: Icons.people_outline,
+                            label:
+                                '$memberCount member${memberCount != 1 ? 's' : ''}',
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const PopupMenuItem(
-                    value: 'members',
-                    child: Row(children: [
-                      Icon(Icons.manage_accounts_outlined, size: 16),
-                      SizedBox(width: 10),
-                      Text('Manage Members'),
-                    ]),
+                ),
+                PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: AppColors.onSurfaceVariant,
+                    size: 20,
                   ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(children: [
-                      Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                      SizedBox(width: 10),
-                      Text('Delete', style: TextStyle(color: Colors.red)),
-                    ]),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ],
-                onSelected: (val) {
-                  if (val == 'edit') onEdit();
-                  if (val == 'members') onManageMembers();
-                  if (val == 'delete') onDelete();
-                },
-              ),
-            ]),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 16),
+                          SizedBox(width: 10),
+                          Text('Edit Team'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'members',
+                      child: Row(
+                        children: [
+                          Icon(Icons.manage_accounts_outlined, size: 16),
+                          SizedBox(width: 10),
+                          Text('Manage Members'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.delete_outline,
+                            size: 16,
+                            color: Colors.red,
+                          ),
+                          SizedBox(width: 10),
+                          Text('Delete', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
+                    ),
+                  ],
+                  onSelected: (val) {
+                    if (val == 'edit') onEdit();
+                    if (val == 'members') onManageMembers();
+                    if (val == 'delete') onDelete();
+                  },
+                ),
+              ],
+            ),
           ),
 
           // ── Description
@@ -467,18 +526,24 @@ class _TeamCard extends StatelessWidget {
             const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-              child: Row(children: [
-                Icon(Icons.notes_outlined, size: 14, color: AppColors.onSurfaceVariant),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    team.description!,
-                    style: AppTextStyles.bodySm,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.notes_outlined,
+                    size: 14,
+                    color: AppColors.onSurfaceVariant,
                   ),
-                ),
-              ]),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      team.description!,
+                      style: AppTextStyles.bodySm,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
 
@@ -486,17 +551,25 @@ class _TeamCard extends StatelessWidget {
           const Divider(height: 1),
           InkWell(
             onTap: onManageMembers,
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(10),
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.manage_accounts_outlined, size: 16, color: AppColors.gold),
+                  const Icon(
+                    Icons.manage_accounts_outlined,
+                    size: 16,
+                    color: AppColors.gold,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Manage Members',
-                    style: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
+                    style: AppTextStyles.labelMd.copyWith(
+                      color: AppColors.gold,
+                    ),
                   ),
                 ],
               ),
@@ -516,11 +589,11 @@ class _MetaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: AppColors.onSurfaceVariant),
-          const SizedBox(width: 3),
-          Text(label, style: AppTextStyles.bodySm.copyWith(fontSize: 12)),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 12, color: AppColors.onSurfaceVariant),
+      const SizedBox(width: 3),
+      Text(label, style: AppTextStyles.bodySm.copyWith(fontSize: 12)),
+    ],
+  );
 }

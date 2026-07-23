@@ -49,7 +49,7 @@ GoRouter makeRouter(AuthNotifier auth) {
     refreshListenable: auth,
 
     redirect: (BuildContext context, GoRouterState state) {
-      final loc    = state.matchedLocation;
+      final loc = state.matchedLocation;
       final status = auth.status;
 
       // ① Session still loading — stay on splash
@@ -59,7 +59,8 @@ GoRouter makeRouter(AuthNotifier auth) {
 
       // ② Not logged in — must see login screen
       if (status == AuthStatus.unauthenticated) {
-        if (loc == '/login' || loc == '/forgot-password' || loc == '/signup') return null;
+        if (loc == '/login' || loc == '/forgot-password' || loc == '/signup')
+          return null;
         return '/login';
       }
 
@@ -67,8 +68,8 @@ GoRouter makeRouter(AuthNotifier auth) {
       // They can only see the pending screen until an admin/manager adds
       // them to a team. Everything else redirects here.
       final pendingProfile = auth.profile;
-      final isPending = pendingProfile?.isEmployee == true &&
-          pendingProfile?.teamId == null;
+      final isPending =
+          pendingProfile?.isEmployee == true && pendingProfile?.teamId == null;
       if (isPending) {
         return loc == '/pending' ? null : '/pending';
       }
@@ -81,10 +82,10 @@ GoRouter makeRouter(AuthNotifier auth) {
       // ④ Logged in — redirect away from auth-only screens
       if (loc == '/splash' || loc == '/login' || loc == '/signup') {
         final role = auth.profile?.role ?? 'employee';
-        if (role == 'admin')    return '/dashboard';
-        if (role == 'manager')  return '/dashboard';
+        if (role == 'admin') return '/dashboard';
+        if (role == 'manager') return '/dashboard';
         if (role == 'employee') return '/tasks';
-        if (role == 'client')   return '/tasks';
+        if (role == 'client') return '/tasks';
         return '/dashboard';
       }
 
@@ -93,11 +94,18 @@ GoRouter makeRouter(AuthNotifier auth) {
 
       // Clients: tasks + calendar + their own finance only
       if (profile?.isClient == true) {
-        if (loc == '/users' || loc.startsWith('/users/') || loc == '/roles' || loc == '/penalties' ||
-            loc == '/teams' || loc.startsWith('/teams/') ||
-            loc == '/clients' || loc.startsWith('/clients/') ||
-            loc == '/dashboard' || loc == '/analytics' ||
-            loc == '/attendance' || loc == '/expenses' ||
+        if (loc == '/users' ||
+            loc.startsWith('/users/') ||
+            loc == '/roles' ||
+            loc == '/penalties' ||
+            loc == '/teams' ||
+            loc.startsWith('/teams/') ||
+            loc == '/clients' ||
+            loc.startsWith('/clients/') ||
+            loc == '/dashboard' ||
+            loc == '/analytics' ||
+            loc == '/attendance' ||
+            loc == '/expenses' ||
             loc == '/finance/analytics') {
           return '/tasks';
         }
@@ -109,8 +117,7 @@ GoRouter makeRouter(AuthNotifier auth) {
       // team's members screen (/teams/:id/members).
       if (profile?.isManager == true) {
         final isMembersRoute = RegExp(r'^/teams/[^/]+/members$').hasMatch(loc);
-        if (!isMembersRoute &&
-            (loc == '/teams' || loc.startsWith('/teams/'))) {
+        if (!isMembersRoute && (loc == '/teams' || loc.startsWith('/teams/'))) {
           return '/dashboard';
         }
       }
@@ -119,8 +126,11 @@ GoRouter makeRouter(AuthNotifier auth) {
       // /penalties IS allowed — screen shows only their own record.
       if (profile?.isEmployee == true) {
         if (loc.startsWith('/finance')) return '/tasks';
-        if (loc == '/users' || loc.startsWith('/users/') || loc == '/roles' ||
-            loc == '/teams' || loc.startsWith('/teams/') ||
+        if (loc == '/users' ||
+            loc.startsWith('/users/') ||
+            loc == '/roles' ||
+            loc == '/teams' ||
+            loc.startsWith('/teams/') ||
             loc == '/create-user') {
           return '/tasks';
         }
@@ -136,101 +146,134 @@ GoRouter makeRouter(AuthNotifier auth) {
 
     routes: [
       // ── Auth ──────────────────────────────────────────────────────────────
-      GoRoute(path: '/splash',          builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/login',           builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/signup',          builder: (_, __) => const SignUpScreen()),
-      GoRoute(path: '/pending',         builder: (_, __) => const PendingApprovalScreen()),
-      GoRoute(path: '/forgot-password', builder: (_, __) => const ForgotPasswordScreen()),
+      GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
+      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/signup', builder: (_, __) => const SignUpScreen()),
+      GoRoute(
+        path: '/pending',
+        builder: (_, __) => const PendingApprovalScreen(),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (_, __) => const ForgotPasswordScreen(),
+      ),
 
       // ── Shell (bottom nav) ───────────────────────────────────────────────
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => BottomNavShell(shell: shell),
         branches: [
           // 0 — Dashboard
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/dashboard',
-              builder: (_, __) => const AdminDashboardScreen(),
-            ),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/dashboard',
+                builder: (_, __) => const AdminDashboardScreen(),
+              ),
+            ],
+          ),
           // 1 — Tasks
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/tasks',
-              builder: (_, state) {
-                final filter = state.uri.queryParameters['filter'] ??
-                    (state.extra is String ? state.extra as String : null);
-                return TaskBoardScreen(initialFilter: filter);
-              },
-              routes: [
-                GoRoute(
-                  path: 'table',
-                  builder: (_, __) => const TaskTableScreen(),
-                ),
-                GoRoute(
-                  path: 'detail/:id',
-                  builder: (_, state) =>
-                      TaskDetailScreen(taskId: state.pathParameters['id'] ?? ''),
-                ),
-              ],
-            ),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/tasks',
+                builder: (_, state) {
+                  final filter =
+                      state.uri.queryParameters['filter'] ??
+                      (state.extra is String ? state.extra as String : null);
+                  return TaskBoardScreen(initialFilter: filter);
+                },
+                routes: [
+                  GoRoute(
+                    path: 'table',
+                    builder: (_, __) => const TaskTableScreen(),
+                  ),
+                  GoRoute(
+                    path: 'detail/:id',
+                    builder: (_, state) => TaskDetailScreen(
+                      taskId: state.pathParameters['id'] ?? '',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
           // 2 — Calendar
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/calendar',
-              builder: (_, __) => const CalendarScreen(),
-              routes: [
-                GoRoute(
-                  path: 'enhanced',
-                  builder: (_, __) => const CalendarScreen(),
-                ),
-              ],
-            ),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/calendar',
+                builder: (_, __) => const CalendarScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'enhanced',
+                    builder: (_, __) => const CalendarScreen(),
+                  ),
+                ],
+              ),
+            ],
+          ),
           // 3 — Finance (role-aware: clients see their own finance)
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/finance',
-              builder: (_, __) => const _FinanceRouter(),
-              routes: [
-                GoRoute(
-                  path: 'analytics',
-                  builder: (_, __) => const FinanceAnalyticsScreen(),
-                ),
-              ],
-            ),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/finance',
+                builder: (_, __) => const _FinanceRouter(),
+                routes: [
+                  GoRoute(
+                    path: 'analytics',
+                    builder: (_, __) => const FinanceAnalyticsScreen(),
+                  ),
+                ],
+              ),
+            ],
+          ),
           // 4 — Settings
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/settings',
-              builder: (_, __) => const SettingsScreen(),
-            ),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/settings',
+                builder: (_, __) => const SettingsScreen(),
+              ),
+            ],
+          ),
         ],
       ),
 
       // ── Full-page routes (no bottom nav) ──────────────────────────────────
-      GoRoute(path: '/analytics',     builder: (_, __) => const AdvancedAnalyticsScreen()),
-      GoRoute(path: '/attendance',    builder: (_, __) => const AttendanceScreen()),
-      GoRoute(path: '/penalties',     builder: (_, __) => const PenaltyManagementScreen()),
-      GoRoute(path: '/users',         builder: (_, __) => const UserManagementScreen()),
+      GoRoute(
+        path: '/analytics',
+        builder: (_, __) => const AdvancedAnalyticsScreen(),
+      ),
+      GoRoute(
+        path: '/attendance',
+        builder: (_, __) => const AttendanceScreen(),
+      ),
+      GoRoute(
+        path: '/penalties',
+        builder: (_, __) => const PenaltyManagementScreen(),
+      ),
+      GoRoute(path: '/users', builder: (_, __) => const UserManagementScreen()),
       GoRoute(
         path: '/users/:id/privileges',
         builder: (_, state) {
           final extra = state.extra as Map<String, dynamic>?;
           return UserPrivilegesScreen(
-            userId:   state.pathParameters['id'] ?? '',
+            userId: state.pathParameters['id'] ?? '',
             userName: extra?['userName'] as String? ?? 'User',
-            role:     extra?['role'] as String?,
+            role: extra?['role'] as String?,
           );
         },
       ),
-      GoRoute(path: '/roles',         builder: (_, __) => const RolesEditorScreen()),
-      GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
-      GoRoute(path: '/expenses',      builder: (_, __) => const DailyExpensesScreen()),
-      GoRoute(path: '/teams',         builder: (_, __) => const TeamManagementScreen()),
+      GoRoute(path: '/roles', builder: (_, __) => const RolesEditorScreen()),
+      GoRoute(
+        path: '/notifications',
+        builder: (_, __) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/expenses',
+        builder: (_, __) => const DailyExpensesScreen(),
+      ),
+      GoRoute(path: '/teams', builder: (_, __) => const TeamManagementScreen()),
       GoRoute(
         path: '/teams/:id/members',
         builder: (_, state) => TeamMembersScreen(
@@ -250,12 +293,12 @@ GoRouter makeRouter(AuthNotifier auth) {
         builder: (_, state) {
           final extra = state.extra as Map<String, dynamic>?;
           return CreateUserScreen(
-            teamId:   extra?['teamId']   as String?,
+            teamId: extra?['teamId'] as String?,
             teamName: extra?['teamName'] as String?,
           );
         },
       ),
-      GoRoute(path: '/clients',       builder: (_, __) => const ClientsScreen()),
+      GoRoute(path: '/clients', builder: (_, __) => const ClientsScreen()),
       GoRoute(
         path: '/clients/:id/finance',
         builder: (_, state) =>
@@ -272,7 +315,7 @@ class _FinanceRouter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final profile = context.watch<AuthNotifier>().profile;
-    final privs   = context.watch<TeamPrivilegesNotifier>();
+    final privs = context.watch<TeamPrivilegesNotifier>();
 
     if (profile?.isClient == true) {
       return ClientFinanceScreen(clientId: profile!.id);
@@ -281,8 +324,9 @@ class _FinanceRouter extends StatelessWidget {
     if (profile?.isManager == true && !privs.canViewFinance) {
       return const _PrivilegeDeniedScreen(
         icon: Icons.account_balance_outlined,
-        message: 'Your team does not have access to the Finance dashboard.\n'
-                 'Contact your admin to enable it.',
+        message:
+            'Your team does not have access to the Finance dashboard.\n'
+            'Contact your admin to enable it.',
       );
     }
     return const FinanceDashboardScreen();
@@ -301,21 +345,28 @@ class _PrivilegeDeniedScreen extends StatelessWidget {
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 56, color: AppColors.outlineVariant),
-            const SizedBox(height: 16),
-            Text('Access Restricted',
-                style: AppTextStyles.headlineSm, textAlign: TextAlign.center),
-            const SizedBox(height: 8),
-            Text(message,
-                style: AppTextStyles.bodyMd
-                    .copyWith(color: AppColors.onSurfaceVariant),
-                textAlign: TextAlign.center),
-          ]),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 56, color: AppColors.outlineVariant),
+              const SizedBox(height: 16),
+              Text(
+                'Access Restricted',
+                style: AppTextStyles.headlineSm,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: AppTextStyles.bodyMd.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
-
-

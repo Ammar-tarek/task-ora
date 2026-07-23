@@ -26,15 +26,23 @@ class UserPrivilegesRepository {
 
   /// Like [fetchForUser] but returns defaults instead of null when no row
   /// exists (used by the editor screen).
-  static Future<UserPrivilegesModel> fetchForUserOrDefaults(String userId) async {
+  static Future<UserPrivilegesModel> fetchForUserOrDefaults(
+    String userId,
+  ) async {
     final existing = await fetchForUser(userId);
     return existing ?? UserPrivilegesModel.defaults(userId);
   }
 
   /// Upsert privileges for a user.
-  static Future<void> save(UserPrivilegesModel privileges, {String? updatedBy}) async {
+  static Future<void> save(
+    UserPrivilegesModel privileges, {
+    String? updatedBy,
+  }) async {
     await _admin
         .from('user_privileges')
-        .upsert(privileges.toUpsertMap(updatedBy: updatedBy), onConflict: 'user_id');
+        .upsert(
+          privileges.toUpsertMap(updatedBy: updatedBy),
+          onConflict: 'user_id',
+        );
   }
 }

@@ -14,7 +14,7 @@ class SupabaseService {
 
   /// Call once in main() before runApp
   static Future<void> initialize() async {
-    await Supabase.initialize(url: _url, anonKey: _anonKey);
+    await Supabase.initialize(url: _url, publishableKey: _anonKey);
   }
 
   /// Regular client (anon key, respects RLS)

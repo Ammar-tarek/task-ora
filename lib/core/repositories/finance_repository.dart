@@ -12,8 +12,8 @@ class CrmEntry {
   final String title;
   final double amount;
   final double paidAmount;
-  final String status;      // 'unpaid' | 'partial' | 'paid' | 'overdue'
-  final String sourceType;  // 'task' | 'room_booking' | 'manual'
+  final String status; // 'unpaid' | 'partial' | 'paid' | 'overdue'
+  final String sourceType; // 'task' | 'room_booking' | 'manual'
   final String? dueDate;
   final String? invoiceNumber;
   final String currency;
@@ -34,27 +34,32 @@ class CrmEntry {
   factory CrmEntry.fromMap(Map<String, dynamic> m) {
     final client = m['client'] as Map<String, dynamic>?;
     return CrmEntry(
-      id:            m['id'] as String,
-      clientName:    client?['company_name'] as String? ?? 'Unknown Client',
-      title:         m['title'] as String? ?? '',
-      amount:        (m['amount'] as num?)?.toDouble() ?? 0,
-      paidAmount:    (m['paid_amount'] as num?)?.toDouble() ?? 0,
-      status:        m['status'] as String? ?? 'unpaid',
-      sourceType:    m['source_type'] as String? ?? 'manual',
-      dueDate:       m['due_date'] as String?,
+      id: m['id'] as String,
+      clientName: client?['company_name'] as String? ?? 'Unknown Client',
+      title: m['title'] as String? ?? '',
+      amount: (m['amount'] as num?)?.toDouble() ?? 0,
+      paidAmount: (m['paid_amount'] as num?)?.toDouble() ?? 0,
+      status: m['status'] as String? ?? 'unpaid',
+      sourceType: m['source_type'] as String? ?? 'manual',
+      dueDate: m['due_date'] as String?,
       invoiceNumber: m['invoice_number'] as String?,
-      currency:      m['currency'] as String? ?? 'USD',
+      currency: m['currency'] as String? ?? 'USD',
     );
   }
 
   double get outstanding => amount - paidAmount;
   String get statusLabel {
     switch (status) {
-      case 'unpaid':  return 'Unpaid';
-      case 'partial': return 'Partial';
-      case 'paid':    return 'Paid';
-      case 'overdue': return 'Overdue';
-      default:        return status;
+      case 'unpaid':
+        return 'Unpaid';
+      case 'partial':
+        return 'Partial';
+      case 'paid':
+        return 'Paid';
+      case 'overdue':
+        return 'Overdue';
+      default:
+        return status;
     }
   }
 }
@@ -83,8 +88,8 @@ class FinanceSummary {
   });
 
   double get grossRevenue => taskRevenue + meetingRevenue + totalInvoiced;
-  double get netProfit    => grossRevenue - totalExpenses;
-  double get outstanding  => totalInvoiced - totalPaid;
+  double get netProfit => grossRevenue - totalExpenses;
+  double get outstanding => totalInvoiced - totalPaid;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,13 +124,13 @@ class FinanceRepository {
     String? teamId,
     String? clientType,
   }) async {
-    double taskRevenue    = 0;
+    double taskRevenue = 0;
     double meetingRevenue = 0;
-    double totalExpenses  = 0;
-    double totalInvoiced  = 0;
-    double totalPaid      = 0;
-    int    pendingInvoices = 0;
-    int    overdueCount    = 0;
+    double totalExpenses = 0;
+    double totalInvoiced = 0;
+    double totalPaid = 0;
+    int pendingInvoices = 0;
+    int overdueCount = 0;
 
     // If scoped to a department, resolve client IDs for CRM filtering
     List<String>? scopedClientIds;
@@ -135,9 +140,7 @@ class FinanceRepository {
             .from('client_profiles')
             .select('id')
             .or('client_type.eq.$clientType,client_type.eq.both');
-        scopedClientIds = (rows as List)
-            .map((r) => r['id'] as String)
-            .toList();
+        scopedClientIds = (rows as List).map((r) => r['id'] as String).toList();
       } catch (_) {
         scopedClientIds = [];
       }
@@ -148,7 +151,10 @@ class FinanceRepository {
     List<String>? memberIds;
     if (teamId != null) {
       try {
-        final rows = await _admin.from('profiles').select('id').eq('team_id', teamId);
+        final rows = await _admin
+            .from('profiles')
+            .select('id')
+            .eq('team_id', teamId);
         memberIds = (rows as List).map((r) => r['id'] as String).toList();
       } catch (_) {
         memberIds = [];
@@ -162,8 +168,10 @@ class FinanceRepository {
           var q = _admin.from('tasks').select('cost').not('cost', 'is', null);
           if (teamId != null) q = q.eq('team_id', teamId);
           final rows = await q;
-          taskRevenue = (rows as List)
-              .fold(0.0, (s, r) => s + ((r['cost'] as num?)?.toDouble() ?? 0));
+          taskRevenue = (rows as List).fold(
+            0.0,
+            (s, r) => s + ((r['cost'] as num?)?.toDouble() ?? 0),
+          );
         } catch (_) {}
       }(),
       // Event / meeting costs (scoped by creator's team membership)
@@ -173,8 +181,10 @@ class FinanceRepository {
           var q = _admin.from('events').select('cost').not('cost', 'is', null);
           if (memberIds != null) q = q.inFilter('created_by', memberIds);
           final rows = await q;
-          meetingRevenue = (rows as List)
-              .fold(0.0, (s, r) => s + ((r['cost'] as num?)?.toDouble() ?? 0));
+          meetingRevenue = (rows as List).fold(
+            0.0,
+            (s, r) => s + ((r['cost'] as num?)?.toDouble() ?? 0),
+          );
         } catch (_) {}
       }(),
       // Expenses (scoped by recorder's team membership)
@@ -184,14 +194,18 @@ class FinanceRepository {
           var q = _admin.from('expenses').select('amount');
           if (memberIds != null) q = q.inFilter('recorded_by', memberIds);
           final rows = await q;
-          totalExpenses = (rows as List)
-              .fold(0.0, (s, r) => s + ((r['amount'] as num?)?.toDouble() ?? 0));
+          totalExpenses = (rows as List).fold(
+            0.0,
+            (s, r) => s + ((r['amount'] as num?)?.toDouble() ?? 0),
+          );
         } catch (_) {}
       }(),
       // CRM invoices
       () async {
         try {
-          var q = _admin.from('crm_entries').select('amount, paid_amount, status');
+          var q = _admin
+              .from('crm_entries')
+              .select('amount, paid_amount, status');
           if (scopedClientIds != null) {
             if (scopedClientIds.isEmpty) return; // no clients → no invoices
             q = q.inFilter('client_id', scopedClientIds);
@@ -199,7 +213,7 @@ class FinanceRepository {
           final rows = await q;
           for (final r in rows as List) {
             totalInvoiced += (r['amount'] as num?)?.toDouble() ?? 0;
-            totalPaid     += (r['paid_amount'] as num?)?.toDouble() ?? 0;
+            totalPaid += (r['paid_amount'] as num?)?.toDouble() ?? 0;
             final st = r['status'] as String? ?? '';
             if (st != 'paid') pendingInvoices++;
             if (st == 'overdue') overdueCount++;
@@ -209,13 +223,13 @@ class FinanceRepository {
     ]);
 
     return FinanceSummary(
-      taskRevenue:    taskRevenue,
+      taskRevenue: taskRevenue,
       meetingRevenue: meetingRevenue,
-      totalExpenses:  totalExpenses,
-      totalInvoiced:  totalInvoiced,
-      totalPaid:      totalPaid,
+      totalExpenses: totalExpenses,
+      totalInvoiced: totalInvoiced,
+      totalPaid: totalPaid,
       pendingInvoices: pendingInvoices,
-      overdueCount:   overdueCount,
+      overdueCount: overdueCount,
     );
   }
 
@@ -225,15 +239,27 @@ class FinanceRepository {
   static Future<List<Map<String, dynamic>>> fetchMonthlyBreakdown({
     String? teamId,
   }) async {
-    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun',
-                        'Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     final now = DateTime.now();
 
     // Build ordered map for the last 6 months (oldest → newest)
     final orderedKeys = <String>[];
-    final months      = <String, double>{};
+    final months = <String, double>{};
     for (int i = 5; i >= 0; i--) {
-      final dt  = DateTime(now.year, now.month - i);
+      final dt = DateTime(now.year, now.month - i);
       final key = '${monthNames[dt.month - 1]} ${dt.year}';
       orderedKeys.add(key);
       months[key] = 0;
@@ -250,7 +276,10 @@ class FinanceRepository {
     List<String>? memberIds;
     if (teamId != null) {
       try {
-        final rows = await _admin.from('profiles').select('id').eq('team_id', teamId);
+        final rows = await _admin
+            .from('profiles')
+            .select('id')
+            .eq('team_id', teamId);
         memberIds = (rows as List).map((r) => r['id'] as String).toList();
       } catch (_) {
         memberIds = [];
@@ -260,7 +289,10 @@ class FinanceRepository {
     await Future.wait([
       () async {
         try {
-          var q = _admin.from('tasks').select('cost, created_at').not('cost', 'is', null);
+          var q = _admin
+              .from('tasks')
+              .select('cost, created_at')
+              .not('cost', 'is', null);
           if (teamId != null) q = q.eq('team_id', teamId);
           final rows = await q;
           for (final r in rows as List) {
@@ -274,7 +306,10 @@ class FinanceRepository {
       () async {
         try {
           if (memberIds != null && memberIds.isEmpty) return;
-          var q = _admin.from('events').select('cost, start_time').not('cost', 'is', null);
+          var q = _admin
+              .from('events')
+              .select('cost, start_time')
+              .not('cost', 'is', null);
           if (memberIds != null) q = q.inFilter('created_by', memberIds);
           final rows = await q;
           for (final r in rows as List) {
@@ -296,7 +331,9 @@ class FinanceRepository {
 
   // ── Top clients by task revenue ───────────────────────────────────────────
 
-  static Future<List<Map<String, dynamic>>> fetchTopClients({int limit = 5}) async {
+  static Future<List<Map<String, dynamic>>> fetchTopClients({
+    int limit = 5,
+  }) async {
     try {
       final rows = await _admin
           .from('tasks')
@@ -307,16 +344,24 @@ class FinanceRepository {
       final Map<String, Map<String, dynamic>> map = {};
       for (final r in rows as List) {
         final clientId = r['client_id'] as String;
-        final name     = (r['client'] as Map<String, dynamic>?)?['company_name'] as String? ?? 'Unknown';
-        final cost     = (r['cost'] as num?)?.toDouble() ?? 0;
-        map.putIfAbsent(clientId, () => {'name': name, 'revenue': 0.0, 'tasks': 0});
-        map[clientId]!['revenue'] = (map[clientId]!['revenue'] as double) + cost;
-        map[clientId]!['tasks']   = (map[clientId]!['tasks'] as int) + 1;
+        final name =
+            (r['client'] as Map<String, dynamic>?)?['company_name']
+                as String? ??
+            'Unknown';
+        final cost = (r['cost'] as num?)?.toDouble() ?? 0;
+        map.putIfAbsent(
+          clientId,
+          () => {'name': name, 'revenue': 0.0, 'tasks': 0},
+        );
+        map[clientId]!['revenue'] =
+            (map[clientId]!['revenue'] as double) + cost;
+        map[clientId]!['tasks'] = (map[clientId]!['tasks'] as int) + 1;
       }
 
-      return (map.values.toList()
-            ..sort((a, b) =>
-                (b['revenue'] as double).compareTo(a['revenue'] as double)))
+      return (map.values.toList()..sort(
+            (a, b) =>
+                (b['revenue'] as double).compareTo(a['revenue'] as double),
+          ))
           .take(limit)
           .toList();
     } catch (_) {
@@ -335,20 +380,28 @@ class FinanceRepository {
       final Map<String, double> cats = {};
       double total = 0;
       for (final r in rows as List) {
-        final name   = (r['category'] as Map<String, dynamic>?)?['name'] as String? ?? 'Other';
+        final name =
+            (r['category'] as Map<String, dynamic>?)?['name'] as String? ??
+            'Other';
         final amount = (r['amount'] as num?)?.toDouble() ?? 0;
         cats[name] = (cats[name] ?? 0) + amount;
-        total      += amount;
+        total += amount;
       }
 
       if (total == 0) return [];
 
-      return (cats.entries.map((e) => {
-        'label': e.key,
-        'value': e.value / total * 100,
-        'amount': e.value,
-      }).toList()
-        ..sort((a, b) => (b['value'] as double).compareTo(a['value'] as double)));
+      return (cats.entries
+          .map(
+            (e) => {
+              'label': e.key,
+              'value': e.value / total * 100,
+              'amount': e.value,
+            },
+          )
+          .toList()
+        ..sort(
+          (a, b) => (b['value'] as double).compareTo(a['value'] as double),
+        ));
     } catch (_) {
       return [];
     }
@@ -365,11 +418,11 @@ class FinanceRepository {
   }) async {
     try {
       await _admin.from('crm_payments').insert({
-        'crm_entry_id':     crmEntryId,
-        'client_id':        clientId,
-        'amount_paid':      amount,
-        'payment_date':     DateTime.now().toIso8601String().substring(0, 10),
-        'recorded_by':      recordedBy,
+        'crm_entry_id': crmEntryId,
+        'client_id': clientId,
+        'amount_paid': amount,
+        'payment_date': DateTime.now().toIso8601String().substring(0, 10),
+        'recorded_by': recordedBy,
         'reference_number': referenceNumber,
       });
     } catch (_) {}

@@ -20,15 +20,15 @@ class FinanceDashboardScreen extends StatefulWidget {
 }
 
 class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
-  List<ClientModel>          _clients     = [];
-  FinanceSummary             _summary     = const FinanceSummary();
-  List<ExpenseItem>          _expenses    = [];
-  List<Map<String, dynamic>> _monthly     = [];
+  List<ClientModel> _clients = [];
+  FinanceSummary _summary = const FinanceSummary();
+  List<ExpenseItem> _expenses = [];
+  List<Map<String, dynamic>> _monthly = [];
   bool _loading = true;
 
   TeamFilterNotifier? _teamFilter;
   String? _filterClientType; // department name → client_type filter
-  String? _filterTeamId;     // for expense scoping
+  String? _filterTeamId; // for expense scoping
 
   @override
   void initState() {
@@ -44,7 +44,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
         final team = await TeamRepository.fetchById(profile!.teamId!);
         if (mounted) {
           _filterClientType = team?.department?.toLowerCase();
-          _filterTeamId     = team?.id;
+          _filterTeamId = team?.id;
         }
       }
       if (mounted) _load();
@@ -60,7 +60,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   void _onTeamChange() {
     final selected = _teamFilter?.selectedTeam;
     _filterClientType = selected?.department?.toLowerCase();
-    _filterTeamId     = selected?.id;
+    _filterTeamId = selected?.id;
     if (mounted) _load();
   }
 
@@ -70,7 +70,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       final results = await Future.wait([
         ClientRepository.fetchClients(clientType: _filterClientType),
         FinanceRepository.fetchSummary(
-          teamId:     _filterTeamId,
+          teamId: _filterTeamId,
           clientType: _filterClientType,
         ),
         ExpenseRepository.fetchAll(limit: 5, teamId: _filterTeamId),
@@ -78,11 +78,11 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       ]);
       if (mounted) {
         setState(() {
-          _clients  = results[0] as List<ClientModel>;
-          _summary  = results[1] as FinanceSummary;
+          _clients = results[0] as List<ClientModel>;
+          _summary = results[1] as FinanceSummary;
           _expenses = results[2] as List<ExpenseItem>;
-          _monthly  = results[3] as List<Map<String, dynamic>>;
-          _loading  = false;
+          _monthly = results[3] as List<Map<String, dynamic>>;
+          _loading = false;
         });
       }
     } catch (_) {
@@ -94,7 +94,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   Widget build(BuildContext context) {
     final profile = context.watch<AuthNotifier>().profile;
     final isAdmin = profile?.isAdmin ?? false;
-    final title   = (profile?.isManager == true && _filterClientType != null)
+    final title = (profile?.isManager == true && _filterClientType != null)
         ? 'Finance — ${_filterClientType![0].toUpperCase()}${_filterClientType!.substring(1)}'
         : 'Finance';
 
@@ -103,10 +103,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       appBar: AppBar(
         title: Text(title),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
           IconButton(
             icon: const Icon(Icons.bar_chart),
             onPressed: () => context.push('/finance/analytics'),
@@ -119,146 +116,202 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
           const TeamFilterChip(),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.gold),
+                  )
                 : RefreshIndicator(
                     onRefresh: _load,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  // ── Hero revenue card ────────────────────────────────────────
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('TOTAL REVENUE',
-                          style: AppTextStyles.labelCaps.copyWith(color: Colors.white54)),
-                      const SizedBox(height: 8),
-                      Text(_fmtAmount(_summary.grossRevenue),
-                          style: AppTextStyles.dataLg.copyWith(
-                              color: AppColors.gold, fontSize: 36,
-                              fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 16),
-                      Row(children: [
-                        _MiniStat(
-                            label: 'Task Services',
-                            value: _fmtAmount(_summary.taskRevenue)),
-                        const SizedBox(width: 20),
-                        _MiniStat(
-                            label: 'Meetings',
-                            value: _fmtAmount(_summary.meetingRevenue)),
-                        const SizedBox(width: 20),
-                        _MiniStat(
-                            label: 'Invoiced',
-                            value: _fmtAmount(_summary.totalInvoiced)),
-                      ]),
-                      const Divider(color: Colors.white24, height: 24),
-                      Row(children: [
-                        _MiniStat(
-                            label: 'Expenses',
-                            value: _fmtAmount(_summary.totalExpenses),
-                            isNegative: true),
-                        const SizedBox(width: 24),
-                        _MiniStat(
-                            label: 'Net Profit',
-                            value: _fmtAmount(_summary.netProfit),
-                            isPositive: true),
-                        const SizedBox(width: 24),
-                        _MiniStat(
-                            label: 'Outstanding',
-                            value: _fmtAmount(_summary.outstanding),
-                            isNegative: _summary.outstanding > 0),
-                      ]),
-                    ]),
-                  ),
-                  const SizedBox(height: 16),
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ── Hero revenue card ────────────────────────────────────────
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'TOTAL REVENUE',
+                                  style: AppTextStyles.labelCaps.copyWith(
+                                    color: Colors.white54,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _fmtAmount(_summary.grossRevenue),
+                                  style: AppTextStyles.dataLg.copyWith(
+                                    color: AppColors.gold,
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    _MiniStat(
+                                      label: 'Task Services',
+                                      value: _fmtAmount(_summary.taskRevenue),
+                                    ),
+                                    const SizedBox(width: 20),
+                                    _MiniStat(
+                                      label: 'Meetings',
+                                      value: _fmtAmount(
+                                        _summary.meetingRevenue,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 20),
+                                    _MiniStat(
+                                      label: 'Invoiced',
+                                      value: _fmtAmount(_summary.totalInvoiced),
+                                    ),
+                                  ],
+                                ),
+                                const Divider(
+                                  color: Colors.white24,
+                                  height: 24,
+                                ),
+                                Row(
+                                  children: [
+                                    _MiniStat(
+                                      label: 'Expenses',
+                                      value: _fmtAmount(_summary.totalExpenses),
+                                      isNegative: true,
+                                    ),
+                                    const SizedBox(width: 24),
+                                    _MiniStat(
+                                      label: 'Net Profit',
+                                      value: _fmtAmount(_summary.netProfit),
+                                      isPositive: true,
+                                    ),
+                                    const SizedBox(width: 24),
+                                    _MiniStat(
+                                      label: 'Outstanding',
+                                      value: _fmtAmount(_summary.outstanding),
+                                      isNegative: _summary.outstanding > 0,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
 
-                  // ── Quick stat cards ─────────────────────────────────────────
-                  Row(children: [
-                    Expanded(child: TStatCard(
-                        title: 'PENDING INVOICES',
-                        value: '${_summary.pendingInvoices}',
-                        icon: Icons.receipt_outlined,
-                        sub: 'Not yet paid')),
-                    const SizedBox(width: 12),
-                    Expanded(child: TStatCard(
-                        title: 'OVERDUE',
-                        value: '${_summary.overdueCount}',
-                        icon: Icons.warning_amber_outlined,
-                        sub: 'Needs attention')),
-                  ]),
-                  const SizedBox(height: 24),
+                          // ── Quick stat cards ─────────────────────────────────────────
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TStatCard(
+                                  title: 'PENDING INVOICES',
+                                  value: '${_summary.pendingInvoices}',
+                                  icon: Icons.receipt_outlined,
+                                  sub: 'Not yet paid',
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TStatCard(
+                                  title: 'OVERDUE',
+                                  value: '${_summary.overdueCount}',
+                                  icon: Icons.warning_amber_outlined,
+                                  sub: 'Needs attention',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
 
-                  // ── Revenue trend chart ──────────────────────────────────────
-                  TSectionHeader(
-                      title: 'Revenue Trend (6 months)',
-                      action: 'Full Analytics',
-                      onAction: () => context.push('/finance/analytics')),
-                  const SizedBox(height: 12),
-                  _monthly.isEmpty
-                      ? _EmptyCard(message: 'No revenue data yet.')
-                      : _BarChart(data: _monthly),
-                  const SizedBox(height: 24),
+                          // ── Revenue trend chart ──────────────────────────────────────
+                          TSectionHeader(
+                            title: 'Revenue Trend (6 months)',
+                            action: 'Full Analytics',
+                            onAction: () => context.push('/finance/analytics'),
+                          ),
+                          const SizedBox(height: 12),
+                          _monthly.isEmpty
+                              ? _EmptyCard(message: 'No revenue data yet.')
+                              : _BarChart(data: _monthly),
+                          const SizedBox(height: 24),
 
-                  // ── Paid vs Outstanding ──────────────────────────────────────
-                  Row(children: [
-                    Expanded(child: _StatCard(
-                        label: 'Paid',
-                        value: _fmtAmount(_summary.totalPaid),
-                        color: const Color(0xFF81C784))),
-                    const SizedBox(width: 10),
-                    Expanded(child: _StatCard(
-                        label: 'Outstanding',
-                        value: _fmtAmount(_summary.outstanding),
-                        color: _summary.outstanding > 0
-                            ? AppColors.error
-                            : AppColors.onSurfaceVariant)),
-                  ]),
-                  const SizedBox(height: 24),
+                          // ── Paid vs Outstanding ──────────────────────────────────────
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _StatCard(
+                                  label: 'Paid',
+                                  value: _fmtAmount(_summary.totalPaid),
+                                  color: const Color(0xFF81C784),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _StatCard(
+                                  label: 'Outstanding',
+                                  value: _fmtAmount(_summary.outstanding),
+                                  color: _summary.outstanding > 0
+                                      ? AppColors.error
+                                      : AppColors.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
 
-                  // ── Recent expenses ──────────────────────────────────────────
-                  TSectionHeader(
-                      title: 'Recent Expenses',
-                      action: 'All Expenses',
-                      onAction: () => context.push('/expenses')),
-                  const SizedBox(height: 12),
-                  if (_expenses.isEmpty)
-                    _EmptyCard(message: 'No expenses recorded yet.')
-                  else
-                    ..._expenses.map((e) => _ExpenseRow(expense: e)),
-                  const SizedBox(height: 24),
+                          // ── Recent expenses ──────────────────────────────────────────
+                          TSectionHeader(
+                            title: 'Recent Expenses',
+                            action: 'All Expenses',
+                            onAction: () => context.push('/expenses'),
+                          ),
+                          const SizedBox(height: 12),
+                          if (_expenses.isEmpty)
+                            _EmptyCard(message: 'No expenses recorded yet.')
+                          else
+                            ..._expenses.map((e) => _ExpenseRow(expense: e)),
+                          const SizedBox(height: 24),
 
-                  // ── Clients ──────────────────────────────────────────────────
-                  TSectionHeader(
-                      title: 'Clients',
-                      action: isAdmin ? 'Manage Clients' : 'View Clients',
-                      onAction: () => context.push('/clients')),
-                  const SizedBox(height: 12),
-                  if (_clients.isEmpty)
-                    _EmptyCard(
-                        message: isAdmin
-                            ? 'No clients yet. Go to Clients to create one.'
-                            : 'No clients yet.')
-                  else
-                    ..._clients.take(5).map((c) => _ClientFinanceRow(client: c)),
-                  if (_clients.length > 5)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: TextButton(
-                        onPressed: () => context.push('/clients'),
-                        child: Text('View all ${_clients.length} clients',
-                            style: AppTextStyles.labelMd
-                                .copyWith(color: AppColors.goldDark)),
+                          // ── Clients ──────────────────────────────────────────────────
+                          TSectionHeader(
+                            title: 'Clients',
+                            action: isAdmin ? 'Manage Clients' : 'View Clients',
+                            onAction: () => context.push('/clients'),
+                          ),
+                          const SizedBox(height: 12),
+                          if (_clients.isEmpty)
+                            _EmptyCard(
+                              message: isAdmin
+                                  ? 'No clients yet. Go to Clients to create one.'
+                                  : 'No clients yet.',
+                            )
+                          else
+                            ..._clients
+                                .take(5)
+                                .map((c) => _ClientFinanceRow(client: c)),
+                          if (_clients.length > 5)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: TextButton(
+                                onPressed: () => context.push('/clients'),
+                                child: Text(
+                                  'View all ${_clients.length} clients',
+                                  style: AppTextStyles.labelMd.copyWith(
+                                    color: AppColors.goldDark,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 80),
+                        ],
                       ),
                     ),
-                  const SizedBox(height: 80),
-                ]),
-              ),
-            ),
+                  ),
           ),
         ],
       ),
@@ -269,7 +322,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
 // ── Amount formatter ───────────────────────────────────────────────────────────
 String _fmtAmount(double v) {
   if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
-  if (v >= 1000)    return '${(v / 1000).toStringAsFixed(1)}k';
+  if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
   return v.toStringAsFixed(0);
 }
 
@@ -295,32 +348,42 @@ class _BarChart extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: data.map((d) {
-          final val   = d['value'] as double;
+          final val = d['value'] as double;
           final ratio = val / safeMax;
           final isLast = d == data.last;
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-                if (val > 0)
-                  Text(_fmtAmount(val),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (val > 0)
+                    Text(
+                      _fmtAmount(val),
                       style: AppTextStyles.bodySm.copyWith(
-                          fontSize: 9, color: AppColors.onSurfaceVariant)),
-                const SizedBox(height: 2),
-                Container(
-                  height: (ratio * 90).clamp(6.0, 90.0),
-                  decoration: BoxDecoration(
-                    color: isLast
-                        ? AppColors.gold
-                        : AppColors.primary.withValues(alpha: 0.7),
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(4)),
+                        fontSize: 9,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  const SizedBox(height: 2),
+                  Container(
+                    height: (ratio * 90).clamp(6.0, 90.0),
+                    decoration: BoxDecoration(
+                      color: isLast
+                          ? AppColors.gold
+                          : AppColors.primary.withValues(alpha: 0.7),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(4),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(d['month'] as String,
-                    style: AppTextStyles.bodySm.copyWith(fontSize: 10)),
-              ]),
+                  const SizedBox(height: 4),
+                  Text(
+                    d['month'] as String,
+                    style: AppTextStyles.bodySm.copyWith(fontSize: 10),
+                  ),
+                ],
+              ),
             ),
           );
         }).toList(),
@@ -332,8 +395,12 @@ class _BarChart extends StatelessWidget {
 // ── Supporting widgets ─────────────────────────────────────────────────────────
 
 class _MiniStat extends StatelessWidget {
-  const _MiniStat({required this.label, required this.value,
-      this.isPositive = false, this.isNegative = false});
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    this.isPositive = false,
+    this.isNegative = false,
+  });
   final String label, value;
   final bool isPositive, isNegative;
 
@@ -342,19 +409,33 @@ class _MiniStat extends StatelessWidget {
     final color = isPositive
         ? const Color(0xFF81C784)
         : isNegative
-            ? AppColors.error
-            : Colors.white70;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(value,
-          style: AppTextStyles.dataMd.copyWith(color: color, fontSize: 15)),
-      Text(label,
-          style: AppTextStyles.bodySm.copyWith(color: Colors.white38, fontSize: 11)),
-    ]);
+        ? AppColors.error
+        : Colors.white70;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: AppTextStyles.dataMd.copyWith(color: color, fontSize: 15),
+        ),
+        Text(
+          label,
+          style: AppTextStyles.bodySm.copyWith(
+            color: Colors.white38,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
   }
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.label, required this.value, required this.color});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
   final String label, value;
   final Color color;
 
@@ -367,15 +448,26 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(value,
-            style: AppTextStyles.dataMd
-                .copyWith(color: color, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 2),
-        Text(label,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: AppTextStyles.dataMd.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
             style: AppTextStyles.bodySm.copyWith(
-                color: AppColors.onSurfaceVariant, fontSize: 11)),
-      ]),
+              color: AppColors.onSurfaceVariant,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -394,27 +486,47 @@ class _ExpenseRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Row(children: [
-        Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.gold.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.gold.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.receipt_long_outlined,
+              size: 18,
+              color: AppColors.gold,
+            ),
           ),
-          child: const Icon(Icons.receipt_long_outlined,
-              size: 18, color: AppColors.gold),
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(expense.description.isNotEmpty ? expense.description : 'Expense',
-              style: AppTextStyles.labelMd,
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          Text('${expense.categoryName} · ${expense.date}',
-              style: AppTextStyles.bodySm),
-        ])),
-        Text('${_fmtAmount(expense.amount)} EGP',
-            style: AppTextStyles.dataMd.copyWith(color: AppColors.statusHigh)),
-      ]),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  expense.description.isNotEmpty
+                      ? expense.description
+                      : 'Expense',
+                  style: AppTextStyles.labelMd,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '${expense.categoryName} · ${expense.date}',
+                  style: AppTextStyles.bodySm,
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '${_fmtAmount(expense.amount)} EGP',
+            style: AppTextStyles.dataMd.copyWith(color: AppColors.statusHigh),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -436,26 +548,43 @@ class _ClientFinanceRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppColors.outlineVariant),
         ),
-        child: Row(children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-                color: AppColors.primary, shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: Text(client.initials,
-                style: AppTextStyles.labelMd
-                    .copyWith(color: AppColors.gold, fontSize: 13)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(client.companyName, style: AppTextStyles.labelMd),
-            if (client.contactPerson.isNotEmpty)
-              Text(client.contactPerson,
-                  style: AppTextStyles.bodySm
-                      .copyWith(color: AppColors.onSurfaceVariant)),
-          ])),
-          Icon(Icons.chevron_right, color: AppColors.outlineVariant),
-        ]),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                client.initials,
+                style: AppTextStyles.labelMd.copyWith(
+                  color: AppColors.gold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(client.companyName, style: AppTextStyles.labelMd),
+                  if (client.contactPerson.isNotEmpty)
+                    Text(
+                      client.contactPerson,
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: AppColors.outlineVariant),
+          ],
+        ),
       ),
     );
   }
@@ -475,9 +604,11 @@ class _EmptyCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Text(message,
-          style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
-          textAlign: TextAlign.center),
+      child: Text(
+        message,
+        style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 }

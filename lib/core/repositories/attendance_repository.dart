@@ -41,21 +41,21 @@ class AttendanceRecord {
   factory AttendanceRecord.fromMap(Map<String, dynamic> m) {
     final profile = m['employee'] as Map<String, dynamic>?;
     return AttendanceRecord(
-      id:             m['id'] as String,
-      employeeId:     m['employee_id'] as String,
-      employeeName:   profile?['full_name'] as String? ?? 'Unknown',
-      date:           m['attendance_date'] as String? ?? '',
-      checkInTime:    m['check_in_time'] as String?,
-      checkOutTime:   m['check_out_time'] as String?,
-      status:         m['status'] as String? ?? 'present',
-      totalHours:     (m['total_hours'] as num?)?.toDouble(),
-      isOverridden:   m['is_overridden'] as bool? ?? false,
+      id: m['id'] as String,
+      employeeId: m['employee_id'] as String,
+      employeeName: profile?['full_name'] as String? ?? 'Unknown',
+      date: m['attendance_date'] as String? ?? '',
+      checkInTime: m['check_in_time'] as String?,
+      checkOutTime: m['check_out_time'] as String?,
+      status: m['status'] as String? ?? 'present',
+      totalHours: (m['total_hours'] as num?)?.toDouble(),
+      isOverridden: m['is_overridden'] as bool? ?? false,
       overrideReason: m['override_reason'] as String?,
-      isApproved:     m['is_approved'] as bool? ?? false,
-      isManual:       m['is_manual'] as bool? ?? false,
-      manualNote:     m['manual_note'] as String?,
-      approvedBy:     m['approved_by'] as String?,
-      dailyReport:    m['daily_report'] as String?,
+      isApproved: m['is_approved'] as bool? ?? false,
+      isManual: m['is_manual'] as bool? ?? false,
+      manualNote: m['manual_note'] as String?,
+      approvedBy: m['approved_by'] as String?,
+      dailyReport: m['daily_report'] as String?,
     );
   }
 
@@ -63,15 +63,20 @@ class AttendanceRecord {
 
   String get statusLabel {
     switch (status) {
-      case 'present':  return 'Present';
-      case 'absent':   return 'Absent';
-      case 'late':     return 'Late';
-      case 'half_day': return 'Half Day';
-      default:         return status;
+      case 'present':
+        return 'Present';
+      case 'absent':
+        return 'Absent';
+      case 'late':
+        return 'Late';
+      case 'half_day':
+        return 'Half Day';
+      default:
+        return status;
     }
   }
 
-  bool get isCheckedIn  => checkInTime != null;
+  bool get isCheckedIn => checkInTime != null;
   bool get isCheckedOut => checkOutTime != null;
 }
 
@@ -105,14 +110,19 @@ class AttendanceRepository {
   /// Resolve active staff (non-client) ids for a team, or all if [teamId] null.
   static Future<List<Map<String, String>>> _staff({String? teamId}) async {
     try {
-      var q = _admin.from('profiles').select('id, full_name').neq('role', 'client');
+      var q = _admin
+          .from('profiles')
+          .select('id, full_name')
+          .neq('role', 'client');
       if (teamId != null) q = q.eq('team_id', teamId);
       final data = await q.order('full_name');
       return (data as List)
-          .map((m) => {
-                'id': (m as Map<String, dynamic>)['id'] as String,
-                'name': m['full_name'] as String? ?? 'Unknown',
-              })
+          .map(
+            (m) => {
+              'id': (m as Map<String, dynamic>)['id'] as String,
+              'name': m['full_name'] as String? ?? 'Unknown',
+            },
+          )
           .toList();
     } catch (_) {
       return [];
@@ -128,11 +138,13 @@ class AttendanceRepository {
     String? teamId,
     String? employeeId,
   }) async {
-    final first = '${year.toString().padLeft(4, '0')}-'
+    final first =
+        '${year.toString().padLeft(4, '0')}-'
         '${month.toString().padLeft(2, '0')}-01';
     final nextY = month == 12 ? year + 1 : year;
     final nextM = month == 12 ? 1 : month + 1;
-    final next = '${nextY.toString().padLeft(4, '0')}-'
+    final next =
+        '${nextY.toString().padLeft(4, '0')}-'
         '${nextM.toString().padLeft(2, '0')}-01';
 
     // Base staff list (so people with zero records still appear).
@@ -140,7 +152,10 @@ class AttendanceRepository {
     final summaries = <String, EmpAttendanceSummary>{
       for (final s in staff)
         if (employeeId == null || s['id'] == employeeId)
-          s['id']!: EmpAttendanceSummary(employeeId: s['id']!, name: s['name']!),
+          s['id']!: EmpAttendanceSummary(
+            employeeId: s['id']!,
+            name: s['name']!,
+          ),
     };
 
     try {
@@ -159,12 +174,21 @@ class AttendanceRepository {
         final id = (r as Map<String, dynamic>)['employee_id'] as String;
         final st = r['status'] as String? ?? 'present';
         final s = summaries.putIfAbsent(
-            id, () => EmpAttendanceSummary(employeeId: id, name: 'Unknown'));
+          id,
+          () => EmpAttendanceSummary(employeeId: id, name: 'Unknown'),
+        );
         switch (st) {
-          case 'absent':   s.absent++;   break;
-          case 'late':     s.late++;     break;
-          case 'half_day': s.halfDay++;  break;
-          default:         s.present++;
+          case 'absent':
+            s.absent++;
+            break;
+          case 'late':
+            s.late++;
+            break;
+          case 'half_day':
+            s.halfDay++;
+            break;
+          default:
+            s.present++;
         }
       }
     } catch (_) {}
@@ -191,10 +215,12 @@ class AttendanceRepository {
             p['full_name'] as String? ?? 'Unknown',
     };
     return rows
-        .map((r) => {
-              ...r,
-              'employee': {'full_name': nameMap[r['employee_id']] ?? 'Unknown'},
-            })
+        .map(
+          (r) => {
+            ...r,
+            'employee': {'full_name': nameMap[r['employee_id']] ?? 'Unknown'},
+          },
+        )
         .toList();
   }
 
@@ -243,11 +269,8 @@ class AttendanceRepository {
       }
     }
     return _queryAttendanceList((sel) {
-      var q = _admin
-          .from('attendance')
-          .select(sel)
-          .eq('attendance_date', date);
-      if (memberIds != null) q = q.inFilter('employee_id', memberIds!);
+      var q = _admin.from('attendance').select(sel).eq('attendance_date', date);
+      if (memberIds != null) q = q.inFilter('employee_id', memberIds);
       return q.order('created_at');
     });
   }
@@ -258,38 +281,48 @@ class AttendanceRepository {
     required int year,
     required int month,
   }) async {
-    final first = '${year.toString().padLeft(4, '0')}-'
+    final first =
+        '${year.toString().padLeft(4, '0')}-'
         '${month.toString().padLeft(2, '0')}-01';
     final nextY = month == 12 ? year + 1 : year;
     final nextM = month == 12 ? 1 : month + 1;
-    final next = '${nextY.toString().padLeft(4, '0')}-'
+    final next =
+        '${nextY.toString().padLeft(4, '0')}-'
         '${nextM.toString().padLeft(2, '0')}-01';
 
-    return _queryAttendanceList((sel) => _admin
-        .from('attendance')
-        .select(sel)
-        .eq('employee_id', employeeId)
-        .gte('attendance_date', first)
-        .lt('attendance_date', next)
-        .order('attendance_date', ascending: false));
+    return _queryAttendanceList(
+      (sel) => _admin
+          .from('attendance')
+          .select(sel)
+          .eq('employee_id', employeeId)
+          .gte('attendance_date', first)
+          .lt('attendance_date', next)
+          .order('attendance_date', ascending: false),
+    );
   }
 
   /// Fetch the last 30 days of attendance for a specific employee.
-  static Future<List<AttendanceRecord>> fetchForEmployee(String employeeId) async {
+  static Future<List<AttendanceRecord>> fetchForEmployee(
+    String employeeId,
+  ) async {
     final from = DateTime.now()
         .subtract(const Duration(days: 30))
         .toIso8601String()
         .substring(0, 10);
-    return _queryAttendanceList((sel) => _admin
-        .from('attendance')
-        .select(sel)
-        .eq('employee_id', employeeId)
-        .gte('attendance_date', from)
-        .order('attendance_date', ascending: false));
+    return _queryAttendanceList(
+      (sel) => _admin
+          .from('attendance')
+          .select(sel)
+          .eq('employee_id', employeeId)
+          .gte('attendance_date', from)
+          .order('attendance_date', ascending: false),
+    );
   }
 
   /// Get today's record for a specific employee (null if not checked in).
-  static Future<AttendanceRecord?> fetchTodayForEmployee(String employeeId) async {
+  static Future<AttendanceRecord?> fetchTodayForEmployee(
+    String employeeId,
+  ) async {
     final today = AppTime.now().toIso8601String().substring(0, 10);
     // Pass 1: FK join
     try {
@@ -300,7 +333,7 @@ class AttendanceRepository {
           .eq('attendance_date', today)
           .maybeSingle();
       if (data == null) return null;
-      return AttendanceRecord.fromMap(data as Map<String, dynamic>);
+      return AttendanceRecord.fromMap(data);
     } catch (_) {}
     // Pass 2: plain select + enrich
     try {
@@ -311,7 +344,7 @@ class AttendanceRepository {
           .eq('attendance_date', today)
           .maybeSingle();
       if (data == null) return null;
-      final enriched = await _enrichWithNames([data as Map<String, dynamic>]);
+      final enriched = await _enrichWithNames([data]);
       return AttendanceRecord.fromMap(enriched.first);
     } catch (_) {
       return null;
@@ -328,7 +361,7 @@ class AttendanceRepository {
     try {
       // Calendar day in Egypt; timestamps stored as UTC.
       final today = AppTime.now().toIso8601String().substring(0, 10);
-      final now   = DateTime.now().toUtc().toIso8601String();
+      final now = DateTime.now().toUtc().toIso8601String();
 
       final existing = await _admin
           .from('attendance')
@@ -345,23 +378,25 @@ class AttendanceRepository {
           // Already checked in today — keep the original check-in time.
           // Reconnecting means they're back on-site: reopen the session by
           // clearing check_out so the next disconnect records fresh hours.
-          await _admin.from('attendance').update({
-            'check_out_time': null,
-            'status':         'present',
-            'updated_at':     now,
-          })
-          .eq('employee_id', employeeId)
-          .eq('attendance_date', today);
+          await _admin
+              .from('attendance')
+              .update({
+                'check_out_time': null,
+                'status': 'present',
+                'updated_at': now,
+              })
+              .eq('employee_id', employeeId)
+              .eq('attendance_date', today);
           return null;
         }
       }
 
       // First check-in of the day.
       await _admin.from('attendance').upsert({
-        'employee_id':     employeeId,
+        'employee_id': employeeId,
         'attendance_date': today,
-        'check_in_time':   now,
-        'status':          'present',
+        'check_in_time': now,
+        'status': 'present',
       }, onConflict: 'employee_id, attendance_date');
       return null;
     } catch (e) {
@@ -374,9 +409,12 @@ class AttendanceRepository {
   /// Check out for today. Returns null on success, error message string on failure.
   /// [dailyReport] — what the employee did today (required by the UI on manual
   /// check-out).
-  static Future<String?> checkOut(String employeeId, {String? dailyReport}) async {
+  static Future<String?> checkOut(
+    String employeeId, {
+    String? dailyReport,
+  }) async {
     try {
-      final today   = AppTime.now().toIso8601String().substring(0, 10);
+      final today = AppTime.now().toIso8601String().substring(0, 10);
       final checkIn = await _admin
           .from('attendance')
           .select('check_in_time')
@@ -401,15 +439,18 @@ class AttendanceRepository {
         if (hours < 0) hours = 0;
       }
 
-      await _admin.from('attendance').update({
-        'check_out_time': nowDt.toIso8601String(),
-        if (hours != null) 'total_hours': double.parse(hours.toStringAsFixed(2)),
-        if (dailyReport != null && dailyReport.trim().isNotEmpty)
-          'daily_report': dailyReport.trim(),
-        'updated_at':     nowDt.toIso8601String(),
-      })
-      .eq('employee_id', employeeId)
-      .eq('attendance_date', today);
+      await _admin
+          .from('attendance')
+          .update({
+            'check_out_time': nowDt.toIso8601String(),
+            if (hours != null)
+              'total_hours': double.parse(hours.toStringAsFixed(2)),
+            if (dailyReport != null && dailyReport.trim().isNotEmpty)
+              'daily_report': dailyReport.trim(),
+            'updated_at': nowDt.toIso8601String(),
+          })
+          .eq('employee_id', employeeId)
+          .eq('attendance_date', today);
       return null;
     } catch (e) {
       final s = e.toString();
@@ -425,10 +466,14 @@ class AttendanceRepository {
     required String report,
   }) async {
     try {
-      await _admin.from('attendance').update({
-        'daily_report': report.trim(),
-        'updated_at':   DateTime.now().toUtc().toIso8601String(),
-      }).eq('employee_id', employeeId).eq('attendance_date', date);
+      await _admin
+          .from('attendance')
+          .update({
+            'daily_report': report.trim(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('employee_id', employeeId)
+          .eq('attendance_date', date);
     } catch (_) {}
   }
 
@@ -436,7 +481,10 @@ class AttendanceRepository {
   static Future<void> autoCheckIn(String employeeId) => checkIn(employeeId);
 
   /// WiFi-based auto check-out with hour accumulation.
-  static Future<void> autoCheckOut(String employeeId, {int accumulatedMinutes = 0}) async {
+  static Future<void> autoCheckOut(
+    String employeeId, {
+    int accumulatedMinutes = 0,
+  }) async {
     try {
       final today = AppTime.now().toIso8601String().substring(0, 10);
       final nowDt = DateTime.now().toUtc();
@@ -462,13 +510,15 @@ class AttendanceRepository {
       double newHours = existing + (accumulatedMinutes / 60.0);
       if (newHours < 0) newHours = 0;
 
-      await _admin.from('attendance').update({
-        'check_out_time': nowDt.toIso8601String(),
-        'total_hours':    double.parse(newHours.toStringAsFixed(2)),
-        'updated_at':     nowDt.toIso8601String(),
-      })
-      .eq('employee_id', employeeId)
-      .eq('attendance_date', today);
+      await _admin
+          .from('attendance')
+          .update({
+            'check_out_time': nowDt.toIso8601String(),
+            'total_hours': double.parse(newHours.toStringAsFixed(2)),
+            'updated_at': nowDt.toIso8601String(),
+          })
+          .eq('employee_id', employeeId)
+          .eq('attendance_date', today);
     } catch (_) {}
   }
 
@@ -483,7 +533,7 @@ class AttendanceRepository {
     String status = 'present',
   }) async {
     final isAbsent = status == 'absent';
-    final inDt  = DateTime.tryParse(checkInTime);
+    final inDt = DateTime.tryParse(checkInTime);
     final outDt = DateTime.tryParse(checkOutTime);
 
     // Absent days carry no times. Otherwise check-out must be after check-in.
@@ -496,35 +546,39 @@ class AttendanceRepository {
       if (hours < 0) hours = 0;
     }
 
-    final String? inIso  = isAbsent ? null : checkInTime;
+    final String? inIso = isAbsent ? null : checkInTime;
     final String? outIso = isAbsent ? null : checkOutTime;
 
     // Try with full new-column payload first; fall back if columns missing
     try {
       await _admin.from('attendance').upsert({
-        'employee_id':     employeeId,
+        'employee_id': employeeId,
         'attendance_date': date,
-        'check_in_time':   inIso,
-        'check_out_time':  outIso,
-        'status':          status,
-        'total_hours':     isAbsent ? 0 : (hours != null ? double.parse(hours.toStringAsFixed(2)) : null),
-        'is_manual':       true,
-        'manual_note':     note,
-        'is_approved':     false,
-        'updated_at':      DateTime.now().toUtc().toIso8601String(),
+        'check_in_time': inIso,
+        'check_out_time': outIso,
+        'status': status,
+        'total_hours': isAbsent
+            ? 0
+            : (hours != null ? double.parse(hours.toStringAsFixed(2)) : null),
+        'is_manual': true,
+        'manual_note': note,
+        'is_approved': false,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'employee_id, attendance_date');
       return true;
     } catch (_) {}
 
     try {
       await _admin.from('attendance').upsert({
-        'employee_id':     employeeId,
+        'employee_id': employeeId,
         'attendance_date': date,
-        'check_in_time':   inIso,
-        'check_out_time':  outIso,
-        'status':          status,
-        'total_hours':     isAbsent ? 0 : (hours != null ? double.parse(hours.toStringAsFixed(2)) : null),
-        'updated_at':      DateTime.now().toUtc().toIso8601String(),
+        'check_in_time': inIso,
+        'check_out_time': outIso,
+        'status': status,
+        'total_hours': isAbsent
+            ? 0
+            : (hours != null ? double.parse(hours.toStringAsFixed(2)) : null),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'employee_id, attendance_date');
       return true;
     } catch (_) {
@@ -538,11 +592,14 @@ class AttendanceRepository {
     required String approvedBy,
   }) async {
     try {
-      await _admin.from('attendance').update({
-        'is_approved': true,
-        'approved_by': approvedBy,
-        'updated_at':  DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', attendanceId);
+      await _admin
+          .from('attendance')
+          .update({
+            'is_approved': true,
+            'approved_by': approvedBy,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', attendanceId);
     } catch (_) {}
   }
 
@@ -557,7 +614,7 @@ class AttendanceRepository {
     required String status,
   }) async {
     final isAbsent = status == 'absent';
-    final inDt  = DateTime.tryParse(checkInTime);
+    final inDt = DateTime.tryParse(checkInTime);
     final outDt = DateTime.tryParse(checkOutTime);
 
     // Absent days carry no times. Otherwise check-out must be after check-in.
@@ -570,26 +627,30 @@ class AttendanceRepository {
       if (hours < 0) hours = 0;
     }
 
-    final String? inIso  = isAbsent ? null : checkInTime;
+    final String? inIso = isAbsent ? null : checkInTime;
     final String? outIso = isAbsent ? null : checkOutTime;
 
     try {
       await _admin.from('attendance').upsert({
-        'employee_id':     employeeId,
+        'employee_id': employeeId,
         'attendance_date': date,
-        'check_in_time':   inIso,
-        'check_out_time':  outIso,
-        'status':          status,
-        'total_hours':     isAbsent ? 0 : (hours != null ? double.parse(hours.toStringAsFixed(2)) : null),
-        'is_overridden':   true,
+        'check_in_time': inIso,
+        'check_out_time': outIso,
+        'status': status,
+        'total_hours': isAbsent
+            ? 0
+            : (hours != null ? double.parse(hours.toStringAsFixed(2)) : null),
+        'is_overridden': true,
         'override_reason': reason,
-        'updated_at':      DateTime.now().toUtc().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'employee_id, attendance_date');
       return null;
     } catch (e) {
       final s = e.toString();
       final m = RegExp(r'message: ([^,\)]+)').firstMatch(s);
-      return m != null ? m.group(1)!.trim() : 'Could not save the override. Please try again.';
+      return m != null
+          ? m.group(1)!.trim()
+          : 'Could not save the override. Please try again.';
     }
   }
 }

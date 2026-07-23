@@ -11,20 +11,20 @@ class TaskStatusOptionsRepository {
   static final _client = SupabaseService.client;
 
   static const _systemTableName = '_task_status_system';
-  static const _columnName      = 'task_status';
+  static const _columnName = 'task_status';
 
   static String? _cachedColumnId;
   static List<TaskStatusOption>? _cache;
 
   // Default built-in options seeded on first setup.
   static const List<List<String>> _defaults = [
-    ['not_started',     '#6D4C41'],
-    ['in_progress',     '#1565C0'],
-    ['employee_done',   '#755B00'],
-    ['client_approved',  '#2E7D32'],
+    ['not_started', '#6D4C41'],
+    ['in_progress', '#1565C0'],
+    ['employee_done', '#755B00'],
+    ['client_approved', '#2E7D32'],
     ['client_rejected', '#BA1A1A'],
-    ['completed',       '#2E7D32'],
-    ['on_hold',         '#747878'],
+    ['completed', '#2E7D32'],
+    ['on_hold', '#747878'],
   ];
 
   // ── Bootstrap ───────────────────────────────────────────────────────────────
@@ -49,13 +49,17 @@ class TaskStatusOptionsRepository {
       if ((rows as List).isNotEmpty) {
         tableId = rows.first['id'] as String;
       } else {
-        final res = await _client.from('custom_tables').insert({
-          'name':       _systemTableName,
-          'icon':       '🏷',
-          'color':      '#888888',
-          'created_by': userId,
-          'is_archived': false,
-        }).select('id').single();
+        final res = await _client
+            .from('custom_tables')
+            .insert({
+              'name': _systemTableName,
+              'icon': '🏷',
+              'color': '#888888',
+              'created_by': userId,
+              'is_archived': false,
+            })
+            .select('id')
+            .single();
         tableId = res['id'] as String;
       }
     } catch (_) {
@@ -67,7 +71,7 @@ class TaskStatusOptionsRepository {
       final cols = await _client
           .from('custom_columns')
           .select('id')
-          .eq('table_id', tableId!)
+          .eq('table_id', tableId)
           .eq('name', _columnName)
           .limit(1);
 
@@ -75,26 +79,30 @@ class TaskStatusOptionsRepository {
       if ((cols as List).isNotEmpty) {
         columnId = cols.first['id'] as String;
       } else {
-        final res = await _client.from('custom_columns').insert({
-          'table_id':              tableId,
-          'name':                  _columnName,
-          'field_type':            'status',
-          'position':              0,
-          'created_by':            userId,
-          'is_required':           false,
-          'is_admin_only':         false,
-          'is_hidden_from_client': false,
-        }).select('id').single();
+        final res = await _client
+            .from('custom_columns')
+            .insert({
+              'table_id': tableId,
+              'name': _columnName,
+              'field_type': 'status',
+              'position': 0,
+              'created_by': userId,
+              'is_required': false,
+              'is_admin_only': false,
+              'is_hidden_from_client': false,
+            })
+            .select('id')
+            .single();
         columnId = res['id'] as String;
 
         // Seed the 7 built-in options
         final seeds = <Map<String, dynamic>>[];
         for (var i = 0; i < _defaults.length; i++) {
           seeds.add({
-            'column_id':  columnId,
-            'label':      _defaults[i][0],
-            'color':      _defaults[i][1],
-            'position':   i,
+            'column_id': columnId,
+            'label': _defaults[i][0],
+            'color': _defaults[i][1],
+            'position': i,
             'is_default': true,
           });
         }
@@ -172,13 +180,17 @@ class TaskStatusOptionsRepository {
           ? 0
           : existing.map((o) => o.position).reduce((a, b) => a > b ? a : b) + 1;
 
-      final res = await _client.from('column_status_options').insert({
-        'column_id':  columnId,
-        'label':      label,
-        'color':      color,
-        'position':   maxPos,
-        'is_default': false,
-      }).select().single();
+      final res = await _client
+          .from('column_status_options')
+          .insert({
+            'column_id': columnId,
+            'label': label,
+            'color': color,
+            'position': maxPos,
+            'is_default': false,
+          })
+          .select()
+          .single();
       final opt = TaskStatusOption.fromMap(res);
       _cache = [...(existing), opt];
       return opt;
@@ -193,10 +205,10 @@ class TaskStatusOptionsRepository {
     required String color,
   }) async {
     try {
-      await _client.from('column_status_options').update({
-        'label': label,
-        'color': color,
-      }).eq('id', id);
+      await _client
+          .from('column_status_options')
+          .update({'label': label, 'color': color})
+          .eq('id', id);
       _cache = null; // invalidate
       return true;
     } catch (_) {
@@ -229,24 +241,34 @@ class TaskStatusOptionsRepository {
 
   static Color _staticColor(String value) {
     switch (value) {
-      case 'in_progress':     return const Color(0xFF1565C0);
-      case 'employee_done':   return const Color(0xFF755B00);
-      case 'client_approved':  return const Color(0xFF2E7D32);
-      case 'client_rejected': return const Color(0xFFBA1A1A);
-      case 'completed':       return const Color(0xFF2E7D32);
-      case 'on_hold':         return const Color(0xFF747878);
-      default:                return const Color(0xFF6D4C41);
+      case 'in_progress':
+        return const Color(0xFF1565C0);
+      case 'employee_done':
+        return const Color(0xFF755B00);
+      case 'client_approved':
+        return const Color(0xFF2E7D32);
+      case 'client_rejected':
+        return const Color(0xFFBA1A1A);
+      case 'completed':
+        return const Color(0xFF2E7D32);
+      case 'on_hold':
+        return const Color(0xFF747878);
+      default:
+        return const Color(0xFF6D4C41);
     }
   }
 
   static List<TaskStatusOption> _fallback() {
-    return List.generate(_defaults.length, (i) => TaskStatusOption(
-      id:        i.toString(),
-      columnId:  '',
-      label:     _defaults[i][0],
-      color:     _defaults[i][1],
-      position:  i,
-      isDefault: true,
-    ));
+    return List.generate(
+      _defaults.length,
+      (i) => TaskStatusOption(
+        id: i.toString(),
+        columnId: '',
+        label: _defaults[i][0],
+        color: _defaults[i][1],
+        position: i,
+        isDefault: true,
+      ),
+    );
   }
 }

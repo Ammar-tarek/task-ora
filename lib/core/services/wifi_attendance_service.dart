@@ -12,9 +12,9 @@ import 'local_notification_service.dart';
 
 // Local cache keys — mirror the central DB values so detection still works
 // briefly offline. The DB (app_settings) is always the source of truth.
-const _kCompanySsid        = 'wifi_company_ssid';
-const _kWifiAttendance     = 'wifi_attendance_enabled';
-const _kSessionStart       = 'wifi_session_start_ms';
+const _kCompanySsid = 'wifi_company_ssid';
+const _kWifiAttendance = 'wifi_attendance_enabled';
+const _kSessionStart = 'wifi_session_start_ms';
 
 class WifiAttendanceService {
   WifiAttendanceService._();
@@ -72,8 +72,8 @@ class WifiAttendanceService {
   /// Call once when the authenticated employee's profile is available.
   Future<void> init(String employeeId) async {
     if (_initialized && _employeeId == employeeId) return;
-    _employeeId   = employeeId;
-    _initialized  = true;
+    _employeeId = employeeId;
+    _initialized = true;
 
     // Listen for connectivity changes while the app is in the foreground.
     Connectivity().onConnectivityChanged.listen(_onConnectivity);
@@ -84,7 +84,7 @@ class WifiAttendanceService {
 
   void dispose() {
     _initialized = false;
-    _employeeId  = null;
+    _employeeId = null;
   }
 
   // ── Core logic ─────────────────────────────────────────────────────────────
@@ -92,10 +92,10 @@ class WifiAttendanceService {
   /// Called from app-resume (WidgetsBindingObserver) and from init.
   Future<void> checkNow() async {
     if (_employeeId == null) return;
-    if (!await isEnabled())  return;
+    if (!await isEnabled()) return;
 
     final results = await Connectivity().checkConnectivity();
-    final onWifi  = results.contains(ConnectivityResult.wifi);
+    final onWifi = results.contains(ConnectivityResult.wifi);
 
     if (onWifi && await _isOnCompanyNetwork()) {
       await _handleConnected();
@@ -106,7 +106,7 @@ class WifiAttendanceService {
 
   Future<void> _onConnectivity(List<ConnectivityResult> results) async {
     if (_employeeId == null) return;
-    if (!await isEnabled())  return;
+    if (!await isEnabled()) return;
 
     final onWifi = results.contains(ConnectivityResult.wifi);
 
@@ -141,9 +141,9 @@ class WifiAttendanceService {
       // Notify the employee that their attendance was recorded.
       LocalNotificationService.show(
         title: '✅ Checked In',
-        body:  'Your attendance has been automatically recorded.',
-        type:  LocalNotificationService.typeHr,
-        id:    2001,
+        body: 'Your attendance has been automatically recorded.',
+        type: LocalNotificationService.typeHr,
+        id: 2001,
       );
     }
   }
@@ -159,13 +159,17 @@ class WifiAttendanceService {
         .inMinutes;
 
     await prefs.remove(_kSessionStart);
-    await AttendanceRepository.autoCheckOut(_employeeId!, accumulatedMinutes: minutes);
+    await AttendanceRepository.autoCheckOut(
+      _employeeId!,
+      accumulatedMinutes: minutes,
+    );
     // Notify the employee that their check-out was recorded.
     LocalNotificationService.show(
       title: '🔔 Checked Out',
-      body:  'You have been automatically checked out after ${minutes}m session.',
-      type:  LocalNotificationService.typeHr,
-      id:    2002,
+      body:
+          'You have been automatically checked out after ${minutes}m session.',
+      type: LocalNotificationService.typeHr,
+      id: 2002,
     );
   }
 

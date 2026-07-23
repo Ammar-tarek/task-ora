@@ -51,9 +51,9 @@ class _ClientFinanceScreenState extends State<ClientFinanceScreen>
     if (mounted) {
       setState(() {
         _client = results[0] as ClientModel?;
-        _tasks  = results[1] as List<TaskModel>;
+        _tasks = results[1] as List<TaskModel>;
         _events = results[2] as List<CalEventData>;
-        _crm    = results[3] as List<CrmEntry>;
+        _crm = results[3] as List<CrmEntry>;
         _loading = false;
       });
     }
@@ -61,17 +61,13 @@ class _ClientFinanceScreenState extends State<ClientFinanceScreen>
 
   // ── Financial summary ───────────────────────────────────────────────────────
 
-  double get _totalTaskCost =>
-      _tasks.fold(0, (s, t) => s + (t.cost ?? 0));
+  double get _totalTaskCost => _tasks.fold(0, (s, t) => s + (t.cost ?? 0));
 
-  double get _totalMeetingCost =>
-      _events.fold(0, (s, e) => s + (e.cost ?? 0));
+  double get _totalMeetingCost => _events.fold(0, (s, e) => s + (e.cost ?? 0));
 
-  double get _totalInvoiced =>
-      _crm.fold(0, (s, e) => s + e.amount);
+  double get _totalInvoiced => _crm.fold(0, (s, e) => s + e.amount);
 
-  double get _totalPaid =>
-      _crm.fold(0, (s, e) => s + e.paidAmount);
+  double get _totalPaid => _crm.fold(0, (s, e) => s + e.paidAmount);
 
   @override
   Widget build(BuildContext context) {
@@ -92,27 +88,38 @@ class _ClientFinanceScreenState extends State<ClientFinanceScreen>
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _client == null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.link_off, size: 48, color: AppColors.outlineVariant),
-                      const SizedBox(height: 16),
-                      Text('Account not linked',
-                          style: AppTextStyles.headlineSm
-                              .copyWith(color: AppColors.onSurfaceVariant)),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Your account is not linked to a client profile.\n'
-                        'Please contact your administrator.',
-                        style: AppTextStyles.bodyMd
-                            .copyWith(color: AppColors.onSurfaceVariant),
-                        textAlign: TextAlign.center,
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.link_off,
+                      size: 48,
+                      color: AppColors.outlineVariant,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Account not linked',
+                      style: AppTextStyles.headlineSm.copyWith(
+                        color: AppColors.onSurfaceVariant,
                       ),
-                    ]),
-                  ),
-                )
-              : TabBarView(
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Your account is not linked to a client profile.\n'
+                      'Please contact your administrator.',
+                      style: AppTextStyles.bodyMd.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : TabBarView(
               controller: _tab,
               children: [
                 _FinanceTab(
@@ -146,7 +153,7 @@ class _FinanceTab extends StatelessWidget {
   final double totalTaskCost, totalMeetingCost, totalInvoiced, totalPaid;
 
   double get _totalRevenue => totalTaskCost + totalMeetingCost + totalInvoiced;
-  double get _outstanding  => totalInvoiced - totalPaid;
+  double get _outstanding => totalInvoiced - totalPaid;
 
   @override
   Widget build(BuildContext context) {
@@ -163,40 +170,72 @@ class _FinanceTab extends StatelessWidget {
             color: AppColors.primary,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('TOTAL REVENUE',
-                style: AppTextStyles.labelCaps.copyWith(color: Colors.white54)),
-            const SizedBox(height: 6),
-            Text('EGP ${_totalRevenue.toStringAsFixed(2)}',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'TOTAL REVENUE',
+                style: AppTextStyles.labelCaps.copyWith(color: Colors.white54),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'EGP ${_totalRevenue.toStringAsFixed(2)}',
                 style: AppTextStyles.dataLg.copyWith(
-                    color: AppColors.gold, fontSize: 32,
-                    fontWeight: FontWeight.w700)),
-            const Divider(color: Colors.white24, height: 24),
-            Row(children: [
-              Expanded(child: _SummaryItem(
-                  label: 'Task Services',
-                  value: 'EGP ${totalTaskCost.toStringAsFixed(0)}')),
-              Expanded(child: _SummaryItem(
-                  label: 'Meetings',
-                  value: 'EGP ${totalMeetingCost.toStringAsFixed(0)}')),
-              Expanded(child: _SummaryItem(
-                  label: 'Invoiced',
-                  value: 'EGP ${totalInvoiced.toStringAsFixed(0)}')),
-            ]),
-          ]),
+                  color: AppColors.gold,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Divider(color: Colors.white24, height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SummaryItem(
+                      label: 'Task Services',
+                      value: 'EGP ${totalTaskCost.toStringAsFixed(0)}',
+                    ),
+                  ),
+                  Expanded(
+                    child: _SummaryItem(
+                      label: 'Meetings',
+                      value: 'EGP ${totalMeetingCost.toStringAsFixed(0)}',
+                    ),
+                  ),
+                  Expanded(
+                    child: _SummaryItem(
+                      label: 'Invoiced',
+                      value: 'EGP ${totalInvoiced.toStringAsFixed(0)}',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
 
         // ── Invoice status strip ────────────────────────────────────
-        Row(children: [
-          Expanded(child: _StatCard(
-              label: 'Paid', value: 'EGP ${totalPaid.toStringAsFixed(0)}',
-              color: const Color(0xFF81C784))),
-          const SizedBox(width: 10),
-          Expanded(child: _StatCard(
-              label: 'Outstanding', value: 'EGP ${_outstanding.toStringAsFixed(0)}',
-              color: _outstanding > 0 ? AppColors.error : AppColors.onSurfaceVariant)),
-        ]),
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                label: 'Paid',
+                value: 'EGP ${totalPaid.toStringAsFixed(0)}',
+                color: const Color(0xFF81C784),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatCard(
+                label: 'Outstanding',
+                value: 'EGP ${_outstanding.toStringAsFixed(0)}',
+                color: _outstanding > 0
+                    ? AppColors.error
+                    : AppColors.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 24),
 
         // ── Task cost breakdown ─────────────────────────────────────
@@ -220,7 +259,11 @@ class _FinanceTab extends StatelessWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.label, required this.value, required this.color});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
   final String label, value;
   final Color color;
 
@@ -233,15 +276,26 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(value,
-            style: AppTextStyles.dataMd
-                .copyWith(color: color, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: AppTextStyles.bodySm
-                .copyWith(color: AppColors.onSurfaceVariant, fontSize: 11)),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: AppTextStyles.dataMd.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: AppTextStyles.bodySm.copyWith(
+              color: AppColors.onSurfaceVariant,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -260,39 +314,65 @@ class _TaskCostRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Row(children: [
-        const Icon(Icons.task_alt_outlined, size: 16, color: AppColors.gold),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(task.title, style: AppTextStyles.labelMd,
-              overflow: TextOverflow.ellipsis),
-          Text(task.statusLabel,
-              style: AppTextStyles.bodySm
-                  .copyWith(color: AppColors.onSurfaceVariant, fontSize: 10)),
-        ])),
-        Text('EGP ${task.cost!.toStringAsFixed(2)}',
-            style: AppTextStyles.dataMd.copyWith(color: AppColors.gold)),
-      ]),
+      child: Row(
+        children: [
+          const Icon(Icons.task_alt_outlined, size: 16, color: AppColors.gold),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.title,
+                  style: AppTextStyles.labelMd,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  task.statusLabel,
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            'EGP ${task.cost!.toStringAsFixed(2)}',
+            style: AppTextStyles.dataMd.copyWith(color: AppColors.gold),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _SummaryItem extends StatelessWidget {
-  const _SummaryItem({required this.label, required this.value, this.positive});
+  const _SummaryItem({
+    required this.label,
+    required this.value,
+  });
   final String label, value;
-  final bool? positive;
 
   @override
   Widget build(BuildContext context) {
-    final color = positive == null
-        ? Colors.white70
-        : positive! ? const Color(0xFF81C784) : AppColors.error;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(value,
-          style: AppTextStyles.dataMd.copyWith(color: color, fontSize: 15)),
-      Text(label,
-          style: AppTextStyles.bodySm.copyWith(color: Colors.white38, fontSize: 10)),
-    ]);
+    const color = Colors.white70;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: AppTextStyles.dataMd.copyWith(color: color, fontSize: 15),
+        ),
+        Text(
+          label,
+          style: AppTextStyles.bodySm.copyWith(
+            color: Colors.white38,
+            fontSize: 10,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -302,10 +382,14 @@ class _CrmRow extends StatelessWidget {
 
   Color _statusColor() {
     switch (entry.status) {
-      case 'paid':     return const Color(0xFF81C784);
-      case 'overdue':  return AppColors.error;
-      case 'partial':  return AppColors.gold;
-      default:         return AppColors.onSurfaceVariant;
+      case 'paid':
+        return const Color(0xFF81C784);
+      case 'overdue':
+        return AppColors.error;
+      case 'partial':
+        return AppColors.gold;
+      default:
+        return AppColors.onSurfaceVariant;
     }
   }
 
@@ -319,26 +403,48 @@ class _CrmRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(entry.title, style: AppTextStyles.labelMd),
-          if (entry.invoiceNumber != null)
-            Text('INV ${entry.invoiceNumber}',
-                style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
-        ])),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('EGP ${entry.amount.toStringAsFixed(0)}', style: AppTextStyles.dataMd),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: _statusColor().withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(entry.title, style: AppTextStyles.labelMd),
+                if (entry.invoiceNumber != null)
+                  Text(
+                    'INV ${entry.invoiceNumber}',
+                    style: AppTextStyles.bodySm.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+              ],
             ),
-            child: Text(entry.statusLabel,
-                style: AppTextStyles.bodySm.copyWith(color: _statusColor(), fontSize: 10)),
           ),
-        ]),
-      ]),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'EGP ${entry.amount.toStringAsFixed(0)}',
+                style: AppTextStyles.dataMd,
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _statusColor().withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  entry.statusLabel,
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: _statusColor(),
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -356,7 +462,7 @@ class _TasksTab extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: tasks.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (_, i) => _TaskRow(task: tasks[i]),
     );
   }
@@ -368,10 +474,14 @@ class _TaskRow extends StatelessWidget {
 
   Color _priorityColor() {
     switch (task.priority) {
-      case 'critical': return AppColors.error;
-      case 'high':     return AppColors.statusHigh;
-      case 'medium':   return AppColors.gold;
-      default:         return AppColors.onSurfaceVariant;
+      case 'critical':
+        return AppColors.error;
+      case 'high':
+        return AppColors.statusHigh;
+      case 'medium':
+        return AppColors.gold;
+      default:
+        return AppColors.onSurfaceVariant;
     }
   }
 
@@ -382,26 +492,38 @@ class _TaskRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(10),
-        border: Border(
-          left: BorderSide(color: _priorityColor(), width: 3),
-        ),
+        border: Border(left: BorderSide(color: _priorityColor(), width: 3)),
       ),
-      child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(task.title, style: AppTextStyles.labelMd),
-          const SizedBox(height: 4),
-          Row(children: [
-            _Chip(label: task.statusLabel, color: AppColors.primary),
-            if (task.dueDate != null) ...[
-              const SizedBox(width: 8),
-              _Chip(label: task.dueDateDisplay, color: AppColors.outlineVariant),
-            ],
-          ]),
-        ])),
-        if (task.cost != null && task.cost! > 0)
-          Text('EGP ${task.cost!.toStringAsFixed(0)}',
-              style: AppTextStyles.dataMd.copyWith(color: AppColors.gold)),
-      ]),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(task.title, style: AppTextStyles.labelMd),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    _Chip(label: task.statusLabel, color: AppColors.primary),
+                    if (task.dueDate != null) ...[
+                      const SizedBox(width: 8),
+                      _Chip(
+                        label: task.dueDateDisplay,
+                        color: AppColors.outlineVariant,
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (task.cost != null && task.cost! > 0)
+            Text(
+              'EGP ${task.cost!.toStringAsFixed(0)}',
+              style: AppTextStyles.dataMd.copyWith(color: AppColors.gold),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -419,8 +541,10 @@ class _Chip extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(label,
-          style: AppTextStyles.bodySm.copyWith(color: color, fontSize: 10)),
+      child: Text(
+        label,
+        style: AppTextStyles.bodySm.copyWith(color: color, fontSize: 10),
+      ),
     );
   }
 }
@@ -438,7 +562,7 @@ class _MeetingsTab extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: events.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (_, i) => _MeetingRow(event: events[i]),
     );
   }
@@ -448,8 +572,7 @@ class _MeetingRow extends StatelessWidget {
   const _MeetingRow({required this.event});
   final CalEventData event;
 
-  String _fmt(DateTime d) =>
-      '${d.day}/${d.month}/${d.year}  ${AppTime.hm(d)}';
+  String _fmt(DateTime d) => '${d.day}/${d.month}/${d.year}  ${AppTime.hm(d)}';
 
   @override
   Widget build(BuildContext context) {
@@ -460,36 +583,61 @@ class _MeetingRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.outlineVariant),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: Text(event.title, style: AppTextStyles.labelMd)),
-          if (event.cost != null && event.cost! > 0)
-            Text('EGP ${event.cost!.toStringAsFixed(0)}',
-                style: AppTextStyles.dataMd.copyWith(color: AppColors.gold)),
-        ]),
-        const SizedBox(height: 6),
-        Row(children: [
-          Icon(Icons.access_time_outlined, size: 13, color: AppColors.onSurfaceVariant),
-          const SizedBox(width: 4),
-          Text(_fmt(event.start), style: AppTextStyles.dataSm),
-        ]),
-        if (event.attendeeNames.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6, runSpacing: 4,
-            children: event.attendeeNames.map((n) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(n,
-                  style: AppTextStyles.bodySm
-                      .copyWith(fontSize: 10, color: AppColors.primary)),
-            )).toList(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(event.title, style: AppTextStyles.labelMd)),
+              if (event.cost != null && event.cost! > 0)
+                Text(
+                  'EGP ${event.cost!.toStringAsFixed(0)}',
+                  style: AppTextStyles.dataMd.copyWith(color: AppColors.gold),
+                ),
+            ],
           ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(
+                Icons.access_time_outlined,
+                size: 13,
+                color: AppColors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Text(_fmt(event.start), style: AppTextStyles.dataSm),
+            ],
+          ),
+          if (event.attendeeNames.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: event.attendeeNames
+                  .map(
+                    (n) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        n,
+                        style: AppTextStyles.bodySm.copyWith(
+                          fontSize: 10,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 }
@@ -504,13 +652,24 @@ class _EmptySection extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.inbox_outlined, size: 48, color: AppColors.outlineVariant),
-          const SizedBox(height: 12),
-          Text(message,
-              style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
-              textAlign: TextAlign.center),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.inbox_outlined,
+              size: 48,
+              color: AppColors.outlineVariant,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: AppTextStyles.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

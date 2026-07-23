@@ -17,7 +17,7 @@ class NotificationTriggerService {
       NotificationTriggerService._();
 
   RealtimeChannel? _channel;
-  ProfileModel?    _profile;
+  ProfileModel? _profile;
 
   // HR-flavoured types go to the HR channel; everything else to Tasks.
   static const _hrTypes = {'attendance_alert', 'penalty_applied'};
@@ -28,35 +28,36 @@ class NotificationTriggerService {
     _profile = profile;
     _stop();
 
-    _channel = SupabaseService.client
-        .channel('public:notifications:recipient_id=eq.${profile.id}')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'notifications',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'recipient_id',
-            value: profile.id,
-          ),
-          callback: (payload) {
-            final row = payload.newRecord;
-            final type = row['type'] as String? ?? 'system';
-            final refType = row['reference_type'] as String?;
-            final refId   = row['reference_id']   as String?;
-            LocalNotificationService.show(
-              title: row['title'] as String? ?? 'CB TO-DO',
-              body:  row['body']  as String? ?? '',
-              type:  _hrTypes.contains(type)
-                  ? LocalNotificationService.typeHr
-                  : LocalNotificationService.typeTask,
-              payload: (refType != null && refId != null)
-                  ? '$refType:$refId'
-                  : null,
-            );
-          },
-        )
-      ..subscribe();
+    _channel =
+        SupabaseService.client
+            .channel('public:notifications:recipient_id=eq.${profile.id}')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.insert,
+              schema: 'public',
+              table: 'notifications',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'recipient_id',
+                value: profile.id,
+              ),
+              callback: (payload) {
+                final row = payload.newRecord;
+                final type = row['type'] as String? ?? 'system';
+                final refType = row['reference_type'] as String?;
+                final refId = row['reference_id'] as String?;
+                LocalNotificationService.show(
+                  title: row['title'] as String? ?? 'CB TO-DO',
+                  body: row['body'] as String? ?? '',
+                  type: _hrTypes.contains(type)
+                      ? LocalNotificationService.typeHr
+                      : LocalNotificationService.typeTask,
+                  payload: (refType != null && refId != null)
+                      ? '$refType:$refId'
+                      : null,
+                );
+              },
+            )
+          ..subscribe();
   }
 
   /// Call when the user signs out.

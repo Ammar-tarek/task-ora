@@ -22,10 +22,10 @@ class LocalNotificationService {
 
   // ── Notification channel IDs ──────────────────────────────────────────────
 
-  static const _channelTaskId   = 'cbtodo_tasks';
+  static const _channelTaskId = 'cbtodo_tasks';
   static const _channelTaskName = 'Tasks';
 
-  static const _channelHrId   = 'cbtodo_hr';
+  static const _channelHrId = 'cbtodo_hr';
   static const _channelHrName = 'HR & Attendance';
 
   // ── Init ──────────────────────────────────────────────────────────────────
@@ -34,10 +34,14 @@ class LocalNotificationService {
   static Future<void> init() async {
     if (_initialized) return;
     // Local notifications are mobile-only — skip entirely on web/desktop.
-    if (kIsWeb) { _initialized = true; return; }
+    if (kIsWeb) {
+      _initialized = true;
+      return;
+    }
 
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -45,17 +49,16 @@ class LocalNotificationService {
     );
 
     await _plugin.initialize(
-      const InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      ),
+      const InitializationSettings(android: androidSettings, iOS: iosSettings),
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
     // Create notification channels (Android 8+) and request permission (Android 13+).
     if (!kIsWeb && Platform.isAndroid) {
-      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       if (androidPlugin != null) {
         await androidPlugin.createNotificationChannel(
           const AndroidNotificationChannel(
@@ -95,7 +98,7 @@ class LocalNotificationService {
 
   /// Pass one of these types to [show] to pick the right channel.
   static const String typeTask = 'task';
-  static const String typeHr   = 'hr';
+  static const String typeHr = 'hr';
 
   /// Show a local notification immediately.
   ///
@@ -105,19 +108,19 @@ class LocalNotificationService {
     required String title,
     required String body,
     String type = typeTask,
-    int?   id,
+    int? id,
     String? payload,
   }) async {
     if (!_initialized || kIsWeb) return;
 
-    final channelId   = type == typeHr ? _channelHrId   : _channelTaskId;
+    final channelId = type == typeHr ? _channelHrId : _channelTaskId;
     final channelName = type == typeHr ? _channelHrName : _channelTaskName;
 
     final androidDetails = AndroidNotificationDetails(
       channelId,
       channelName,
       importance: Importance.high,
-      priority:   Priority.high,
+      priority: Priority.high,
       styleInformation: BigTextStyleInformation(body),
     );
 

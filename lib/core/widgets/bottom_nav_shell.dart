@@ -41,14 +41,14 @@ class BottomNavShell extends StatelessWidget {
   ];
 
   // Branch indices per role (indices map to branches 0-4 in StatefulShellRoute).
-  static const _employeeBranchIndices = [0, 1, 2, 4];        // no Finance
-  static const _clientBranchIndices   = [1, 2, 3, 4];        // no Dashboard
+  static const _employeeBranchIndices = [0, 1, 2, 4]; // no Finance
+  static const _clientBranchIndices = [1, 2, 3, 4]; // no Dashboard
 
   @override
   Widget build(BuildContext context) {
     final profile = context.watch<AuthNotifier>().profile;
     final isEmployee = profile?.isEmployee ?? false;
-    final isClient   = profile?.isClient   ?? false;
+    final isClient = profile?.isClient ?? false;
 
     // Build the visible item list and a mapping: visible-index → branch-index.
     final List<BottomNavigationBarItem> visibleItems;

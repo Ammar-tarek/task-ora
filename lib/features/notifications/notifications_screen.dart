@@ -30,7 +30,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     RealtimeService.instance.listen(const ['notifications'], _onRealtime);
   }
 
-  void _onRealtime() { if (mounted) _load(); }
+  void _onRealtime() {
+    if (mounted) _load();
+  }
 
   @override
   void dispose() {
@@ -66,14 +68,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final seenKeys = <String>{};
     final uniqueData = <AppNotification>[];
     for (final n in filtered) {
-      final key = '${n.title.trim()}|${n.body.trim()}|${n.referenceType}|${n.referenceId}';
+      final key =
+          '${n.title.trim()}|${n.body.trim()}|${n.referenceType}|${n.referenceId}';
       if (!seenKeys.contains(key)) {
         seenKeys.add(key);
         uniqueData.add(n);
       }
     }
 
-    if (mounted) setState(() { _notifications = uniqueData; _loading = false; });
+    if (mounted)
+      setState(() {
+        _notifications = uniqueData;
+        _loading = false;
+      });
   }
 
   Future<void> _ignoreNotification(String id) async {
@@ -118,14 +125,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       final task = await TaskRepository.fetchTaskDetail(taskId);
       if (task == null) return;
-      final targetTeam = task['handoff_to_team_id'] as String? ?? profile.teamId;
+      final targetTeam =
+          task['handoff_to_team_id'] as String? ?? profile.teamId;
       if (targetTeam != null) {
         await TaskRepository.acceptHandoff(taskId: taskId, teamId: targetTeam);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Task handoff accepted!'),
-            backgroundColor: AppColors.statusDone,
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Task handoff accepted!'),
+              backgroundColor: AppColors.statusDone,
+            ),
+          );
         }
         _load();
       }
@@ -141,7 +151,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   /// Maps [referenceType] (or falls back to [type]) to an in-app route.
   void _navigateToReference(AppNotification n) {
     final refType = n.referenceType;
-    final refId   = n.referenceId;
+    final refId = n.referenceId;
 
     String? route;
 
@@ -194,62 +204,84 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           if (unread > 0)
             TextButton(
               onPressed: _markAllRead,
-              child: Text('Mark all read',
-                style: AppTextStyles.labelMd.copyWith(color: AppColors.gold)),
+              child: Text(
+                'Mark all read',
+                style: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
+              ),
             ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.gold),
+            )
           : _notifications.isEmpty
-              ? Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.notifications_none_outlined,
-                      size: 64, color: AppColors.outlineVariant),
-                    const SizedBox(height: 16),
-                    Text('No notifications', style: AppTextStyles.labelMd),
-                  ]),
-                )
-              : RefreshIndicator(
-                  color: AppColors.gold,
-                  onRefresh: _load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _notifications.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) {
-                      final n = _notifications[i];
-                      return Dismissible(
-                        key: Key('notif_${n.id}'),
-                        direction: DismissDirection.endToStart,
-                        onDismissed: (_) => _ignoreNotification(n.id),
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          decoration: BoxDecoration(
-                            color: AppColors.error.withValues(alpha: 0.8),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.visibility_off_outlined, color: Colors.white, size: 20),
-                              SizedBox(width: 6),
-                              Text('Ignore', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                            ],
-                          ),
-                        ),
-                        child: _NotifCard(
-                          notif: n,
-                          onTap: () => _onNotificationTap(n),
-                          onAcceptHandoff: (n.type == 'task_handoff' && n.referenceId != null)
-                              ? () => _acceptHandoff(n.referenceId!)
-                              : null,
-                        ),
-                      );
-                    },
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.notifications_none_outlined,
+                    size: 64,
+                    color: AppColors.outlineVariant,
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Text('No notifications', style: AppTextStyles.labelMd),
+                ],
+              ),
+            )
+          : RefreshIndicator(
+              color: AppColors.gold,
+              onRefresh: _load,
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: _notifications.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (_, i) {
+                  final n = _notifications[i];
+                  return Dismissible(
+                    key: Key('notif_${n.id}'),
+                    direction: DismissDirection.endToStart,
+                    onDismissed: (_) => _ignoreNotification(n.id),
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.visibility_off_outlined,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Ignore',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    child: _NotifCard(
+                      notif: n,
+                      onTap: () => _onNotificationTap(n),
+                      onAcceptHandoff:
+                          (n.type == 'task_handoff' && n.referenceId != null)
+                          ? () => _acceptHandoff(n.referenceId!)
+                          : null,
+                    ),
+                  );
+                },
+              ),
+            ),
     );
   }
 }
@@ -267,15 +299,23 @@ class _NotifCard extends StatelessWidget {
 
   IconData get _icon {
     switch (notif.type) {
-      case 'task_assigned':     return Icons.assignment_outlined;
-      case 'task_done':         return Icons.check_circle_outline;
-      case 'task_handoff':      return Icons.swap_horiz_outlined;
-      case 'payment_due':       return Icons.account_balance_wallet_outlined;
+      case 'task_assigned':
+        return Icons.assignment_outlined;
+      case 'task_done':
+        return Icons.check_circle_outline;
+      case 'task_handoff':
+        return Icons.swap_horiz_outlined;
+      case 'payment_due':
+        return Icons.account_balance_wallet_outlined;
       case 'penalty_issued':
-      case 'penalty_applied':   return Icons.gavel_outlined;
-      case 'attendance_alert':  return Icons.access_time_outlined;
-      case 'system':            return Icons.settings_outlined;
-      default:                  return Icons.notifications_outlined;
+      case 'penalty_applied':
+        return Icons.gavel_outlined;
+      case 'attendance_alert':
+        return Icons.access_time_outlined;
+      case 'system':
+        return Icons.settings_outlined;
+      default:
+        return Icons.notifications_outlined;
     }
   }
 
@@ -283,8 +323,13 @@ class _NotifCard extends StatelessWidget {
   bool get _hasLink {
     if (notif.referenceType != null) return true;
     return const {
-      'task_assigned', 'task_done', 'task_handoff', 'penalty_issued', 'penalty_applied',
-      'payment_due', 'attendance_alert',
+      'task_assigned',
+      'task_done',
+      'task_handoff',
+      'penalty_issued',
+      'penalty_applied',
+      'payment_due',
+      'attendance_alert',
     }.contains(notif.type);
   }
 
@@ -296,9 +341,9 @@ class _NotifCard extends StatelessWidget {
       if (minutes <= 0) return 'Just now';
       if (minutes < 60) return '${minutes}m ago';
       final hours = diff.inHours;
-      if (hours < 24)   return '${hours}h ago';
+      if (hours < 24) return '${hours}h ago';
       final days = diff.inDays;
-      if (days < 7)     return '${days}d ago';
+      if (days < 7) return '${days}d ago';
       final dt = AppTime.cairo(dtUtc);
       return '${dt.day}/${dt.month}/${dt.year}';
     } catch (_) {
@@ -318,49 +363,80 @@ class _NotifCard extends StatelessWidget {
               : AppColors.gold.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: notif.isRead ? AppColors.outlineVariant : AppColors.gold.withValues(alpha: 0.3),
+            color: notif.isRead
+                ? AppColors.outlineVariant
+                : AppColors.gold.withValues(alpha: 0.3),
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(_icon, size: 18, color: AppColors.gold),
                 ),
-                child: Icon(_icon, size: 18, color: AppColors.gold),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(child: Text(notif.title,
-                    style: AppTextStyles.labelMd.copyWith(
-                      fontWeight: notif.isRead ? FontWeight.w500 : FontWeight.w700,
-                    ))),
-                  if (!notif.isRead)
-                    Container(
-                      width: 8, height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.gold, shape: BoxShape.circle,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              notif.title,
+                              style: AppTextStyles.labelMd.copyWith(
+                                fontWeight: notif.isRead
+                                    ? FontWeight.w500
+                                    : FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          if (!notif.isRead)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.gold,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
-                ]),
-                const SizedBox(height: 4),
-                Text(notif.body,
-                  style: AppTextStyles.bodySm, maxLines: 2, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 6),
-                Text(_timeAgo,
-                  style: AppTextStyles.bodySm.copyWith(fontSize: 11)),
-              ])),
-              if (_hasLink)
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: Icon(Icons.chevron_right, size: 18, color: AppColors.outlineVariant),
+                      const SizedBox(height: 4),
+                      Text(
+                        notif.body,
+                        style: AppTextStyles.bodySm,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _timeAgo,
+                        style: AppTextStyles.bodySm.copyWith(fontSize: 11),
+                      ),
+                    ],
+                  ),
                 ),
-            ]),
+                if (_hasLink)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: AppColors.outlineVariant,
+                    ),
+                  ),
+              ],
+            ),
             if (onAcceptHandoff != null) ...[
               const SizedBox(height: 10),
               Align(
@@ -372,8 +448,13 @@ class _NotifCard extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.statusDone,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    textStyle: AppTextStyles.labelMd.copyWith(fontWeight: FontWeight.bold),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    textStyle: AppTextStyles.labelMd.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),

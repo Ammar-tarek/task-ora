@@ -33,9 +33,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   List<TaskModel> _tasks = [];
   bool _loading = true;
   String? _error;
-  String _filter    = 'All';
-  _Sort  _sort      = _Sort.newest;
-  String? _clientId;   // null = all clients
+  String _filter = 'All';
+  _Sort _sort = _Sort.newest;
+  String? _clientId; // null = all clients
   String? _assigneeId; // null = all assignees
   bool _isTableView = true;
 
@@ -47,26 +47,36 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   List<TeamModel> _teams = []; // for department handoff picker + names
 
   static const _statusFilters = [
-    'All', 'To Do', 'In Progress', 'Employee Done',
-    'Client Approved', 'Client Rejected', 'Completed', 'On Hold',
+    'All',
+    'To Do',
+    'In Progress',
+    'Employee Done',
+    'Client Approved',
+    'Client Rejected',
+    'Completed',
+    'On Hold',
   ];
   static const _statusMap = <String, String>{
-    'To Do':            'not_started',
-    'In Progress':      'in_progress',
-    'Employee Done':    'employee_done',
-    'Client Approved':  'client_approved',
-    'Client Rejected':  'client_rejected',
-    'Completed':        'completed',
-    'On Hold':          'on_hold',
+    'To Do': 'not_started',
+    'In Progress': 'in_progress',
+    'Employee Done': 'employee_done',
+    'Client Approved': 'client_approved',
+    'Client Rejected': 'client_rejected',
+    'Completed': 'completed',
+    'On Hold': 'on_hold',
   };
   static const _priorityWeight = <String, int>{
-    'critical': 4, 'high': 3, 'medium': 2, 'low': 1,
+    'critical': 4,
+    'high': 3,
+    'medium': 2,
+    'low': 1,
   };
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialFilter != null && _statusFilters.contains(widget.initialFilter)) {
+    if (widget.initialFilter != null &&
+        _statusFilters.contains(widget.initialFilter)) {
       _filter = widget.initialFilter!;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -76,8 +86,10 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       _load();
     });
     // Live refresh when tasks change anywhere.
-    RealtimeService.instance.listen(
-        const ['tasks', 'task_assignees'], _onRealtime);
+    RealtimeService.instance.listen(const [
+      'tasks',
+      'task_assignees',
+    ], _onRealtime);
   }
 
   @override
@@ -141,7 +153,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   List<TaskModel> get _filtered {
     // Exclude pending-handoff tasks — they live in the Waiting List only.
-    var list = List<TaskModel>.of(_tasks.where((t) => t.handoffToTeamId == null));
+    var list = List<TaskModel>.of(
+      _tasks.where((t) => t.handoffToTeamId == null),
+    );
 
     // Status filter
     if (_filter != 'All') {
@@ -175,12 +189,13 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
           return a.dueDate!.compareTo(b.dueDate!);
         });
       case _Sort.priorityHigh:
-        list.sort((a, b) =>
-            (_priorityWeight[b.priority] ?? 0)
-                .compareTo(_priorityWeight[a.priority] ?? 0));
+        list.sort(
+          (a, b) => (_priorityWeight[b.priority] ?? 0).compareTo(
+            _priorityWeight[a.priority] ?? 0,
+          ),
+        );
       case _Sort.clientAZ:
-        list.sort((a, b) =>
-            (a.clientName ?? '').compareTo(b.clientName ?? ''));
+        list.sort((a, b) => (a.clientName ?? '').compareTo(b.clientName ?? ''));
       case _Sort.titleAZ:
         list.sort((a, b) => a.title.compareTo(b.title));
       case _Sort.moved:
@@ -198,45 +213,87 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   String get _sortLabel {
     switch (_sort) {
-      case _Sort.newest:       return 'Newest first';
-      case _Sort.oldest:       return 'Oldest first';
-      case _Sort.dueDate:      return 'Due date';
-      case _Sort.priorityHigh: return 'Priority (high→low)';
-      case _Sort.clientAZ:     return 'Client A–Z';
-      case _Sort.titleAZ:      return 'Title A–Z';
-      case _Sort.moved:        return 'Moved tasks';
+      case _Sort.newest:
+        return 'Newest first';
+      case _Sort.oldest:
+        return 'Oldest first';
+      case _Sort.dueDate:
+        return 'Due date';
+      case _Sort.priorityHigh:
+        return 'Priority (high→low)';
+      case _Sort.clientAZ:
+        return 'Client A–Z';
+      case _Sort.titleAZ:
+        return 'Title A–Z';
+      case _Sort.moved:
+        return 'Moved tasks';
     }
   }
 
   bool get _hasActiveFilters =>
-      _filter != 'All' || _clientId != null || _assigneeId != null || _sort != _Sort.newest;
+      _filter != 'All' ||
+      _clientId != null ||
+      _assigneeId != null ||
+      _sort != _Sort.newest;
 
   // ── Role-based columns ────────────────────────────────────────────────────
 
   List<NotionColumn> get _columns {
     final p = _perms;
     return [
-      NotionColumn(key: 'title', label: 'Task',
-          icon: Icons.text_fields, flex: 3),
-      NotionColumn(key: 'status', label: 'Status',
-          icon: Icons.circle_outlined, flex: 2),
+      NotionColumn(
+        key: 'title',
+        label: 'Task',
+        icon: Icons.text_fields,
+        flex: 3,
+      ),
+      NotionColumn(
+        key: 'status',
+        label: 'Status',
+        icon: Icons.circle_outlined,
+        flex: 2,
+      ),
       if (p?.canSeePriority != false)
-        NotionColumn(key: 'priority', label: 'Priority',
-            icon: Icons.flag_outlined, flex: 2),
+        NotionColumn(
+          key: 'priority',
+          label: 'Priority',
+          icon: Icons.flag_outlined,
+          flex: 2,
+        ),
       if (p?.canSeeAssignees != false)
-        NotionColumn(key: 'assignee', label: 'Assignee',
-            icon: Icons.person_outline, flex: 2),
-      NotionColumn(key: 'due', label: 'Due',
-          icon: Icons.calendar_today_outlined, flex: 2),
+        NotionColumn(
+          key: 'assignee',
+          label: 'Assignee',
+          icon: Icons.person_outline,
+          flex: 2,
+        ),
+      NotionColumn(
+        key: 'due',
+        label: 'Due',
+        icon: Icons.calendar_today_outlined,
+        flex: 2,
+      ),
       if (p?.canSeeProgress != false)
-        NotionColumn(key: 'progress', label: 'Progress',
-            icon: Icons.trending_up, flex: 2),
+        NotionColumn(
+          key: 'progress',
+          label: 'Progress',
+          icon: Icons.trending_up,
+          flex: 2,
+        ),
       if (p?.canSeeCost == true)
-        NotionColumn(key: 'cost', label: 'Cost / Price',
-            icon: Icons.monetization_on_outlined, flex: 2),
+        NotionColumn(
+          key: 'cost',
+          label: 'Cost / Price',
+          icon: Icons.monetization_on_outlined,
+          flex: 2,
+        ),
       if (p?.canSeeComments == true)
-        NotionColumn(key: 'comments', label: 'Comments',
-            icon: Icons.comment_outlined, flex: 1),
+        NotionColumn(
+          key: 'comments',
+          label: 'Comments',
+          icon: Icons.comment_outlined,
+          flex: 1,
+        ),
       ..._customColumns,
     ];
   }
@@ -244,11 +301,15 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   // ── Load ─────────────────────────────────────────────────────────────────
 
   Future<void> _load({bool animate = true}) async {
-    if (animate) setState(() { _loading = true; _error = null; });
+    if (animate)
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
     try {
       final profile = context.read<AuthNotifier>().profile;
       _profile = profile;
-      _perms   = profile != null ? TaskPermissions(profile) : null;
+      _perms = profile != null ? TaskPermissions(profile) : null;
 
       String? overrideTeamId;
       if (profile?.isAdmin == true) {
@@ -257,15 +318,27 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
       final data = profile != null
           ? await TaskRepository.fetchTasksForProfile(
-              profile, overrideTeamId: overrideTeamId)
+              profile,
+              overrideTeamId: overrideTeamId,
+            )
           : [];
       // Teams list (for handoff target picker + department names).
       if (_teams.isEmpty && profile?.isClient != true) {
-        try { _teams = await TeamRepository.fetchAllAdmin(); } catch (_) {}
+        try {
+          _teams = await TeamRepository.fetchAllAdmin();
+        } catch (_) {}
       }
-      if (mounted) setState(() { _tasks = data as List<TaskModel>; _loading = false; });
+      if (mounted)
+        setState(() {
+          _tasks = data as List<TaskModel>;
+          _loading = false;
+        });
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+      if (mounted)
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
     }
   }
 
@@ -290,10 +363,12 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(t.title,
-                style: titleStyle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            Text(
+              t.title,
+              style: titleStyle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             if (t.clientName != null)
               Container(
                 margin: const EdgeInsets.only(top: 2),
@@ -305,7 +380,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                 child: Text(
                   t.clientName!,
                   style: bodyStyle.copyWith(
-                      fontSize: 9, color: AppColors.primary),
+                    fontSize: 9,
+                    color: AppColors.primary,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -318,8 +395,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
           child: TStatusChip(
-              label: t.statusLabel,
-              color: _statusColor(t.status)),
+            label: t.statusLabel,
+            color: _statusColor(t.status),
+          ),
         ),
         if (_perms?.canSeePriority != false)
           'priority': FittedBox(
@@ -328,23 +406,26 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             child: TPriorityBadge(priority: t.priorityLabel),
           ),
         if (_perms?.canSeeAssignees != false)
-          'assignee': Row(mainAxisSize: MainAxisSize.min, children: [
-            TAvatar(name: t.leadAssigneeName, size: avatarSize),
-            SizedBox(width: isMobile ? 3 : 5),
-            Flexible(
-              child: Text(t.leadAssigneeName,
+          'assignee': Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TAvatar(name: t.leadAssigneeName, size: avatarSize),
+              SizedBox(width: isMobile ? 3 : 5),
+              Flexible(
+                child: Text(
+                  t.leadAssigneeName,
                   style: bodyStyle,
-                  overflow: TextOverflow.ellipsis),
-            ),
-          ]),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         'due': Text(t.dueDateDisplay, style: dataStyle),
         if (_perms?.canSeeProgress != false)
           'progress': _ProgressCell(pct: t.completionPercentage),
         if (_perms?.canSeeCost == true)
           'cost': Text(
-            t.cost != null
-                ? 'EGP ${t.cost!.toStringAsFixed(2)}'
-                : '—',
+            t.cost != null ? 'EGP ${t.cost!.toStringAsFixed(2)}' : '—',
             style: dataStyle.copyWith(color: AppColors.gold),
           ),
         if (_perms?.canSeeComments == true)
@@ -359,13 +440,20 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   Color _statusColor(String status) {
     switch (status) {
-      case 'in_progress':     return AppColors.statusInProgress;
-      case 'employee_done':   return AppColors.statusMedium;
-      case 'client_approved':  return AppColors.statusDone;
-      case 'client_rejected': return AppColors.error;
-      case 'completed':       return AppColors.statusDone;
-      case 'on_hold':         return AppColors.outline;
-      default:                return AppColors.statusTodo;
+      case 'in_progress':
+        return AppColors.statusInProgress;
+      case 'employee_done':
+        return AppColors.statusMedium;
+      case 'client_approved':
+        return AppColors.statusDone;
+      case 'client_rejected':
+        return AppColors.error;
+      case 'completed':
+        return AppColors.statusDone;
+      case 'on_hold':
+        return AppColors.outline;
+      default:
+        return AppColors.statusTodo;
     }
   }
 
@@ -377,54 +465,64 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 12),
-          Container(width: 36, height: 4,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
-                  color: AppColors.outlineVariant,
-                  borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Align(alignment: Alignment.centerLeft,
-              child: Text('Sort tasks', style: AppTextStyles.headlineSm)),
-          ),
-          const SizedBox(height: 8),
-          ..._Sort.values.map((s) {
-            final labels = {
-              _Sort.newest:       'Newest first',
-              _Sort.oldest:       'Oldest first',
-              _Sort.dueDate:      'Due date (soonest)',
-              _Sort.priorityHigh: 'Priority (high → low)',
-              _Sort.clientAZ:     'Client (A – Z)',
-              _Sort.titleAZ:      'Title (A – Z)',
-              _Sort.moved:        'Moved tasks',
-            };
-            final icons = {
-              _Sort.newest:       Icons.arrow_downward,
-              _Sort.oldest:       Icons.arrow_upward,
-              _Sort.dueDate:      Icons.calendar_today_outlined,
-              _Sort.priorityHigh: Icons.flag_outlined,
-              _Sort.clientAZ:     Icons.business_outlined,
-              _Sort.titleAZ:      Icons.sort_by_alpha,
-              _Sort.moved:        Icons.swap_horiz,
-            };
-            return ListTile(
-              leading: Icon(icons[s], size: 20, color: AppColors.gold),
-              title: Text(labels[s]!, style: AppTextStyles.bodyMd),
-              trailing: _sort == s
-                  ? const Icon(Icons.check, color: AppColors.gold, size: 18)
-                  : null,
-              onTap: () {
-                setState(() => _sort = s);
-                Navigator.pop(context);
-              },
-            );
-          }),
-          const SizedBox(height: 8),
-        ]),
+                color: AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Sort tasks', style: AppTextStyles.headlineSm),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ..._Sort.values.map((s) {
+              final labels = {
+                _Sort.newest: 'Newest first',
+                _Sort.oldest: 'Oldest first',
+                _Sort.dueDate: 'Due date (soonest)',
+                _Sort.priorityHigh: 'Priority (high → low)',
+                _Sort.clientAZ: 'Client (A – Z)',
+                _Sort.titleAZ: 'Title (A – Z)',
+                _Sort.moved: 'Moved tasks',
+              };
+              final icons = {
+                _Sort.newest: Icons.arrow_downward,
+                _Sort.oldest: Icons.arrow_upward,
+                _Sort.dueDate: Icons.calendar_today_outlined,
+                _Sort.priorityHigh: Icons.flag_outlined,
+                _Sort.clientAZ: Icons.business_outlined,
+                _Sort.titleAZ: Icons.sort_by_alpha,
+                _Sort.moved: Icons.swap_horiz,
+              };
+              return ListTile(
+                leading: Icon(icons[s], size: 20, color: AppColors.gold),
+                title: Text(labels[s]!, style: AppTextStyles.bodyMd),
+                trailing: _sort == s
+                    ? const Icon(Icons.check, color: AppColors.gold, size: 18)
+                    : null,
+                onTap: () {
+                  setState(() => _sort = s);
+                  Navigator.pop(context);
+                },
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -435,54 +533,82 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       context: context,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 12),
-          Container(width: 36, height: 4,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
-                  color: AppColors.outlineVariant,
-                  borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Align(alignment: Alignment.centerLeft,
-              child: Text('Filter by client', style: AppTextStyles.headlineSm)),
-          ),
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.people_outline, size: 20, color: AppColors.gold),
-            title: Text('All clients', style: AppTextStyles.bodyMd),
-            trailing: _clientId == null
-                ? const Icon(Icons.check, color: AppColors.gold, size: 18)
-                : null,
-            onTap: () {
-              setState(() => _clientId = null);
-              Navigator.pop(context);
-            },
-          ),
-          if (opts.isEmpty)
+                color: AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Text('No client-linked tasks loaded.',
-                  style: AppTextStyles.bodySm
-                      .copyWith(color: AppColors.onSurfaceVariant)),
-            )
-          else
-            ...opts.entries.map((e) => ListTile(
-              leading: Icon(Icons.business_outlined,
-                  size: 20, color: AppColors.onSurfaceVariant),
-              title: Text(e.value, style: AppTextStyles.bodyMd),
-              trailing: _clientId == e.key
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Filter by client',
+                  style: AppTextStyles.headlineSm,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(
+                Icons.people_outline,
+                size: 20,
+                color: AppColors.gold,
+              ),
+              title: Text('All clients', style: AppTextStyles.bodyMd),
+              trailing: _clientId == null
                   ? const Icon(Icons.check, color: AppColors.gold, size: 18)
                   : null,
               onTap: () {
-                setState(() => _clientId = e.key);
+                setState(() => _clientId = null);
                 Navigator.pop(context);
               },
-            )),
-          const SizedBox(height: 8),
-        ]),
+            ),
+            if (opts.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
+                child: Text(
+                  'No client-linked tasks loaded.',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              ...opts.entries.map(
+                (e) => ListTile(
+                  leading: Icon(
+                    Icons.business_outlined,
+                    size: 20,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  title: Text(e.value, style: AppTextStyles.bodyMd),
+                  trailing: _clientId == e.key
+                      ? const Icon(Icons.check, color: AppColors.gold, size: 18)
+                      : null,
+                  onTap: () {
+                    setState(() => _clientId = e.key);
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -493,63 +619,88 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       context: context,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 12),
-          Container(width: 36, height: 4,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
-                  color: AppColors.outlineVariant,
-                  borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Align(alignment: Alignment.centerLeft,
-              child: Text('Filter by assignee', style: AppTextStyles.headlineSm)),
-          ),
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.group_outlined, size: 20, color: AppColors.gold),
-            title: Text('All assignees', style: AppTextStyles.bodyMd),
-            trailing: _assigneeId == null
-                ? const Icon(Icons.check, color: AppColors.gold, size: 18)
-                : null,
-            onTap: () {
-              setState(() => _assigneeId = null);
-              Navigator.pop(context);
-            },
-          ),
-          if (opts.isEmpty)
+                color: AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Text('No assigned tasks loaded.',
-                  style: AppTextStyles.bodySm
-                      .copyWith(color: AppColors.onSurfaceVariant)),
-            )
-          else
-            ...opts.entries.map((e) => ListTile(
-              leading: TAvatar(name: e.value, size: 24),
-              title: Text(e.value, style: AppTextStyles.bodyMd),
-              trailing: _assigneeId == e.key
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Filter by assignee',
+                  style: AppTextStyles.headlineSm,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(
+                Icons.group_outlined,
+                size: 20,
+                color: AppColors.gold,
+              ),
+              title: Text('All assignees', style: AppTextStyles.bodyMd),
+              trailing: _assigneeId == null
                   ? const Icon(Icons.check, color: AppColors.gold, size: 18)
                   : null,
               onTap: () {
-                setState(() => _assigneeId = e.key);
+                setState(() => _assigneeId = null);
                 Navigator.pop(context);
               },
-            )),
-          const SizedBox(height: 8),
-        ]),
+            ),
+            if (opts.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
+                child: Text(
+                  'No assigned tasks loaded.',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              ...opts.entries.map(
+                (e) => ListTile(
+                  leading: TAvatar(name: e.value, size: 24),
+                  title: Text(e.value, style: AppTextStyles.bodyMd),
+                  trailing: _assigneeId == e.key
+                      ? const Icon(Icons.check, color: AppColors.gold, size: 18)
+                      : null,
+                  onTap: () {
+                    setState(() => _assigneeId = e.key);
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
 
   void _clearFilters() {
     setState(() {
-      _filter     = 'All';
-      _clientId   = null;
+      _filter = 'All';
+      _clientId = null;
       _assigneeId = null;
-      _sort       = _Sort.newest;
+      _sort = _Sort.newest;
     });
   }
 
@@ -609,56 +760,66 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   Widget _buildBody() {
     if (_loading) {
       return const Center(
-          child: CircularProgressIndicator(color: AppColors.gold));
+        child: CircularProgressIndicator(color: AppColors.gold),
+      );
     }
     if (_error != null) {
       return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.error_outline,
-              size: 40, color: AppColors.outlineVariant),
-          const SizedBox(height: 12),
-          Text('Error loading tasks', style: AppTextStyles.labelMd),
-          const SizedBox(height: 8),
-          ElevatedButton(onPressed: _load, child: const Text('Retry')),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 40,
+              color: AppColors.outlineVariant,
+            ),
+            const SizedBox(height: 12),
+            Text('Error loading tasks', style: AppTextStyles.labelMd),
+            const SizedBox(height: 8),
+            ElevatedButton(onPressed: _load, child: const Text('Retry')),
+          ],
+        ),
       );
     }
     final canManage = _profile?.isAdmin == true || _profile?.isManager == true;
     final waiting = _waiting;
-    return Column(children: [
-      if (canManage && waiting.isNotEmpty)
-        _WaitingList(
-          tasks: waiting,
-          teamName: _teamName,
-          onAccept: _acceptHandoff,
-          onView: _openWaitingDetail,
-        ),
-      Expanded(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 400),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          // Align children to the top — default centers a short child and
-          // leaves a big empty gap above the table.
-          layoutBuilder: (current, previous) => Stack(
-            alignment: Alignment.topCenter,
-            children: [...previous, if (current != null) current],
+    return Column(
+      children: [
+        if (canManage && waiting.isNotEmpty)
+          _WaitingList(
+            tasks: waiting,
+            teamName: _teamName,
+            onAccept: _acceptHandoff,
+            onView: _openWaitingDetail,
           ),
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.03, 0), end: Offset.zero,
-              ).animate(anim),
-              child: child,
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            // Align children to the top — default centers a short child and
+            // leaves a big empty gap above the table.
+            layoutBuilder: (current, previous) => Stack(
+              alignment: Alignment.topCenter,
+              children: [...previous, ?current],
             ),
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0.03, 0),
+                  end: Offset.zero,
+                ).animate(anim),
+                child: child,
+              ),
+            ),
+            child: _isTableView
+                ? _buildTableView(key: const ValueKey('table'))
+                : _buildBoardView(key: const ValueKey('board')),
           ),
-          child: _isTableView
-              ? _buildTableView(key: const ValueKey('table'))
-              : _buildBoardView(key: const ValueKey('board')),
         ),
-      ),
-    ]);
+      ],
+    );
   }
 
   String _teamName(String? teamId) {
@@ -690,10 +851,12 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     await TaskRepository.acceptHandoff(taskId: task.id, teamId: targetTeam);
     await _load(animate: false);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Task accepted. Open it to assign your team.'),
-        backgroundColor: AppColors.statusDone,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Task accepted. Open it to assign your team.'),
+          backgroundColor: AppColors.statusDone,
+        ),
+      );
     }
   }
 
@@ -703,46 +866,70 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     final sourceTeam = task.teamId ?? _profile?.teamId;
     // Candidate targets: teams of a different department.
     String? myDept;
-    for (final t in _teams) { if (t.id == sourceTeam) { myDept = t.department; break; } }
+    for (final t in _teams) {
+      if (t.id == sourceTeam) {
+        myDept = t.department;
+        break;
+      }
+    }
     final targets = _teams
-        .where((t) => t.id != sourceTeam && (myDept == null || t.department != myDept))
+        .where(
+          (t) =>
+              t.id != sourceTeam && (myDept == null || t.department != myDept),
+        )
         .toList();
     if (targets.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('No other department to hand off to.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No other department to hand off to.')),
+      );
       return;
     }
     final picked = await showModalBottomSheet<TeamModel>(
       context: context,
       backgroundColor: AppColors.surfaceContainerLowest,
       builder: (_) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 12),
-          Text('Move to department', style: AppTextStyles.headlineSm),
-          const SizedBox(height: 8),
-          ...targets.map((t) => ListTile(
-            leading: const Icon(Icons.apartment_outlined, color: AppColors.gold),
-            title: Text(t.department ?? t.name, style: AppTextStyles.labelMd),
-            subtitle: Text('Team: ${t.name}', style: AppTextStyles.bodySm),
-            onTap: () => Navigator.pop(context, t),
-          )),
-          const SizedBox(height: 12),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Text('Move to department', style: AppTextStyles.headlineSm),
+            const SizedBox(height: 8),
+            ...targets.map(
+              (t) => ListTile(
+                leading: const Icon(
+                  Icons.apartment_outlined,
+                  color: AppColors.gold,
+                ),
+                title: Text(
+                  t.department ?? t.name,
+                  style: AppTextStyles.labelMd,
+                ),
+                subtitle: Text('Team: ${t.name}', style: AppTextStyles.bodySm),
+                onTap: () => Navigator.pop(context, t),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
     if (picked == null || sourceTeam == null) return;
     await TaskRepository.handoffTask(
-      taskId:      task.id,
-      fromTeamId:  sourceTeam,
-      toTeamId:    picked.id,
+      taskId: task.id,
+      fromTeamId: sourceTeam,
+      toTeamId: picked.id,
       byProfileId: _profile!.id,
     );
     await _load(animate: false);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Sent to ${picked.department ?? picked.name} — waiting for their manager.'),
-        backgroundColor: AppColors.primary,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Sent to ${picked.department ?? picked.name} — waiting for their manager.',
+          ),
+          backgroundColor: AppColors.primary,
+        ),
+      );
     }
   }
 
@@ -759,45 +946,47 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       color: AppColors.background,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: Row(children: [
-          // Sort chip
-          _FilterChipBtn(
-            icon: Icons.sort,
-            label: _sortLabel,
-            active: _sort != _Sort.newest,
-            onTap: _showSortSheet,
-          ),
-          const SizedBox(width: 8),
-          // Client filter (not shown to client role — they always see their own)
-          if (_profile?.isClient != true) ...[
+        child: Row(
+          children: [
+            // Sort chip
             _FilterChipBtn(
-              icon: Icons.business_outlined,
-              label: clientName ?? 'All clients',
-              active: _clientId != null,
-              onTap: _showClientFilterSheet,
+              icon: Icons.sort,
+              label: _sortLabel,
+              active: _sort != _Sort.newest,
+              onTap: _showSortSheet,
             ),
             const SizedBox(width: 8),
+            // Client filter (not shown to client role — they always see their own)
+            if (_profile?.isClient != true) ...[
+              _FilterChipBtn(
+                icon: Icons.business_outlined,
+                label: clientName ?? 'All clients',
+                active: _clientId != null,
+                onTap: _showClientFilterSheet,
+              ),
+              const SizedBox(width: 8),
+            ],
+            // Assignee filter
+            if (_profile?.isClient != true) ...[
+              _FilterChipBtn(
+                icon: Icons.person_outline,
+                label: assigneeName ?? 'All assignees',
+                active: _assigneeId != null,
+                onTap: _showAssigneeFilterSheet,
+              ),
+              const SizedBox(width: 8),
+            ],
+            // Clear all filters
+            if (_hasActiveFilters)
+              _FilterChipBtn(
+                icon: Icons.close,
+                label: 'Clear',
+                active: true,
+                activeColor: AppColors.error,
+                onTap: _clearFilters,
+              ),
           ],
-          // Assignee filter
-          if (_profile?.isClient != true) ...[
-            _FilterChipBtn(
-              icon: Icons.person_outline,
-              label: assigneeName ?? 'All assignees',
-              active: _assigneeId != null,
-              onTap: _showAssigneeFilterSheet,
-            ),
-            const SizedBox(width: 8),
-          ],
-          // Clear all filters
-          if (_hasActiveFilters)
-            _FilterChipBtn(
-              icon: Icons.close,
-              label: 'Clear',
-              active: true,
-              activeColor: AppColors.error,
-              onTap: _clearFilters,
-            ),
-        ]),
+        ),
       ),
     );
   }
@@ -805,42 +994,52 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   Widget _buildTableView({Key? key}) {
     return SingleChildScrollView(
       key: key,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _FilterBar(
-          filters: _statusFilters,
-          selected: _filter,
-          onSelected: (f) => setState(() => _filter = f),
-        ),
-        // Sort / client / assignee filters are only useful for the admin's
-        // full view — hide for manager/employee to keep tasks near the top.
-        if (_profile?.isAdmin == true) _buildSortFilterBar(),
-        NotionTable(
-          columns: _columns,
-          rows: _buildRows(),
-          onRowTap: (id) => _showDetailSheet(context, id),
-          onAddRow: _perms?.canCreateTask == true
-              ? () => _showCreateSheet(context) : null,
-          onAddColumn: _perms?.canEditFull == true
-              ? _showAddColumnDialog : null,
-          onRowDelete: _perms?.canDeleteTask == true
-              ? (id) => _deleteTaskRow(id) : null,
-          onRowReorder: (_perms?.canReorderTasks == true && _sort == _Sort.newest && _clientId == null && _assigneeId == null)
-              ? (orderedIds) {
-                  final reordered = <TaskModel>[];
-                  for (final id in orderedIds) {
-                    final match = _tasks.where((t) => t.id == id);
-                    if (match.isNotEmpty) reordered.add(match.first);
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FilterBar(
+            filters: _statusFilters,
+            selected: _filter,
+            onSelected: (f) => setState(() => _filter = f),
+          ),
+          // Sort / client / assignee filters are only useful for the admin's
+          // full view — hide for manager/employee to keep tasks near the top.
+          if (_profile?.isAdmin == true) _buildSortFilterBar(),
+          NotionTable(
+            columns: _columns,
+            rows: _buildRows(),
+            onRowTap: (id) => _showDetailSheet(context, id),
+            onAddRow: _perms?.canCreateTask == true
+                ? () => _showCreateSheet(context)
+                : null,
+            onAddColumn: _perms?.canEditFull == true
+                ? _showAddColumnDialog
+                : null,
+            onRowDelete: _perms?.canDeleteTask == true
+                ? (id) => _deleteTaskRow(id)
+                : null,
+            onRowReorder:
+                (_perms?.canReorderTasks == true &&
+                    _sort == _Sort.newest &&
+                    _clientId == null &&
+                    _assigneeId == null)
+                ? (orderedIds) {
+                    final reordered = <TaskModel>[];
+                    for (final id in orderedIds) {
+                      final match = _tasks.where((t) => t.id == id);
+                      if (match.isNotEmpty) reordered.add(match.first);
+                    }
+                    setState(() => _tasks = reordered);
                   }
-                  setState(() => _tasks = reordered);
-                }
-              : null,
-          emptyMessage: _hasActiveFilters
-              ? 'No tasks match these filters'
-              : 'No tasks yet',
-          emptyIcon: Icons.task_outlined,
-        ),
-        const SizedBox(height: 80),
-      ]),
+                : null,
+            emptyMessage: _hasActiveFilters
+                ? 'No tasks match these filters'
+                : 'No tasks yet',
+            emptyIcon: Icons.task_outlined,
+          ),
+          const SizedBox(height: 80),
+        ],
+      ),
     );
   }
 
@@ -849,13 +1048,15 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     if (ok) {
       setState(() => _tasks.removeWhere((t) => t.id == id));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Task deleted')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Task deleted')));
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to delete task')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to delete task')));
         _load();
       }
     }
@@ -865,22 +1066,50 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     // Apply client + assignee filters; status split is done per column below.
     final base = _filtered;
     final kanban = {
-      'not_started':     base.where((t) => t.status == 'not_started').toList(),
-      'in_progress':     base.where((t) => t.status == 'in_progress').toList(),
-      'employee_done':   base.where((t) => t.status == 'employee_done').toList(),
-      'client_approved':  base.where((t) => t.status == 'client_approved').toList(),
-      'client_rejected': base.where((t) => t.status == 'client_rejected').toList(),
-      'completed':       base.where((t) => t.status == 'completed').toList(),
-      'on_hold':         base.where((t) => t.status == 'on_hold').toList(),
+      'not_started': base.where((t) => t.status == 'not_started').toList(),
+      'in_progress': base.where((t) => t.status == 'in_progress').toList(),
+      'employee_done': base.where((t) => t.status == 'employee_done').toList(),
+      'client_approved': base
+          .where((t) => t.status == 'client_approved')
+          .toList(),
+      'client_rejected': base
+          .where((t) => t.status == 'client_rejected')
+          .toList(),
+      'completed': base.where((t) => t.status == 'completed').toList(),
+      'on_hold': base.where((t) => t.status == 'on_hold').toList(),
     };
     final columnDefs = [
-      _KanbanDef(key: 'not_started',     label: 'TO DO',            color: AppColors.statusTodo),
-      _KanbanDef(key: 'in_progress',     label: 'IN PROGRESS',      color: AppColors.statusInProgress),
-      _KanbanDef(key: 'employee_done',   label: 'EMPLOYEE DONE',    color: AppColors.statusMedium),
-      _KanbanDef(key: 'client_approved',  label: 'CLIENT APPROVED',  color: AppColors.statusDone),
-      _KanbanDef(key: 'client_rejected', label: 'CLIENT REJECTED',  color: AppColors.error),
-      _KanbanDef(key: 'completed',       label: 'COMPLETED',        color: AppColors.statusDone),
-      _KanbanDef(key: 'on_hold',         label: 'ON HOLD',          color: AppColors.outline),
+      _KanbanDef(
+        key: 'not_started',
+        label: 'TO DO',
+        color: AppColors.statusTodo,
+      ),
+      _KanbanDef(
+        key: 'in_progress',
+        label: 'IN PROGRESS',
+        color: AppColors.statusInProgress,
+      ),
+      _KanbanDef(
+        key: 'employee_done',
+        label: 'EMPLOYEE DONE',
+        color: AppColors.statusMedium,
+      ),
+      _KanbanDef(
+        key: 'client_approved',
+        label: 'CLIENT APPROVED',
+        color: AppColors.statusDone,
+      ),
+      _KanbanDef(
+        key: 'client_rejected',
+        label: 'CLIENT REJECTED',
+        color: AppColors.error,
+      ),
+      _KanbanDef(
+        key: 'completed',
+        label: 'COMPLETED',
+        color: AppColors.statusDone,
+      ),
+      _KanbanDef(key: 'on_hold', label: 'ON HOLD', color: AppColors.outline),
     ];
     return Column(
       key: key,
@@ -928,18 +1157,21 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () {
               if (ctrl.text.trim().isEmpty) return;
               setState(() {
-                _customColumns.add(NotionColumn(
-                  key: 'custom_${DateTime.now().millisecondsSinceEpoch}',
-                  label: ctrl.text.trim(),
-                  icon: Icons.label_outline,
-                  removable: true,
-                ));
+                _customColumns.add(
+                  NotionColumn(
+                    key: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+                    label: ctrl.text.trim(),
+                    icon: Icons.label_outline,
+                    removable: true,
+                  ),
+                );
               });
               Navigator.pop(context);
             },
@@ -971,7 +1203,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     // Allow department handoff only for a manager on their own active team task.
     final matches = _tasks.where((t) => t.id == id);
     final task = matches.isEmpty ? null : matches.first;
-    final canMove = task != null &&
+    final canMove =
+        task != null &&
         task.teamId != null &&
         task.handoffToTeamId == null &&
         (_profile?.isAdmin == true ||
@@ -1001,8 +1234,11 @@ class _KanbanDef {
   final String key;
   final String label;
   final Color color;
-  const _KanbanDef(
-      {required this.key, required this.label, required this.color});
+  const _KanbanDef({
+    required this.key,
+    required this.label,
+    required this.color,
+  });
 }
 
 class _ProgressCell extends StatelessWidget {
@@ -1012,24 +1248,30 @@ class _ProgressCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Flexible(
-        child: SizedBox(
-          width: isMobile ? 24 : 36,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: pct / 100,
-              minHeight: isMobile ? 3 : 4,
-              backgroundColor: AppColors.outlineVariant,
-              color: AppColors.gold,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: SizedBox(
+            width: isMobile ? 24 : 36,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: pct / 100,
+                minHeight: isMobile ? 3 : 4,
+                backgroundColor: AppColors.outlineVariant,
+                color: AppColors.gold,
+              ),
             ),
           ),
         ),
-      ),
-      const SizedBox(width: 4),
-      Text('$pct%', style: AppTextStyles.dataSm.copyWith(fontSize: isMobile ? 9 : 10)),
-    ]);
+        const SizedBox(width: 4),
+        Text(
+          '$pct%',
+          style: AppTextStyles.dataSm.copyWith(fontSize: isMobile ? 9 : 10),
+        ),
+      ],
+    );
   }
 }
 
@@ -1040,12 +1282,18 @@ class _CommentsCountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (count == 0) return Text('—', style: AppTextStyles.bodySm);
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.comment_outlined,
-          size: 13, color: AppColors.onSurfaceVariant),
-      const SizedBox(width: 3),
-      Text('$count', style: AppTextStyles.dataSm),
-    ]);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.comment_outlined,
+          size: 13,
+          color: AppColors.onSurfaceVariant,
+        ),
+        const SizedBox(width: 3),
+        Text('$count', style: AppTextStyles.dataSm),
+      ],
+    );
   }
 }
 
@@ -1068,32 +1316,36 @@ class _FilterBar extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: filters
-              .map((f) => Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(
-                      label: Text(f),
-                      selected: selected == f,
-                      onSelected: (_) => onSelected(f),
-                      selectedColor: AppColors.primary,
-                      backgroundColor: AppColors.surfaceContainerLowest,
-                      labelStyle: AppTextStyles.bodySm.copyWith(
-                        color: selected == f
-                            ? Colors.white : AppColors.onSurface,
-                        fontWeight: selected == f
-                            ? FontWeight.w600 : FontWeight.w400,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(
-                          color: selected == f
-                              ? AppColors.primary
-                              : AppColors.outlineVariant,
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
+              .map(
+                (f) => Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(f),
+                    selected: selected == f,
+                    onSelected: (_) => onSelected(f),
+                    selectedColor: AppColors.primary,
+                    backgroundColor: AppColors.surfaceContainerLowest,
+                    labelStyle: AppTextStyles.bodySm.copyWith(
+                      color: selected == f ? Colors.white : AppColors.onSurface,
+                      fontWeight: selected == f
+                          ? FontWeight.w600
+                          : FontWeight.w400,
                     ),
-                  ))
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: selected == f
+                            ? AppColors.primary
+                            : AppColors.outlineVariant,
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                  ),
+                ),
+              )
               .toList(),
         ),
       ),
@@ -1130,22 +1382,33 @@ class _FilterChipBtn extends StatelessWidget {
               ? color.withValues(alpha: 0.12)
               : AppColors.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active ? color : AppColors.outlineVariant,
-          ),
+          border: Border.all(color: active ? color : AppColors.outlineVariant),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 14, color: active ? color : AppColors.onSurfaceVariant),
-          const SizedBox(width: 5),
-          Text(label,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: active ? color : AppColors.onSurfaceVariant,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
               style: AppTextStyles.bodySm.copyWith(
-                  color: active ? color : AppColors.onSurface,
-                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                  fontSize: 12)),
-          const SizedBox(width: 3),
-          Icon(Icons.keyboard_arrow_down,
-              size: 14, color: active ? color : AppColors.onSurfaceVariant),
-        ]),
+                color: active ? color : AppColors.onSurface,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Icon(
+              Icons.keyboard_arrow_down,
+              size: 14,
+              color: active ? color : AppColors.onSurfaceVariant,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1174,34 +1437,47 @@ class _KanbanColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 280,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border(left: BorderSide(color: color, width: 3)),
-          ),
-          child: Row(children: [
-            Text(title,
-                style: AppTextStyles.labelCaps.copyWith(color: color)),
-            const Spacer(),
-            Container(
-              width: 22, height: 22,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              child: Center(
-                child: Text('${tasks.length}',
-                    style: AppTextStyles.bodySm.copyWith(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    )),
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border(left: BorderSide(color: color, width: 3)),
             ),
-          ]),
-        ),
-        const SizedBox(height: 10),
-        ...tasks.asMap().entries.map((e) => TweenAnimationBuilder<double>(
+            child: Row(
+              children: [
+                Text(
+                  title,
+                  style: AppTextStyles.labelCaps.copyWith(color: color),
+                ),
+                const Spacer(),
+                Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${tasks.length}',
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...tasks.asMap().entries.map(
+            (e) => TweenAnimationBuilder<double>(
               tween: Tween(begin: 0.0, end: 1.0),
               duration: Duration(milliseconds: 300 + e.key * 80),
               curve: Curves.easeOut,
@@ -1216,11 +1492,12 @@ class _KanbanColumn extends StatelessWidget {
                 task: e.value,
                 showCost: showCost,
                 showProgress: showProgress,
-                onTap: onTaskTap != null
-                    ? () => onTaskTap!(e.value.id) : null,
+                onTap: onTaskTap != null ? () => onTaskTap!(e.value.id) : null,
               ),
-            )),
-      ]),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1257,50 +1534,65 @@ class _KanbanCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          TPriorityBadge(priority: task.priorityLabel),
-          const SizedBox(height: 8),
-          Text(task.title,
-              style: AppTextStyles.bodyMd.copyWith(
-                  fontWeight: FontWeight.w500)),
-          const SizedBox(height: 10),
-          if (showProgress && task.completionPercentage > 0) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: task.completionPercentage / 100,
-                minHeight: 4,
-                backgroundColor: AppColors.outlineVariant,
-                color: AppColors.gold,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TPriorityBadge(priority: task.priorityLabel),
+            const SizedBox(height: 8),
+            Text(
+              task.title,
+              style: AppTextStyles.bodyMd.copyWith(fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 10),
+            if (showProgress && task.completionPercentage > 0) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: task.completionPercentage / 100,
+                  minHeight: 4,
+                  backgroundColor: AppColors.outlineVariant,
+                  color: AppColors.gold,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text('${task.completionPercentage}%',
-                  style: AppTextStyles.dataSm),
-            ),
-            const SizedBox(height: 6),
-          ],
-          Row(children: [
-            if (task.assignees.isNotEmpty)
-              TAvatar(name: task.leadAssigneeName, size: 24),
-            const Spacer(),
-            if (showCost && task.cost != null) ...[
-              const Icon(Icons.monetization_on_outlined,
-                  size: 12, color: AppColors.gold),
-              const SizedBox(width: 3),
-              Text('EGP ${task.cost!.toStringAsFixed(0)}',
-                  style: AppTextStyles.dataSm.copyWith(
-                      color: AppColors.gold)),
-              const SizedBox(width: 8),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${task.completionPercentage}%',
+                  style: AppTextStyles.dataSm,
+                ),
+              ),
+              const SizedBox(height: 6),
             ],
-            Icon(Icons.calendar_today_outlined,
-                size: 12, color: AppColors.onSurfaceVariant),
-            const SizedBox(width: 4),
-            Text(task.dueDateDisplay, style: AppTextStyles.bodySm),
-          ]),
-        ]),
+            Row(
+              children: [
+                if (task.assignees.isNotEmpty)
+                  TAvatar(name: task.leadAssigneeName, size: 24),
+                const Spacer(),
+                if (showCost && task.cost != null) ...[
+                  const Icon(
+                    Icons.monetization_on_outlined,
+                    size: 12,
+                    color: AppColors.gold,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    'EGP ${task.cost!.toStringAsFixed(0)}',
+                    style: AppTextStyles.dataSm.copyWith(color: AppColors.gold),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Icon(
+                  Icons.calendar_today_outlined,
+                  size: 12,
+                  color: AppColors.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(task.dueDateDisplay, style: AppTextStyles.bodySm),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1318,9 +1610,9 @@ class _CreateTaskSheet extends StatefulWidget {
 
 class _CreateTaskSheetState extends State<_CreateTaskSheet> {
   final _titleCtrl = TextEditingController();
-  final _descCtrl  = TextEditingController();
+  final _descCtrl = TextEditingController();
   String _priority = 'medium';
-  String _status   = 'not_started';
+  String _status = 'not_started';
   DateTime? _dueDate;
   bool _creating = false;
 
@@ -1353,13 +1645,12 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
     setState(() => _creating = true);
     final profile = context.read<AuthNotifier>().profile!;
     await TaskRepository.createTask(
-      title:       _titleCtrl.text.trim(),
-      description: _descCtrl.text.trim().isEmpty
-          ? null : _descCtrl.text.trim(),
-      createdBy:   profile.id,
-      teamId:      _selectedTeamId,
-      priority:    _priority,
-      dueDate:     _dueDate?.toIso8601String().split('T').first,
+      title: _titleCtrl.text.trim(),
+      description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+      createdBy: profile.id,
+      teamId: _selectedTeamId,
+      priority: _priority,
+      dueDate: _dueDate?.toIso8601String().split('T').first,
     );
     widget.onCreated();
   }
@@ -1377,181 +1668,212 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottom),
       child: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 36, height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text('New Task', style: AppTextStyles.headlineSm),
-          const SizedBox(height: 4),
-          Text('Fill in the details below',
-              style: AppTextStyles.bodySm),
-          const Divider(height: 24),
-
-          TextField(
-            controller: _titleCtrl,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'TITLE',
-              hintText: 'Enter task title',
-              prefixIcon: Icon(Icons.title,
-                  color: AppColors.gold, size: 18),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          TextField(
-            controller: _descCtrl,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'DESCRIPTION',
-              hintText: 'Optional description…',
-              prefixIcon: Padding(
-                padding: EdgeInsets.only(bottom: 36),
-                child: Icon(Icons.notes,
-                    color: AppColors.gold, size: 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-          const SizedBox(height: 18),
+            const SizedBox(height: 16),
+            Text('New Task', style: AppTextStyles.headlineSm),
+            const SizedBox(height: 4),
+            Text('Fill in the details below', style: AppTextStyles.bodySm),
+            const Divider(height: 24),
 
-          // Department (only for Admin)
-          if (context.read<AuthNotifier>().profile?.isAdmin == true && _teams.isNotEmpty) ...[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('DEPARTMENT', style: AppTextStyles.labelCaps),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String?>(
-              value: _selectedTeamId,
-              isExpanded: true,
-              decoration: InputDecoration(
-                hintText: 'Select department/team',
-                prefixIcon: const Icon(Icons.group_outlined,
-                    color: AppColors.gold, size: 18),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            TextField(
+              controller: _titleCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'TITLE',
+                hintText: 'Enter task title',
+                prefixIcon: Icon(Icons.title, color: AppColors.gold, size: 18),
               ),
-              items: _teams.map((t) => DropdownMenuItem<String?>(
-                    value: t.id,
-                    child: Text(t.name,
-                        overflow: TextOverflow.ellipsis),
-                  )).toList(),
-              onChanged: (val) => setState(() => _selectedTeamId = val),
+            ),
+            const SizedBox(height: 14),
+
+            TextField(
+              controller: _descCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'DESCRIPTION',
+                hintText: 'Optional description…',
+                prefixIcon: Padding(
+                  padding: EdgeInsets.only(bottom: 36),
+                  child: Icon(Icons.notes, color: AppColors.gold, size: 18),
+                ),
+              ),
             ),
             const SizedBox(height: 18),
-          ],
 
-          // Priority
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text('PRIORITY', style: AppTextStyles.labelCaps),
-          ),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, children: [
-            _buildPriorityChip('low', 'Low', AppColors.statusLow),
-            _buildPriorityChip('medium', 'Medium', AppColors.statusMedium),
-            _buildPriorityChip('high', 'High', AppColors.statusHigh),
-            _buildPriorityChip('critical', 'Critical', AppColors.error),
-          ]),
-          const SizedBox(height: 18),
-
-          // Status
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text('STATUS', style: AppTextStyles.labelCaps),
-          ),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 6, children: [
-            _buildStatusChip('not_started',   'To Do'),
-            _buildStatusChip('in_progress',   'In Progress'),
-            _buildStatusChip('employee_done', 'Employee Done'),
-            _buildStatusChip('on_hold',       'On Hold'),
-          ]),
-          const SizedBox(height: 18),
-
-          // Due date
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text('DUE DATE', style: AppTextStyles.labelCaps),
-          ),
-          const SizedBox(height: 8),
-          InkWell(
-            borderRadius: BorderRadius.circular(4),
-            onTap: () async {
-              final d = await showDatePicker(
-                context: context,
-                initialDate:
-                    _dueDate ?? DateTime.now().add(const Duration(days: 7)),
-                firstDate: DateTime.now(),
-                lastDate: DateTime.now().add(const Duration(days: 365)),
-              );
-              if (d != null) setState(() => _dueDate = d);
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: AppColors.outlineVariant),
+            // Department (only for Admin)
+            if (context.read<AuthNotifier>().profile?.isAdmin == true &&
+                _teams.isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('DEPARTMENT', style: AppTextStyles.labelCaps),
               ),
-              child: Row(children: [
-                const Icon(Icons.calendar_today_outlined,
-                    size: 16, color: AppColors.gold),
-                const SizedBox(width: 10),
-                Text(
-                  _dueDate != null
-                      ? '${_dueDate!.year}-'
-                          '${_dueDate!.month.toString().padLeft(2, '0')}-'
-                          '${_dueDate!.day.toString().padLeft(2, '0')}'
-                      : 'Select date…',
-                  style: AppTextStyles.bodyMd.copyWith(
-                    color: _dueDate != null
-                        ? AppColors.onSurface
-                        : AppColors.onSurfaceVariant,
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String?>(
+                initialValue: _selectedTeamId,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  hintText: 'Select department/team',
+                  prefixIcon: const Icon(
+                    Icons.group_outlined,
+                    color: AppColors.gold,
+                    size: 18,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
                   ),
                 ),
-                const Spacer(),
-                Icon(Icons.chevron_right,
-                    size: 18, color: AppColors.onSurfaceVariant),
-              ]),
-            ),
-          ),
-          const SizedBox(height: 24),
+                items: _teams
+                    .map(
+                      (t) => DropdownMenuItem<String?>(
+                        value: t.id,
+                        child: Text(t.name, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedTeamId = val),
+              ),
+              const SizedBox(height: 18),
+            ],
 
-          Row(children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _creating
-                    ? null : () => Navigator.pop(context),
-                child: const Text('Cancel'),
+            // Priority
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('PRIORITY', style: AppTextStyles.labelCaps),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                _buildPriorityChip('low', 'Low', AppColors.statusLow),
+                _buildPriorityChip('medium', 'Medium', AppColors.statusMedium),
+                _buildPriorityChip('high', 'High', AppColors.statusHigh),
+                _buildPriorityChip('critical', 'Critical', AppColors.error),
+              ],
+            ),
+            const SizedBox(height: 18),
+
+            // Status
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('STATUS', style: AppTextStyles.labelCaps),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _buildStatusChip('not_started', 'To Do'),
+                _buildStatusChip('in_progress', 'In Progress'),
+                _buildStatusChip('employee_done', 'Employee Done'),
+                _buildStatusChip('on_hold', 'On Hold'),
+              ],
+            ),
+            const SizedBox(height: 18),
+
+            // Due date
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('DUE DATE', style: AppTextStyles.labelCaps),
+            ),
+            const SizedBox(height: 8),
+            InkWell(
+              borderRadius: BorderRadius.circular(4),
+              onTap: () async {
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate:
+                      _dueDate ?? DateTime.now().add(const Duration(days: 7)),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (d != null) setState(() => _dueDate = d);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: AppColors.outlineVariant),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      size: 16,
+                      color: AppColors.gold,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      _dueDate != null
+                          ? '${_dueDate!.year}-'
+                                '${_dueDate!.month.toString().padLeft(2, '0')}-'
+                                '${_dueDate!.day.toString().padLeft(2, '0')}'
+                          : 'Select date…',
+                      style: AppTextStyles.bodyMd.copyWith(
+                        color: _dueDate != null
+                            ? AppColors.onSurface
+                            : AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton(
-                onPressed: _creating ? null : _create,
-                child: _creating
-                    ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppColors.gold,
-                        ),
-                      )
-                    : const Text('Create Task'),
-              ),
+            const SizedBox(height: 24),
+
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _creating ? null : () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: _creating ? null : _create,
+                    child: _creating
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.gold,
+                            ),
+                          )
+                        : const Text('Create Task'),
+                  ),
+                ),
+              ],
             ),
-          ]),
-          const SizedBox(height: 8),
-        ]),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -1570,8 +1892,7 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-            color: sel ? color : AppColors.outlineVariant),
+        side: BorderSide(color: sel ? color : AppColors.outlineVariant),
       ),
     );
   }
@@ -1621,67 +1942,113 @@ class _WaitingList extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Icon(Icons.inbox_outlined, size: 18, color: AppColors.gold),
-          const SizedBox(width: 8),
-          Text('Waiting List', style: AppTextStyles.labelMd),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-            decoration: BoxDecoration(
-              color: AppColors.gold, borderRadius: BorderRadius.circular(10)),
-            child: Text('${tasks.length}',
-                style: AppTextStyles.bodySm.copyWith(
-                    color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11)),
-          ),
-        ]),
-        const SizedBox(height: 4),
-        Text('Tasks handed to your department. Accept to assign your team.',
-            style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
-        const SizedBox(height: 10),
-        ...tasks.map((t) => InkWell(
-          onTap: () => onView(t),
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.outlineVariant),
-          ),
-          child: Row(children: [
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(t.title, style: AppTextStyles.labelMd,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Row(children: [
-                  Text('From: ${teamName(t.handoffFromTeamId)}',
-                      style: AppTextStyles.bodySm
-                          .copyWith(color: AppColors.onSurfaceVariant)),
-                  const SizedBox(width: 8),
-                  Text('Tap to view',
-                      style: AppTextStyles.bodySm.copyWith(
-                          color: AppColors.gold, fontSize: 11)),
-                ]),
-              ],
-            )),
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: () => onAccept(t),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.statusDone,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.inbox_outlined, size: 18, color: AppColors.gold),
+              const SizedBox(width: 8),
+              Text('Waiting List', style: AppTextStyles.labelMd),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.gold,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${tasks.length}',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
               ),
-              icon: const Icon(Icons.check, size: 16, color: Colors.white),
-              label: const Text('Accept', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tasks handed to your department. Accept to assign your team.',
+            style: AppTextStyles.bodySm.copyWith(
+              color: AppColors.onSurfaceVariant,
             ),
-          ]),
-        ))),
-      ]),
+          ),
+          const SizedBox(height: 10),
+          ...tasks.map(
+            (t) => InkWell(
+              onTap: () => onView(t),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.outlineVariant),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            t.title,
+                            style: AppTextStyles.labelMd,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                'From: ${teamName(t.handoffFromTeamId)}',
+                                style: AppTextStyles.bodySm.copyWith(
+                                  color: AppColors.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Tap to view',
+                                style: AppTextStyles.bodySm.copyWith(
+                                  color: AppColors.gold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => onAccept(t),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.statusDone,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      icon: const Icon(
+                        Icons.check,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        'Accept',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

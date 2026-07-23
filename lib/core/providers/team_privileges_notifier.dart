@@ -44,19 +44,40 @@ class TeamPrivilegesNotifier extends ChangeNotifier {
   // ── Effective gating getters — per-user overrides team, then role default ──
   // Admin always bypasses all checks (callers do `isAdmin || canX`).
   bool get canManageAttendance => _resolve(
-      _userPrivileges?.canManageAttendance, _teamPrivileges?.canManageAttendance, true);
+    _userPrivileges?.canManageAttendance,
+    _teamPrivileges?.canManageAttendance,
+    true,
+  );
   bool get canManageExpenses => _resolve(
-      _userPrivileges?.canManageExpenses, _teamPrivileges?.canManageExpenses, true);
+    _userPrivileges?.canManageExpenses,
+    _teamPrivileges?.canManageExpenses,
+    true,
+  );
   bool get canManageTasks => _resolve(
-      _userPrivileges?.canManageTasks, _teamPrivileges?.canManageTasks, true);
+    _userPrivileges?.canManageTasks,
+    _teamPrivileges?.canManageTasks,
+    true,
+  );
   bool get canManagePenalties => _resolve(
-      _userPrivileges?.canManagePenalties, _teamPrivileges?.canManagePenalties, true);
+    _userPrivileges?.canManagePenalties,
+    _teamPrivileges?.canManagePenalties,
+    true,
+  );
   bool get canManageClients => _resolve(
-      _userPrivileges?.canManageClients, _teamPrivileges?.canManageClients, true);
+    _userPrivileges?.canManageClients,
+    _teamPrivileges?.canManageClients,
+    true,
+  );
   bool get canCreateEmployees => _resolve(
-      _userPrivileges?.canCreateEmployees, _teamPrivileges?.canCreateEmployees, true);
+    _userPrivileges?.canCreateEmployees,
+    _teamPrivileges?.canCreateEmployees,
+    true,
+  );
   bool get canViewFinance => _resolve(
-      _userPrivileges?.canViewFinance, _teamPrivileges?.canViewFinance, false);
+    _userPrivileges?.canViewFinance,
+    _teamPrivileges?.canViewFinance,
+    false,
+  );
 
   void _onAuthChanged() {
     final profile = _auth.profile;

@@ -25,16 +25,27 @@ class StatusOptionsManagerSheet extends StatefulWidget {
       _StatusOptionsManagerSheetState();
 }
 
-class _StatusOptionsManagerSheetState
-    extends State<StatusOptionsManagerSheet> {
+class _StatusOptionsManagerSheetState extends State<StatusOptionsManagerSheet> {
   List<TaskStatusOption> _options = [];
   bool _loading = true;
 
   static const _palette = [
-    '#6D4C41', '#1565C0', '#755B00', '#2E7D32',
-    '#BA1A1A', '#747878', '#6A0DAD', '#E65100',
-    '#00838F', '#283593', '#558B2F', '#C62828',
-    '#AD1457', '#00695C', '#F57F17', '#4527A0',
+    '#6D4C41',
+    '#1565C0',
+    '#755B00',
+    '#2E7D32',
+    '#BA1A1A',
+    '#747878',
+    '#6A0DAD',
+    '#E65100',
+    '#00838F',
+    '#283593',
+    '#558B2F',
+    '#C62828',
+    '#AD1457',
+    '#00695C',
+    '#F57F17',
+    '#4527A0',
   ];
 
   @override
@@ -49,7 +60,11 @@ class _StatusOptionsManagerSheetState
       await TaskStatusOptionsRepository.init(widget.adminUserId!);
     }
     final opts = await TaskStatusOptionsRepository.fetchOptions();
-    if (mounted) setState(() { _options = opts; _loading = false; });
+    if (mounted)
+      setState(() {
+        _options = opts;
+        _loading = false;
+      });
   }
 
   // ── Add ──────────────────────────────────────────────────────────────────────
@@ -101,7 +116,9 @@ class _StatusOptionsManagerSheetState
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete Status Option'),
-        content: Text('Delete "${option.displayLabel}"?\n\nThis cannot be undone.'),
+        content: Text(
+          'Delete "${option.displayLabel}"?\n\nThis cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -156,19 +173,28 @@ class _StatusOptionsManagerSheetState
                   ),
                 )
               else
-                Row(children: [
-                  Icon(Icons.lock_outline,
-                      size: 14, color: AppColors.outlineVariant),
-                  const SizedBox(width: 6),
-                  Text(initialLabel,
+                Row(
+                  children: [
+                    Icon(
+                      Icons.lock_outline,
+                      size: 14,
+                      color: AppColors.outlineVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      initialLabel,
                       style: AppTextStyles.bodyMd.copyWith(
-                          color: AppColors.onSurfaceVariant)),
-                ]),
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               const SizedBox(height: 16),
               Text('PICK COLOR', style: AppTextStyles.labelCaps),
               const SizedBox(height: 10),
               Wrap(
-                spacing: 10, runSpacing: 10,
+                spacing: 10,
+                runSpacing: 10,
                 children: _palette.map((hex) {
                   final color = _hexColor(hex);
                   final sel = hex == selectedColor;
@@ -176,7 +202,8 @@ class _StatusOptionsManagerSheetState
                     onTap: () => setD(() => selectedColor = hex),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 140),
-                      width: 30, height: 30,
+                      width: 30,
+                      height: 30,
                       decoration: BoxDecoration(
                         color: color,
                         shape: BoxShape.circle,
@@ -184,15 +211,20 @@ class _StatusOptionsManagerSheetState
                             ? Border.all(color: Colors.white, width: 2.5)
                             : null,
                         boxShadow: sel
-                            ? [BoxShadow(
-                                color: color.withValues(alpha: 0.55),
-                                blurRadius: 8,
-                              )]
+                            ? [
+                                BoxShadow(
+                                  color: color.withValues(alpha: 0.55),
+                                  blurRadius: 8,
+                                ),
+                              ]
                             : null,
                       ),
                       child: sel
-                          ? const Icon(Icons.check,
-                              color: Colors.white, size: 16)
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 16,
+                            )
                           : null,
                     ),
                   );
@@ -233,10 +265,12 @@ class _StatusOptionsManagerSheetState
 
   void _snack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? Colors.red.shade800 : null,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red.shade800 : null,
+      ),
+    );
   }
 
   // ── BUILD ─────────────────────────────────────────────────────────────────────
@@ -258,7 +292,8 @@ class _StatusOptionsManagerSheetState
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Center(
               child: Container(
-                width: 36, height: 4,
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
@@ -270,18 +305,20 @@ class _StatusOptionsManagerSheetState
           // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 12, 8),
-            child: Row(children: [
-              const Icon(Icons.tune, color: AppColors.gold, size: 18),
-              const SizedBox(width: 8),
-              Text('Status Options', style: AppTextStyles.headlineSm),
-              const Spacer(),
-              if (widget.isAdmin)
-                TextButton.icon(
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add Option'),
-                  onPressed: _addOption,
-                ),
-            ]),
+            child: Row(
+              children: [
+                const Icon(Icons.tune, color: AppColors.gold, size: 18),
+                const SizedBox(width: 8),
+                Text('Status Options', style: AppTextStyles.headlineSm),
+                const Spacer(),
+                if (widget.isAdmin)
+                  TextButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Option'),
+                    onPressed: _addOption,
+                  ),
+              ],
+            ),
           ),
           const Divider(height: 1),
 
@@ -289,54 +326,65 @@ class _StatusOptionsManagerSheetState
           Expanded(
             child: _loading
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold))
+                    child: CircularProgressIndicator(color: AppColors.gold),
+                  )
                 : _options.isEmpty
-                    ? const Center(child: Text('No status options found'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: _options.length,
-                        itemBuilder: (_, i) {
-                          final opt = _options[i];
-                          return ListTile(
-                            leading: Container(
-                              width: 22, height: 22,
-                              decoration: BoxDecoration(
-                                color: opt.dartColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            title: Text(opt.displayLabel,
-                                style: AppTextStyles.bodyMd),
-                            subtitle: opt.isDefault
-                                ? Text('Built-in',
-                                    style: AppTextStyles.bodySm.copyWith(
-                                        color: AppColors.outlineVariant))
-                                : null,
-                            trailing: widget.isAdmin
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(
-                                            Icons.edit_outlined, size: 18),
-                                        color: AppColors.gold,
-                                        tooltip: 'Edit color',
-                                        onPressed: () => _editOption(opt),
+                ? const Center(child: Text('No status options found'))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: _options.length,
+                    itemBuilder: (_, i) {
+                      final opt = _options[i];
+                      return ListTile(
+                        leading: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: opt.dartColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        title: Text(
+                          opt.displayLabel,
+                          style: AppTextStyles.bodyMd,
+                        ),
+                        subtitle: opt.isDefault
+                            ? Text(
+                                'Built-in',
+                                style: AppTextStyles.bodySm.copyWith(
+                                  color: AppColors.outlineVariant,
+                                ),
+                              )
+                            : null,
+                        trailing: widget.isAdmin
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                    ),
+                                    color: AppColors.gold,
+                                    tooltip: 'Edit color',
+                                    onPressed: () => _editOption(opt),
+                                  ),
+                                  if (!opt.isDefault)
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 18,
                                       ),
-                                      if (!opt.isDefault)
-                                        IconButton(
-                                          icon: const Icon(
-                                              Icons.delete_outline, size: 18),
-                                          color: AppColors.error,
-                                          tooltip: 'Delete',
-                                          onPressed: () => _deleteOption(opt),
-                                        ),
-                                    ],
-                                  )
-                                : null,
-                          );
-                        },
-                      ),
+                                      color: AppColors.error,
+                                      tooltip: 'Delete',
+                                      onPressed: () => _deleteOption(opt),
+                                    ),
+                                ],
+                              )
+                            : null,
+                      );
+                    },
+                  ),
           ),
         ],
       ),

@@ -24,13 +24,17 @@ class TaskStat {
   factory TaskStat.fromMap(Map<String, dynamic> m) {
     final raw = m['task_assignees'] as List<dynamic>? ?? [];
     return TaskStat(
-      status:     m['status'] as String? ?? 'not_started',
-      priority:   m['priority'] as String? ?? 'medium',
-      teamId:     m['team_id'] as String?,
+      status: m['status'] as String? ?? 'not_started',
+      priority: m['priority'] as String? ?? 'medium',
+      teamId: m['team_id'] as String?,
       completion: m['completion_percentage'] as int? ?? 0,
-      dueDate:    m['due_date'] as String?,
+      dueDate: m['due_date'] as String?,
       assignees: raw
-          .map((a) => (a['profile'] as Map<String, dynamic>?)?['full_name'] as String?)
+          .map(
+            (a) =>
+                (a['profile'] as Map<String, dynamic>?)?['full_name']
+                    as String?,
+          )
           .whereType<String>()
           .toList(),
     );
@@ -52,10 +56,12 @@ class AnalyticsRepository {
   static Future<List<TaskStat>> fetchTaskStats({List<String>? teamIds}) async {
     try {
       if (teamIds != null && teamIds.isEmpty) return [];
-      var q = _admin.from('tasks').select(
-        'status, priority, team_id, completion_percentage, due_date, '
-        'task_assignees(profile:profiles!task_assignees_profile_id_fkey(full_name))',
-      );
+      var q = _admin
+          .from('tasks')
+          .select(
+            'status, priority, team_id, completion_percentage, due_date, '
+            'task_assignees(profile:profiles!task_assignees_profile_id_fkey(full_name))',
+          );
       if (teamIds != null) q = q.inFilter('team_id', teamIds);
       final data = await q;
       return (data as List)

@@ -21,8 +21,8 @@ class TeamPrivilegesScreen extends StatefulWidget {
 }
 
 class _TeamPrivilegesScreenState extends State<TeamPrivilegesScreen> {
-  bool _loading       = true;
-  bool _saving        = false;
+  bool _loading = true;
+  bool _saving = false;
   bool _setupRequired = false; // true when team_privileges table is missing
   TeamPrivilegesModel? _privileges;
 
@@ -33,25 +33,42 @@ class _TeamPrivilegesScreenState extends State<TeamPrivilegesScreen> {
   }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _setupRequired = false; });
+    setState(() {
+      _loading = true;
+      _setupRequired = false;
+    });
     try {
       final p = await TeamPrivilegesRepository.fetchForTeam(widget.teamId);
-      if (mounted) setState(() { _privileges = p; _loading = false; });
+      if (mounted)
+        setState(() {
+          _privileges = p;
+          _loading = false;
+        });
     } catch (e) {
-      if (mounted) setState(() { _loading = false; _setupRequired = true; });
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _setupRequired = true;
+        });
     }
   }
 
   Future<void> _toggle(TeamPrivilegesModel updated) async {
     final previous = _privileges;
-    setState(() { _privileges = updated; _saving = true; });
+    setState(() {
+      _privileges = updated;
+      _saving = true;
+    });
     try {
       await TeamPrivilegesRepository.save(updated);
       if (mounted) setState(() => _saving = false);
     } catch (e) {
       // Revert optimistic update and show error
       if (mounted) {
-        setState(() { _privileges = previous; _saving = false; });
+        setState(() {
+          _privileges = previous;
+          _saving = false;
+        });
         _showSaveError(e);
       }
     }
@@ -61,7 +78,8 @@ class _TeamPrivilegesScreenState extends State<TeamPrivilegesScreen> {
     final msg = e.toString();
     // PGRST205 = PostgREST can't find table in schema cache (table doesn't exist)
     // 42P01    = PostgreSQL undefined_table
-    final isMissing = msg.contains('PGRST205') ||
+    final isMissing =
+        msg.contains('PGRST205') ||
         msg.contains('schema cache') ||
         msg.contains('team_privileges') ||
         msg.contains('does not exist') ||
@@ -141,8 +159,9 @@ class _TeamPrivilegesScreenState extends State<TeamPrivilegesScreen> {
             const Text('Team Privileges'),
             Text(
               widget.teamName,
-              style: AppTextStyles.bodySm
-                  .copyWith(color: AppColors.onSurfaceVariant),
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -165,10 +184,11 @@ class _TeamPrivilegesScreenState extends State<TeamPrivilegesScreen> {
       ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: AppColors.gold))
+              child: CircularProgressIndicator(color: AppColors.gold),
+            )
           : _setupRequired
-              ? _buildSetupRequired()
-              : _buildBody(),
+          ? _buildSetupRequired()
+          : _buildBody(),
     );
   }
 
@@ -176,36 +196,54 @@ class _TeamPrivilegesScreenState extends State<TeamPrivilegesScreen> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.build_circle_outlined, size: 64, color: AppColors.gold),
-          const SizedBox(height: 16),
-          Text('Database setup required',
-              style: AppTextStyles.headlineSm),
-          const SizedBox(height: 8),
-          Text(
-            'The team_privileges table does not exist yet.\n'
-            'Run the SQL migration in your Supabase SQL Editor.',
-            style: AppTextStyles.bodySm
-                .copyWith(color: AppColors.onSurfaceVariant),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            OutlinedButton.icon(
-              onPressed: _showMigrationDialog,
-              icon: const Icon(Icons.code, size: 16),
-              label: const Text('View SQL'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.build_circle_outlined,
+              size: 64,
+              color: AppColors.gold,
             ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
-              onPressed: _load,
-              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-              icon: const Icon(Icons.refresh, size: 16, color: AppColors.gold),
-              label: const Text('Retry',
-                  style: TextStyle(color: AppColors.gold)),
+            const SizedBox(height: 16),
+            Text('Database setup required', style: AppTextStyles.headlineSm),
+            const SizedBox(height: 8),
+            Text(
+              'The team_privileges table does not exist yet.\n'
+              'Run the SQL migration in your Supabase SQL Editor.',
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
             ),
-          ]),
-        ]),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _showMigrationDialog,
+                  icon: const Icon(Icons.code, size: 16),
+                  label: const Text('View SQL'),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: _load,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
+                  icon: const Icon(
+                    Icons.refresh,
+                    size: 16,
+                    color: AppColors.gold,
+                  ),
+                  label: const Text(
+                    'Retry',
+                    style: TextStyle(color: AppColors.gold),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -277,17 +315,20 @@ class _TeamPrivilegesScreenState extends State<TeamPrivilegesScreen> {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppColors.gold.withValues(alpha: 0.2)),
           ),
-          child: Row(children: [
-            const Icon(Icons.info_outline, color: AppColors.gold, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Changes save instantly. The manager will see updated permissions on their next action.',
-                style: AppTextStyles.bodySm
-                    .copyWith(color: AppColors.onSurfaceVariant),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline, color: AppColors.gold, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Changes save instantly. The manager will see updated permissions on their next action.',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         ...items.map(
@@ -334,8 +375,9 @@ class _TeamPrivilegesScreenState extends State<TeamPrivilegesScreen> {
           padding: const EdgeInsets.only(top: 2),
           child: Text(
             item.description,
-            style: AppTextStyles.bodySm
-                .copyWith(color: AppColors.onSurfaceVariant),
+            style: AppTextStyles.bodySm.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
           ),
         ),
         value: item.value,

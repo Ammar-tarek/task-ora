@@ -23,15 +23,15 @@ class TeamModel {
   });
 
   factory TeamModel.fromMap(Map<String, dynamic> m) => TeamModel(
-        id: m['id'] as String,
-        name: m['name'] as String? ?? '',
-        description: m['description'] as String?,
-        department: m['department'] as String?,
-        teamLeadId: m['team_lead_id'] as String?,
-        isActive: m['is_active'] as bool? ?? true,
-        createdAt: m['created_at'] as String? ?? '',
-        updatedAt: m['updated_at'] as String? ?? '',
-      );
+    id: m['id'] as String,
+    name: m['name'] as String? ?? '',
+    description: m['description'] as String?,
+    department: m['department'] as String?,
+    teamLeadId: m['team_lead_id'] as String?,
+    isActive: m['is_active'] as bool? ?? true,
+    createdAt: m['created_at'] as String? ?? '',
+    updatedAt: m['updated_at'] as String? ?? '',
+  );
 
   TeamModel copyWith({
     String? name,
@@ -39,15 +39,14 @@ class TeamModel {
     String? department,
     String? teamLeadId,
     bool? isActive,
-  }) =>
-      TeamModel(
-        id: id,
-        name: name ?? this.name,
-        description: description ?? this.description,
-        department: department ?? this.department,
-        teamLeadId: teamLeadId ?? this.teamLeadId,
-        isActive: isActive ?? this.isActive,
-        createdAt: createdAt,
-        updatedAt: updatedAt,
-      );
+  }) => TeamModel(
+    id: id,
+    name: name ?? this.name,
+    description: description ?? this.description,
+    department: department ?? this.department,
+    teamLeadId: teamLeadId ?? this.teamLeadId,
+    isActive: isActive ?? this.isActive,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+  );
 }

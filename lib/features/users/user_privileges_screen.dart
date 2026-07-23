@@ -28,7 +28,7 @@ class UserPrivilegesScreen extends StatefulWidget {
 
 class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
   bool _loading = true;
-  bool _saving  = false;
+  bool _saving = false;
   UserPrivilegesModel? _privileges;
 
   @override
@@ -39,24 +39,38 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final p = await UserPrivilegesRepository.fetchForUserOrDefaults(widget.userId);
-    if (mounted) setState(() { _privileges = p; _loading = false; });
+    final p = await UserPrivilegesRepository.fetchForUserOrDefaults(
+      widget.userId,
+    );
+    if (mounted)
+      setState(() {
+        _privileges = p;
+        _loading = false;
+      });
   }
 
   Future<void> _toggle(UserPrivilegesModel updated) async {
     final previous = _privileges;
-    setState(() { _privileges = updated; _saving = true; });
+    setState(() {
+      _privileges = updated;
+      _saving = true;
+    });
     try {
       final me = context.read<AuthNotifier>().profile?.id;
       await UserPrivilegesRepository.save(updated, updatedBy: me);
       if (mounted) setState(() => _saving = false);
     } catch (e) {
       if (mounted) {
-        setState(() { _privileges = previous; _saving = false; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: AppColors.error,
-          content: Text('Failed to save: $e'),
-        ));
+        setState(() {
+          _privileges = previous;
+          _saving = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.error,
+            content: Text('Failed to save: $e'),
+          ),
+        );
       }
     }
   }
@@ -74,7 +88,9 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
               widget.role != null
                   ? '${widget.userName} · ${widget.role}'
                   : widget.userName,
-              style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -84,15 +100,21 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
               padding: EdgeInsets.only(right: 16),
               child: Center(
                 child: SizedBox(
-                  width: 18, height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.gold),
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.gold,
+                  ),
                 ),
               ),
             ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.gold),
+            )
           : _buildBody(),
     );
   }
@@ -161,23 +183,29 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppColors.gold.withValues(alpha: 0.2)),
           ),
-          child: Row(children: [
-            const Icon(Icons.info_outline, color: AppColors.gold, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'These privileges apply to this person specifically and override '
-                'the team defaults. Changes save instantly.',
-                style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline, color: AppColors.gold, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'These privileges apply to this person specifically and override '
+                  'the team defaults. Changes save instantly.',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
-        ...items.map((item) => Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _buildCard(item),
-        )),
+        ...items.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _buildCard(item),
+          ),
+        ),
         const SizedBox(height: 24),
       ],
     );
@@ -197,21 +225,29 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
       child: SwitchListTile(
         contentPadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
         secondary: Container(
-          width: 38, height: 38,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
             color: item.value
                 ? AppColors.gold.withValues(alpha: 0.12)
                 : AppColors.outlineVariant.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(item.icon, size: 18,
-            color: item.value ? AppColors.gold : AppColors.onSurfaceVariant),
+          child: Icon(
+            item.icon,
+            size: 18,
+            color: item.value ? AppColors.gold : AppColors.onSurfaceVariant,
+          ),
         ),
         title: Text(item.title, style: AppTextStyles.labelMd),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: Text(item.description,
-            style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
+          child: Text(
+            item.description,
+            style: AppTextStyles.bodySm.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
         ),
         value: item.value,
         onChanged: _saving ? null : item.onChanged,

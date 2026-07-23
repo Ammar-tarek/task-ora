@@ -28,27 +28,27 @@ class PenaltyItem {
   });
 
   factory PenaltyItem.fromMap(Map<String, dynamic> m) {
-    final employee   = m['employee'] as Map<String, dynamic>?;
-    final pType      = m['penalty_type'] as Map<String, dynamic>?;
+    final employee = m['employee'] as Map<String, dynamic>?;
+    final pType = m['penalty_type'] as Map<String, dynamic>?;
     final approvedBy = m['approver'] as Map<String, dynamic>?;
     return PenaltyItem(
-      id:              m['id'] as String,
-      employeeId:      m['employee_id'] as String? ?? '',
-      employeeName:    employee?['full_name'] as String? ?? 'Unknown',
-      penaltyType:     pType?['name'] as String? ?? '',
-      penaltyTypeId:   m['penalty_type_id'] as String? ?? '',
-      reason:          m['reason'] as String? ?? '',
-      date:            m['penalty_date'] as String? ?? '',
-      amount:          (m['amount'] as num?)?.toDouble() ?? 0,
-      isApplied:       m['is_applied'] as bool? ?? false,
-      approvedByName:  approvedBy?['full_name'] as String? ?? '',
+      id: m['id'] as String,
+      employeeId: m['employee_id'] as String? ?? '',
+      employeeName: employee?['full_name'] as String? ?? 'Unknown',
+      penaltyType: pType?['name'] as String? ?? '',
+      penaltyTypeId: m['penalty_type_id'] as String? ?? '',
+      reason: m['reason'] as String? ?? '',
+      date: m['penalty_date'] as String? ?? '',
+      amount: (m['amount'] as num?)?.toDouble() ?? 0,
+      isApplied: m['is_applied'] as bool? ?? false,
+      approvedByName: approvedBy?['full_name'] as String? ?? '',
     );
   }
 }
 
 class PenaltyRepository {
   static final _client = SupabaseService.client;
-  static final _admin  = SupabaseService.adminClient;
+  static final _admin = SupabaseService.adminClient;
 
   static const _select = '''
     *,
@@ -137,10 +137,13 @@ class PenaltyRepository {
 
   static Future<void> applyPenalty(String penaltyId) async {
     try {
-      await _admin.from('penalties').update({
-        'is_applied': true,
-        'applied_at': DateTime.now().toIso8601String(),
-      }).eq('id', penaltyId);
+      await _admin
+          .from('penalties')
+          .update({
+            'is_applied': true,
+            'applied_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', penaltyId);
     } catch (_) {}
   }
 
@@ -154,13 +157,13 @@ class PenaltyRepository {
   }) async {
     try {
       await _admin.from('penalties').insert({
-        'employee_id':     employeeId,
+        'employee_id': employeeId,
         'penalty_type_id': penaltyTypeId,
-        'reason':          reason,
-        'amount':          amount,
-        'approved_by':     approvedBy,
-        'penalty_date':    date,
-        'is_applied':      false,
+        'reason': reason,
+        'amount': amount,
+        'approved_by': approvedBy,
+        'penalty_date': date,
+        'is_applied': false,
       });
     } catch (_) {}
   }

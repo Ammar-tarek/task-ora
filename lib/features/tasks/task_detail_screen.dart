@@ -11,12 +11,8 @@ class TaskDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Edit Task'),
-      ),
-      body: TaskDetailSheet(
-        taskId: taskId,
-      ),
+      appBar: AppBar(title: const Text('Edit Task')),
+      body: TaskDetailSheet(taskId: taskId),
     );
   }
 }

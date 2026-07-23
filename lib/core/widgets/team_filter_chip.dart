@@ -17,7 +17,7 @@ class TeamFilterChip extends StatelessWidget {
     if (profile?.isAdmin != true) return const SizedBox.shrink();
 
     final filter = context.watch<TeamFilterNotifier>();
-    final teams  = filter.teams;
+    final teams = filter.teams;
 
     if (teams.isEmpty) {
       // Trigger load if not yet done
@@ -27,15 +27,18 @@ class TeamFilterChip extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final selectedId   = filter.selectedTeamId;
+    final selectedId = filter.selectedTeamId;
     final selectedName = filter.selectedTeam?.name ?? 'All Teams';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
       child: Row(
         children: [
-          Icon(Icons.filter_list_outlined,
-              size: 16, color: AppColors.onSurfaceVariant),
+          Icon(
+            Icons.filter_list_outlined,
+            size: 16,
+            color: AppColors.onSurfaceVariant,
+          ),
           const SizedBox(width: 6),
           Text('Team:', style: AppTextStyles.bodySm),
           const SizedBox(width: 8),
@@ -50,13 +53,15 @@ class TeamFilterChip extends StatelessWidget {
                     selected: selectedId == null,
                     onTap: () => context.read<TeamFilterNotifier>().clear(),
                   ),
-                  ...teams.map((t) => _chip(
-                        context: context,
-                        label: t.name,
-                        selected: selectedId == t.id,
-                        onTap: () =>
-                            context.read<TeamFilterNotifier>().select(t.id),
-                      )),
+                  ...teams.map(
+                    (t) => _chip(
+                      context: context,
+                      label: t.name,
+                      selected: selectedId == t.id,
+                      onTap: () =>
+                          context.read<TeamFilterNotifier>().select(t.id),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -66,8 +71,10 @@ class TeamFilterChip extends StatelessWidget {
               padding: const EdgeInsets.only(left: 4),
               child: Text(
                 '· $selectedName',
-                style: AppTextStyles.bodySm
-                    .copyWith(color: AppColors.gold, fontWeight: FontWeight.w600),
+                style: AppTextStyles.bodySm.copyWith(
+                  color: AppColors.gold,
+                  fontWeight: FontWeight.w600,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),

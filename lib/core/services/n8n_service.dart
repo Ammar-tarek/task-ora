@@ -48,15 +48,15 @@ class N8nService {
             Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
-              'phone':                 clientPhone,
-              'client_name':           clientName,
-              'task_title':            taskTitle,
-              'task_status':           _statusLabel(newStatus),
-              'task_priority':         priority,
-              'due_date':              dueDate ?? '',
+              'phone': clientPhone,
+              'client_name': clientName,
+              'task_title': taskTitle,
+              'task_status': _statusLabel(newStatus),
+              'task_priority': priority,
+              'due_date': dueDate ?? '',
               'completion_percentage': completionPercentage,
-              'description':           description ?? '',
-              'updated_by':            updatedBy,
+              'description': description ?? '',
+              'updated_by': updatedBy,
             }),
           )
           .timeout(const Duration(seconds: 10));
@@ -67,14 +67,22 @@ class N8nService {
 
   static String _statusLabel(String status) {
     switch (status) {
-      case 'not_started':     return 'Not Started';
-      case 'in_progress':     return 'In Progress';
-      case 'employee_done':   return 'Employee Done';
-      case 'client_approved':  return 'Client Approved';
-      case 'client_rejected': return 'Client Rejected';
-      case 'completed':       return 'Completed';
-      case 'on_hold':         return 'On Hold';
-      default:                return status;
+      case 'not_started':
+        return 'Not Started';
+      case 'in_progress':
+        return 'In Progress';
+      case 'employee_done':
+        return 'Employee Done';
+      case 'client_approved':
+        return 'Client Approved';
+      case 'client_rejected':
+        return 'Client Rejected';
+      case 'completed':
+        return 'Completed';
+      case 'on_hold':
+        return 'On Hold';
+      default:
+        return status;
     }
   }
 }

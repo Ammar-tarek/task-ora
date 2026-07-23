@@ -8,7 +8,7 @@ import '../services/supabase_service.dart';
 class AppSettingsRepository {
   static final _admin = SupabaseService.adminClient;
 
-  static const kWifiSsid    = 'company_wifi_ssid';
+  static const kWifiSsid = 'company_wifi_ssid';
   static const kWifiEnabled = 'wifi_attendance_enabled';
 
   /// Read a single setting value. Returns null if missing.
@@ -28,8 +28,8 @@ class AppSettingsRepository {
   /// Write a single setting value (admin only — UI gates this).
   static Future<void> set(String key, String value, {String? updatedBy}) async {
     await _admin.from('app_settings').upsert({
-      'key':        key,
-      'value':      value,
+      'key': key,
+      'value': value,
       'updated_at': DateTime.now().toIso8601String(),
       if (updatedBy != null) 'updated_by': updatedBy,
     }, onConflict: 'key');

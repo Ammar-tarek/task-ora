@@ -10,7 +10,7 @@ class ExpenseItem {
   final String description;
   final String? receiptUrl;
   final String recordedByName;
-  final String status;     // 'pending' | 'approved' | 'rejected'
+  final String status; // 'pending' | 'approved' | 'rejected'
   final String? approvedBy;
 
   const ExpenseItem({
@@ -26,24 +26,24 @@ class ExpenseItem {
   });
 
   factory ExpenseItem.fromMap(Map<String, dynamic> m) {
-    final cat     = m['category'] as Map<String, dynamic>?;
+    final cat = m['category'] as Map<String, dynamic>?;
     final profile = m['recorder'] as Map<String, dynamic>?;
     return ExpenseItem(
-      id:              m['id'] as String,
-      date:            m['expense_date'] as String? ?? '',
-      categoryName:    cat?['name'] as String? ?? 'Other',
-      amount:          (m['amount'] as num?)?.toDouble() ?? 0,
-      description:     m['description'] as String? ?? '',
-      receiptUrl:      m['receipt_url'] as String?,
-      recordedByName:  profile?['full_name'] as String? ?? '',
-      status:          m['status'] as String? ?? 'pending',
-      approvedBy:      m['approved_by'] as String?,
+      id: m['id'] as String,
+      date: m['expense_date'] as String? ?? '',
+      categoryName: cat?['name'] as String? ?? 'Other',
+      amount: (m['amount'] as num?)?.toDouble() ?? 0,
+      description: m['description'] as String? ?? '',
+      receiptUrl: m['receipt_url'] as String?,
+      recordedByName: profile?['full_name'] as String? ?? '',
+      status: m['status'] as String? ?? 'pending',
+      approvedBy: m['approved_by'] as String?,
     );
   }
 }
 
 class ExpenseRepository {
-  static final _admin  = SupabaseService.adminClient;
+  static final _admin = SupabaseService.adminClient;
 
   // ── Expenses ─────────────────────────────────────────────────────────────────
 
@@ -54,7 +54,8 @@ class ExpenseRepository {
     String? teamId,
   }) async {
     try {
-      const sel = '*, category:expense_categories(name), recorder:profiles!expenses_recorded_by_fkey(full_name)';
+      const sel =
+          '*, category:expense_categories(name), recorder:profiles!expenses_recorded_by_fkey(full_name)';
       if (teamId != null) {
         final members = await _admin
             .from('profiles')
@@ -93,24 +94,27 @@ class ExpenseRepository {
     // blocked on the regular client. UI gates who can reach this.
     try {
       await _admin.from('expenses').insert({
-        'category_id':  categoryId,
-        'amount':       amount,
-        'description':  description,
-        'recorded_by':  recordedBy,
+        'category_id': categoryId,
+        'amount': amount,
+        'description': description,
+        'recorded_by': recordedBy,
         'expense_date': date,
-        'paid_to':      paidTo,
-        'status':       'pending',
+        'paid_to': paidTo,
+        'status': 'pending',
       });
     } catch (_) {}
   }
 
   /// Admin / manager approves an expense.
-  static Future<void> approveExpense(String expenseId, String approvedById) async {
+  static Future<void> approveExpense(
+    String expenseId,
+    String approvedById,
+  ) async {
     try {
-      await _admin.from('expenses').update({
-        'status':      'approved',
-        'approved_by': approvedById,
-      }).eq('id', expenseId);
+      await _admin
+          .from('expenses')
+          .update({'status': 'approved', 'approved_by': approvedById})
+          .eq('id', expenseId);
     } catch (_) {}
   }
 
@@ -140,7 +144,7 @@ class ExpenseRepository {
   static Future<bool> createCategory({required String name}) async {
     try {
       await _admin.from('expense_categories').insert({
-        'name':      name,
+        'name': name,
         'is_active': true,
       });
       return true;
@@ -150,9 +154,15 @@ class ExpenseRepository {
   }
 
   /// Admin / manager renames an expense category.
-  static Future<bool> updateCategory({required String id, required String name}) async {
+  static Future<bool> updateCategory({
+    required String id,
+    required String name,
+  }) async {
     try {
-      await _admin.from('expense_categories').update({'name': name}).eq('id', id);
+      await _admin
+          .from('expense_categories')
+          .update({'name': name})
+          .eq('id', id);
       return true;
     } catch (_) {
       return false;
@@ -162,7 +172,10 @@ class ExpenseRepository {
   /// Admin / manager soft-deletes a category (sets is_active = false).
   static Future<bool> deleteCategory(String id) async {
     try {
-      await _admin.from('expense_categories').update({'is_active': false}).eq('id', id);
+      await _admin
+          .from('expense_categories')
+          .update({'is_active': false})
+          .eq('id', id);
       return true;
     } catch (_) {
       return false;
