@@ -162,7 +162,7 @@ class TeamRepository {
 
   static Future<List<ProfileModel>> fetchMembers(String teamId) async {
     try {
-      final data = await _client
+      final data = await _admin
           .from('profiles')
           .select()
           .eq('team_id', teamId)
@@ -176,7 +176,7 @@ class TeamRepository {
   /// Assign or remove a user from a team. Pass null [teamId] to unassign.
   static Future<bool> setTeamForUser(String userId, String? teamId) async {
     try {
-      await _client
+      await _admin
           .from('profiles')
           .update({'team_id': teamId})
           .eq('id', userId);

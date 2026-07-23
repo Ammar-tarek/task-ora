@@ -170,8 +170,18 @@ class _TeamMembersScreenState extends State<TeamMembersScreen> {
     );
 
     if (confirmed == true) {
-      await TeamRepository.setTeamForUser(user.id, null);
-      _loadMembers();
+      final ok = await TeamRepository.setTeamForUser(user.id, null);
+      if (!mounted) return;
+      if (ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${user.fullName} removed from team.')),
+        );
+        _loadMembers();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to remove member. Please try again.')),
+        );
+      }
     }
   }
 
