@@ -80,6 +80,18 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         const ['tasks', 'task_assignees'], _onRealtime);
   }
 
+  @override
+  void didUpdateWidget(TaskBoardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialFilter != null &&
+        widget.initialFilter != oldWidget.initialFilter &&
+        _statusFilters.contains(widget.initialFilter)) {
+      setState(() {
+        _filter = widget.initialFilter!;
+      });
+    }
+  }
+
   void _onRealtime() {
     if (mounted) _load(animate: false);
   }

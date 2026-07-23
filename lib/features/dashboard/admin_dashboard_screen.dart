@@ -276,7 +276,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         value: '${_stats?.totalEmployees ?? 0}',
                         icon: Icons.people_outline,
                         sub: '${_stats?.presentToday ?? 0} present',
-                        onTap: () => context.push(isAdmin ? '/users' : '/teams'),
+                        onTap: () {
+                          if (isAdmin) {
+                            context.push('/users');
+                          } else if (profile?.teamId != null) {
+                            context.push('/teams/${profile!.teamId}/members', extra: 'My Team');
+                          } else {
+                            context.push('/users');
+                          }
+                        },
                       ),
                     ],
                   );
