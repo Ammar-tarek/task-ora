@@ -91,7 +91,7 @@ class TaskRepository {
     // Remove old assignees — new department will reassign.
     await _adminClient.from('task_assignees').delete().eq('task_id', taskId);
 
-    // Send notifications to target team lead and admins
+    // Send notifications to target & source team leads, managers, and admins
     try {
       final taskData = await fetchTaskDetail(taskId);
       final title = taskData?['title'] as String? ?? 'Task';
@@ -100,6 +100,28 @@ class TaskRepository {
 
       if (toTeam?.teamLeadId != null) {
         recipients.add(toTeam!.teamLeadId!);
+      }
+
+      final targetManagers = await _adminClient
+          .from('profiles')
+          .select('id')
+          .eq('team_id', toTeamId)
+          .eq('role', 'manager');
+      for (final row in (targetManagers as List)) {
+        recipients.add(row['id'] as String);
+      }
+
+      final fromTeam = await TeamRepository.fetchById(fromTeamId);
+      if (fromTeam?.teamLeadId != null) {
+        recipients.add(fromTeam!.teamLeadId!);
+      }
+      final sourceManagers = await _adminClient
+          .from('profiles')
+          .select('id')
+          .eq('team_id', fromTeamId)
+          .eq('role', 'manager');
+      for (final row in (sourceManagers as List)) {
+        recipients.add(row['id'] as String);
       }
 
       final adminRows = await _adminClient
@@ -129,11 +151,69 @@ class TaskRepository {
     required String taskId,
     required String teamId,
   }) async {
+    // 1. Fetch task details BEFORE clearing handoff_to_team_id
+    final taskData = await fetchTaskDetail(taskId);
+    final title = taskData?['title'] as String? ?? 'Task';
+    final fromTeamId = taskData?['handoff_from_team_id'] as String?;
+
     await _adminClient.from('tasks').update({
       'team_id':            teamId,
       'handoff_to_team_id': null,
       'updated_at':         DateTime.now().toIso8601String(),
     }).eq('id', taskId);
+
+    // 2. Notify source & target managers, leads, and admins that handoff was accepted
+    try {
+      final toTeam = await TeamRepository.fetchById(teamId);
+      final recipients = <String>{};
+
+      if (toTeam?.teamLeadId != null) {
+        recipients.add(toTeam!.teamLeadId!);
+      }
+
+      final targetManagers = await _adminClient
+          .from('profiles')
+          .select('id')
+          .eq('team_id', teamId)
+          .eq('role', 'manager');
+      for (final row in (targetManagers as List)) {
+        recipients.add(row['id'] as String);
+      }
+
+      if (fromTeamId != null) {
+        final fromTeam = await TeamRepository.fetchById(fromTeamId);
+        if (fromTeam?.teamLeadId != null) {
+          recipients.add(fromTeam!.teamLeadId!);
+        }
+        final sourceManagers = await _adminClient
+            .from('profiles')
+            .select('id')
+            .eq('team_id', fromTeamId)
+            .eq('role', 'manager');
+        for (final row in (sourceManagers as List)) {
+          recipients.add(row['id'] as String);
+        }
+      }
+
+      final adminRows = await _adminClient
+          .from('profiles')
+          .select('id')
+          .eq('role', 'admin');
+      for (final row in (adminRows as List)) {
+        recipients.add(row['id'] as String);
+      }
+
+      for (final recipientId in recipients) {
+        await NotificationRepository.createNotification(
+          recipientId: recipientId,
+          type: 'handoff_accepted',
+          title: 'Department Switch Accepted',
+          body: 'Task "$title" handoff was accepted into ${toTeam?.name ?? "target"} department.',
+          referenceType: 'task',
+          referenceId: taskId,
+        );
+      }
+    } catch (_) {}
   }
 
   static Future<List<TaskModel>> _fetchEmployeeTasks(

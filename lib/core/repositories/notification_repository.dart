@@ -157,7 +157,7 @@ class NotificationRepository {
     String? referenceId,
   }) async {
     try {
-      await _client.from('notifications').insert({
+      await _admin.from('notifications').insert({
         'recipient_id':   recipientId,
         'type':           type,
         'title':          title,
