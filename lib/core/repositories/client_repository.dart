@@ -4,7 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 import '../models/client_model.dart';
 import '../models/task_model.dart';
+import '../utils/app_time.dart';
 import 'finance_repository.dart';
+import 'notification_repository.dart';
 
 class CalEventData {
   final String id;
@@ -339,6 +341,22 @@ class ClientRepository {
         await _adminDb.from('event_attendees').insert(
           attendeeIds.map((pid) => {'event_id': eventId, 'profile_id': pid}).toList(),
         );
+
+        // Notify assigned employees / managers about the calendar event!
+        final dateStr = '${start.day}/${start.month}/${start.year}';
+        final timeStr = '${AppTime.hm(start)} - ${AppTime.hm(end)}';
+        for (final recipientId in attendeeIds) {
+          if (recipientId != createdBy) {
+            await NotificationRepository.createNotification(
+              recipientId: recipientId,
+              type: 'calendar_event',
+              title: 'Calendar Event Assigned',
+              body: 'You have been assigned to event "$title" on $dateStr ($timeStr).',
+              referenceType: 'calendar',
+              referenceId: eventId,
+            );
+          }
+        }
       }
 
       // Auto-create CRM invoice so the cost appears on the client's finance page
@@ -384,6 +402,20 @@ class ClientRepository {
         await _adminDb.from('event_attendees').insert(
           attendeeIds.map((pid) => {'event_id': eventId, 'profile_id': pid}).toList(),
         );
+
+        // Notify assigned attendees of updated event details!
+        final dateStr = '${start.day}/${start.month}/${start.year}';
+        final timeStr = '${AppTime.hm(start)} - ${AppTime.hm(end)}';
+        for (final recipientId in attendeeIds) {
+          await NotificationRepository.createNotification(
+            recipientId: recipientId,
+            type: 'calendar_event',
+            title: 'Calendar Event Updated',
+            body: 'Event "$title" on $dateStr ($timeStr) was updated.',
+            referenceType: 'calendar',
+            referenceId: eventId,
+          );
+        }
       }
     } catch (_) {}
   }
