@@ -10,9 +10,10 @@ import '../../core/models/profile_model.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 
-const _roleOrder = ['admin', 'manager', 'employee', 'client'];
+const _roleOrder = ['super_admin', 'admin', 'manager', 'employee', 'client'];
 
 const _roleLabels = {
+  'super_admin': 'Super Admin',
   'admin': 'Admin',
   'manager': 'Manager',
   'employee': 'Employee',
@@ -20,13 +21,15 @@ const _roleLabels = {
 };
 
 final _roleColors = {
+  'super_admin': AppColors.gold,
   'admin': AppColors.primary,
-  'manager': AppColors.gold,
-  'employee': AppColors.statusInProgress,
+  'manager': AppColors.statusInProgress,
+  'employee': AppColors.statusDone,
   'client': AppColors.statusMedium,
 };
 
 const _roleDescriptions = {
+  'super_admin': 'Master authority. Can change admin roles, reset data, & view master reports.',
   'admin': 'Full access to all features, users, finance and settings.',
   'manager': 'Manages team tasks, attendance, meetings and team finance.',
   'employee': 'Views own tasks and calendar. Can log attendance.',
@@ -48,6 +51,7 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
   // Admin: manages everyone and can change roles.
   // Manager: scoped to their own team and can only edit privileges.
   bool _isAdmin = false;
+  bool _isSuperAdmin = false;
   String? _scopeTeamId; // non-null for managers
   String? _myId; // current user — managers cannot edit themselves
 
@@ -57,9 +61,10 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final profile = context.read<AuthNotifier>().profile;
       _isAdmin = profile?.isAdmin == true;
+      _isSuperAdmin = profile?.isSuperAdmin == true;
       _scopeTeamId = _isAdmin ? null : profile?.teamId;
       _myId = profile?.id;
-      _selectedRole = _isAdmin ? 'admin' : 'employee';
+      _selectedRole = _isSuperAdmin ? 'super_admin' : (_isAdmin ? 'admin' : 'employee');
       _load();
     });
   }
@@ -104,6 +109,15 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
 
   Future<void> _changeRole(ProfileModel user, String newRole) async {
     if (user.role == newRole) return;
+    if (!_isSuperAdmin && (user.isAdmin || user.id == _myId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Admins cannot change their own role or other admins\' roles.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -397,7 +411,15 @@ class _UserRoleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final me = context.read<AuthNotifier>().profile;
+    final isSuperAdmin = me?.isSuperAdmin == true;
+    final isSelf = user.id == me?.id;
     final color = _roleColors[user.role] ?? AppColors.primary;
+
+    final canChangeUserRole = isSuperAdmin || (canChangeRole && !user.isAdmin && !isSelf);
+    final canEditUserPrivileges = isSuperAdmin || (!user.isAdmin && !isSelf);
+    final hasMenuOptions = canChangeUserRole || (canEditUserPrivileges && onEditPrivileges != null);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -442,81 +464,91 @@ class _UserRoleCard extends StatelessWidget {
               ],
             ),
           ),
-          // Single control: tap the role chip to open a menu. Admins get role
-          // options AND "Edit Privileges"; managers get "Edit Privileges" only.
-          PopupMenuButton<String>(
-            tooltip: 'Options',
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            onSelected: (val) {
-              if (val == 'privileges') {
-                onEditPrivileges?.call();
-              } else if (val.startsWith('role:')) {
-                onChangeRole(val.substring(5));
-              }
-            },
-            itemBuilder: (_) => [
-              // Role options (admin only, and not for other admins)
-              if (canChangeRole && !user.isAdmin) ...[
-                PopupMenuItem<String>(
-                  enabled: false,
-                  child: Text('CHANGE ROLE', style: AppTextStyles.labelCaps),
-                ),
-                ..._roleOrder.map(
-                  (r) => PopupMenuItem<String>(
-                    value: 'role:$r',
-                    child: Row(
-                      children: [
-                        Icon(
-                          r == user.role ? Icons.check : Icons.circle_outlined,
-                          size: 16,
-                          color: _roleColors[r] ?? AppColors.onSurface,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(_roleLabels[r] ?? r),
-                      ],
-                    ),
-                  ),
-                ),
-                const PopupMenuDivider(),
-              ],
-              // Privileges option (everyone in scope)
-              if (onEditPrivileges != null)
-                const PopupMenuItem<String>(
-                  value: 'privileges',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.tune_outlined,
-                        size: 16,
-                        color: AppColors.gold,
-                      ),
-                      SizedBox(width: 10),
-                      Text('Edit Privileges'),
-                    ],
-                  ),
-                ),
-            ],
-            child: Container(
+          if (!hasMenuOptions)
+            Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: color.withValues(alpha: 0.3)),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _roleLabels[user.role] ?? user.role,
-                    style: AppTextStyles.labelMd.copyWith(color: color),
+              child: Text(
+                _roleLabels[user.role] ?? user.role,
+                style: AppTextStyles.labelMd.copyWith(color: color),
+              ),
+            )
+          else
+            PopupMenuButton<String>(
+              tooltip: 'Options',
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              onSelected: (val) {
+                if (val == 'privileges') {
+                  onEditPrivileges?.call();
+                } else if (val.startsWith('role:')) {
+                  onChangeRole(val.substring(5));
+                }
+              },
+              itemBuilder: (_) => [
+                if (canChangeUserRole) ...[
+                  PopupMenuItem<String>(
+                    enabled: false,
+                    child: Text('CHANGE ROLE', style: AppTextStyles.labelCaps),
                   ),
-                  Icon(Icons.arrow_drop_down, size: 18, color: color),
+                  ..._roleOrder.where((r) => r != 'super_admin').map(
+                    (r) => PopupMenuItem<String>(
+                      value: 'role:$r',
+                      child: Row(
+                        children: [
+                          Icon(
+                            r == user.role ? Icons.check : Icons.circle_outlined,
+                            size: 16,
+                            color: _roleColors[r] ?? AppColors.onSurface,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(_roleLabels[r] ?? r),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const PopupMenuDivider(),
                 ],
+                if (canEditUserPrivileges && onEditPrivileges != null)
+                  const PopupMenuItem<String>(
+                    value: 'privileges',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.tune_outlined,
+                          size: 16,
+                          color: AppColors.gold,
+                        ),
+                        SizedBox(width: 10),
+                        Text('Edit Privileges'),
+                      ],
+                    ),
+                  ),
+              ],
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _roleLabels[user.role] ?? user.role,
+                      style: AppTextStyles.labelMd.copyWith(color: color),
+                    ),
+                    Icon(Icons.arrow_drop_down, size: 18, color: color),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

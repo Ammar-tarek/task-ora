@@ -42,11 +42,12 @@ class ProfileModel {
     createdAt: m['created_at'] as String? ?? '',
   );
 
-  bool get isAdmin => role == 'admin';
+  bool get isSuperAdmin => role == 'super_admin';
+  bool get isAdmin => role == 'admin' || role == 'super_admin';
   bool get isManager => role == 'manager';
   bool get isEmployee => role == 'employee';
   bool get isClient => role == 'client';
-  bool get isAdminOrManager => role == 'admin' || role == 'manager';
+  bool get isAdminOrManager => role == 'admin' || role == 'super_admin' || role == 'manager';
   bool get isActive => status == 'active';
 
   /// First name for greeting

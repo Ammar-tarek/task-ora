@@ -284,6 +284,166 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     }
   }
 
+  void _openCreateAdminModal() {
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
+    bool saving = false;
+    bool obscurePass = true;
+    String? errorMsg;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.admin_panel_settings_outlined, color: AppColors.gold, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Create New Admin', style: AppTextStyles.headlineSm),
+                    Text('Set email & password for new Admin account', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 440,
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (errorMsg != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(errorMsg!, style: AppTextStyles.bodySm.copyWith(color: AppColors.error))),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  TextFormField(
+                    controller: nameCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'FULL NAME *',
+                      hintText: 'e.g. System Admin',
+                      prefixIcon: Icon(Icons.person_outline, size: 18),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Full name is required' : null,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'ADMIN LOGIN EMAIL *',
+                      hintText: 'e.g. admin@company.com',
+                      prefixIcon: Icon(Icons.email_outlined, size: 18),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Email is required';
+                      if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v.trim())) return 'Enter valid email';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: passCtrl,
+                    obscureText: obscurePass,
+                    decoration: InputDecoration(
+                      labelText: 'ADMIN LOGIN PASSWORD *',
+                      hintText: 'Min 8 characters',
+                      prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
+                        onPressed: () => setDialogState(() => obscurePass = !obscurePass),
+                      ),
+                    ),
+                    validator: (v) => v == null || v.length < 8 ? 'Min 8 characters required' : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(dialogCtx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                foregroundColor: Colors.black,
+              ),
+              icon: saving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  : const Icon(Icons.check, size: 18),
+              label: const Text('Create Admin Account'),
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() {
+                        saving = true;
+                        errorMsg = null;
+                      });
+
+                      final err = await ProfileRepository.createUser(
+                        email: emailCtrl.text.trim(),
+                        password: passCtrl.text,
+                        fullName: nameCtrl.text.trim(),
+                        role: 'admin',
+                      );
+
+                      if (err != null) {
+                        setDialogState(() {
+                          saving = false;
+                          errorMsg = err;
+                        });
+                      } else {
+                        if (mounted) {
+                          Navigator.pop(dialogCtx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Admin account created! They can now log in with ${emailCtrl.text.trim()}'),
+                              backgroundColor: AppColors.statusDone,
+                            ),
+                          );
+                          _load();
+                        }
+                      }
+                    },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────
 
   @override
@@ -314,6 +474,23 @@ class _UserManagementScreenState extends State<UserManagementScreen>
         automaticallyImplyLeading: leading == null,
         title: Text(appBarTitle),
         actions: [
+          if (profile?.isSuperAdmin == true) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.gold,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
+                label: const Text('+ Create Admin'),
+                onPressed: _openCreateAdminModal,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           if (isAdmin)
             IconButton(
               icon: const Icon(Icons.group_add_outlined),
@@ -323,9 +500,9 @@ class _UserManagementScreenState extends State<UserManagementScreen>
           if (!_pickingTeam && _myTeam != null)
             IconButton(
               icon: const Icon(Icons.refresh),
-              // Refresh current team's members, not the picker
               onPressed: () => _loadTeamMembers(_myTeam!),
             ),
+          const SizedBox(width: 8),
         ],
       ),
       floatingActionButton: (canCreateUser && !_pickingTeam)
@@ -343,7 +520,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                 }
               },
               icon: const Icon(Icons.person_add_outlined),
-              label: Text(isAdmin ? 'Create Manager' : 'Create Employee'),
+              label: Text(isAdmin ? 'Create User / Admin' : 'Create Employee'),
               backgroundColor: AppColors.gold,
               foregroundColor: Colors.black,
             )
@@ -804,65 +981,73 @@ class _UserCardState extends State<_UserCard> {
                 );
               }
             },
-            itemBuilder: (_) => [
-              if (widget.isAdmin)
+            itemBuilder: (_) {
+              final me = context.read<AuthNotifier>().profile;
+              final isSuperAdmin = me?.isSuperAdmin == true;
+              final isSelf = u.id == me?.id;
+              final canChangeStatus = isSuperAdmin || (!u.isAdmin && !isSelf);
+              final canEditPrivileges = isSuperAdmin || (!u.isAdmin && !isSelf);
+
+              return [
+                if (widget.isAdmin)
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 16),
+                        SizedBox(width: 10),
+                        Text('Edit Details'),
+                      ],
+                    ),
+                  ),
+                // Privileges editable for staff (not clients), but NOT for Admins or self unless Super Admin.
+                if (canEditPrivileges && u.role != 'client')
+                  const PopupMenuItem(
+                    value: 'privileges',
+                    child: Row(
+                      children: [
+                        Icon(Icons.tune_outlined, size: 16),
+                        SizedBox(width: 10),
+                        Text('Edit Privileges'),
+                      ],
+                    ),
+                  ),
+                if (widget.isAdmin || (canEditPrivileges && u.role != 'client'))
+                  const PopupMenuDivider(),
+                if (canChangeStatus && !u.isActive)
+                  const PopupMenuItem(
+                    value: 'activate',
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, size: 16),
+                        SizedBox(width: 10),
+                        Text('Activate'),
+                      ],
+                    ),
+                  ),
+                if (canChangeStatus && u.isActive)
+                  const PopupMenuItem(
+                    value: 'deactivate',
+                    child: Row(
+                      children: [
+                        Icon(Icons.block_outlined, size: 16),
+                        SizedBox(width: 10),
+                        Text('Deactivate'),
+                      ],
+                    ),
+                  ),
                 const PopupMenuItem(
-                  value: 'edit',
+                  value: 'assign_team',
                   child: Row(
                     children: [
-                      Icon(Icons.edit_outlined, size: 16),
+                      Icon(Icons.group_outlined, size: 16),
                       SizedBox(width: 10),
-                      Text('Edit Details'),
+                      Text('Assign Team'),
                     ],
                   ),
                 ),
-              // Privileges editable for staff (not clients).
-              if (u.role != 'client')
-                const PopupMenuItem(
-                  value: 'privileges',
-                  child: Row(
-                    children: [
-                      Icon(Icons.tune_outlined, size: 16),
-                      SizedBox(width: 10),
-                      Text('Edit Privileges'),
-                    ],
-                  ),
-                ),
-              if (widget.isAdmin || u.role != 'client')
-                const PopupMenuDivider(),
-              if (!u.isActive)
-                const PopupMenuItem(
-                  value: 'activate',
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle_outline, size: 16),
-                      SizedBox(width: 10),
-                      Text('Activate'),
-                    ],
-                  ),
-                ),
-              if (u.isActive)
-                const PopupMenuItem(
-                  value: 'deactivate',
-                  child: Row(
-                    children: [
-                      Icon(Icons.block_outlined, size: 16),
-                      SizedBox(width: 10),
-                      Text('Deactivate'),
-                    ],
-                  ),
-                ),
-              const PopupMenuItem(
-                value: 'assign_team',
-                child: Row(
-                  children: [
-                    Icon(Icons.group_outlined, size: 16),
-                    SizedBox(width: 10),
-                    Text('Assign Team'),
-                  ],
-                ),
-              ),
-            ],
+              ];
+            },
           ),
         ],
       ),
@@ -1336,55 +1521,88 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
             _SheetLabel('ACCESS'),
             const SizedBox(height: 10),
 
-            // Role selector (hidden for admin accounts — can't demote admin here)
-            if (!isAdminRole) ...[
-              DropdownButtonFormField<String>(
-                initialValue: _selectedRole,
-                decoration: InputDecoration(
-                  labelText: 'ROLE',
-                  prefixIcon: const Icon(Icons.badge_outlined, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'employee', child: Text('Employee')),
-                  DropdownMenuItem(value: 'manager', child: Text('Manager')),
-                ],
-                onChanged: (v) => setState(() => _selectedRole = v),
-              ),
-              const SizedBox(height: 12),
-            ],
+            // Role selector (Super Admin can change role of ANY user including Admins)
+            Builder(
+              builder: (context) {
+                final me = context.read<AuthNotifier>().profile;
+                final isSuperAdmin = me?.isSuperAdmin == true;
+                final isSelf = widget.user.id == me?.id;
+                final canChangeRole = isSuperAdmin || (!isAdminRole && !widget.user.isSuperAdmin && !isSelf);
+
+                if (!canChangeRole) return const SizedBox.shrink();
+
+                final roleItems = isSuperAdmin
+                    ? const [
+                        DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                        DropdownMenuItem(value: 'manager', child: Text('Manager')),
+                        DropdownMenuItem(value: 'employee', child: Text('Employee')),
+                        DropdownMenuItem(value: 'client', child: Text('Client')),
+                      ]
+                    : const [
+                        DropdownMenuItem(value: 'employee', child: Text('Employee')),
+                        DropdownMenuItem(value: 'manager', child: Text('Manager')),
+                      ];
+
+                return Column(
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: roleItems.any((item) => item.value == _selectedRole)
+                          ? _selectedRole
+                          : roleItems.first.value,
+                      decoration: InputDecoration(
+                        labelText: 'ROLE',
+                        prefixIcon: const Icon(Icons.badge_outlined, size: 20),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      items: roleItems,
+                      onChanged: (v) => setState(() => _selectedRole = v),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                );
+              },
+            ),
 
             // Status toggle
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.outlineVariant),
-              ),
-              child: SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 2,
-                ),
-                title: Text('Account Status', style: AppTextStyles.labelMd),
-                subtitle: Text(
-                  _isActive
-                      ? 'Active — can log in'
-                      : 'Inactive — login disabled',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.onSurfaceVariant,
+            Builder(
+              builder: (context) {
+                final me = context.read<AuthNotifier>().profile;
+                final isSuperAdmin = me?.isSuperAdmin == true;
+                final isSelf = widget.user.id == me?.id;
+                final canChangeStatus = isSuperAdmin || (!isAdminRole && !isSelf);
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.outlineVariant),
                   ),
-                ),
-                value: _isActive,
-                onChanged: (v) => setState(() => _isActive = v),
-                activeThumbColor: AppColors.gold,
-              ),
+                  child: SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 2,
+                    ),
+                    title: Text('Account Status', style: AppTextStyles.labelMd),
+                    subtitle: Text(
+                      _isActive
+                          ? 'Active — can log in'
+                          : 'Inactive — login disabled',
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                    value: _isActive,
+                    onChanged: canChangeStatus ? (v) => setState(() => _isActive = v) : null,
+                    activeThumbColor: AppColors.gold,
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 28),
 

@@ -20,6 +20,10 @@ dependencies:
   intl: ^0.20.2
   flutter_local_notifications: ^18.0.1
 
+  # Printing & PDF Export
+  pdf: ^3.11.1
+  printing: ^5.13.2
+
   # Navigation
   go_router: ^14.8.1
 

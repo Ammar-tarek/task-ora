@@ -30,6 +30,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
   final _passCtrl = TextEditingController();
   bool _saving = false;
   bool _obscurePass = true;
+  String _selectedRole = 'manager';
   String? _errorMsg;
   String? _successMsg;
 
@@ -82,7 +83,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       _successMsg = null;
     });
 
-    final role = _targetRole;
+    final role = _selectedRole;
     final email = _emailCtrl.text.trim();
     final error = await ProfileRepository.createUser(
       email: email,
@@ -106,8 +107,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       setState(() {
         _saving = false;
         _successMsg =
-            '${role == 'manager' ? 'Manager' : 'Employee'} account '
-            'created for $email$teamSuffix';
+            '${role.toUpperCase()} account created for $email$teamSuffix';
       });
       _namCtrl.clear();
       _emailCtrl.clear();
@@ -417,11 +417,37 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                 return null;
               },
             ),
+            const SizedBox(height: 16),
+
+            // Role selection dropdown
+            Builder(
+              builder: (context) {
+                final isSuperAdmin = context.read<AuthNotifier>().profile?.isSuperAdmin == true;
+                final items = [
+                  if (isSuperAdmin)
+                    const DropdownMenuItem(value: 'admin', child: Text('Admin (Full System Access)')),
+                  const DropdownMenuItem(value: 'manager', child: Text('Manager (Team & Operations Access)')),
+                  const DropdownMenuItem(value: 'employee', child: Text('Employee (Tasks & Attendance Access)')),
+                  const DropdownMenuItem(value: 'client', child: Text('Client (Client Portal Access)')),
+                ];
+                final initialRole = items.any((i) => i.value == _selectedRole) ? _selectedRole : 'manager';
+                return DropdownButtonFormField<String>(
+                  initialValue: initialRole,
+                  decoration: const InputDecoration(
+                    labelText: 'ACCOUNT ROLE *',
+                    prefixIcon: Icon(Icons.badge_outlined, size: 18),
+                  ),
+                  items: items,
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedRole = val);
+                  },
+                );
+              },
+            ),
 
             const SizedBox(height: 8),
             Text(
-              'Share these credentials directly with the new '
-              '${_targetRole == 'manager' ? 'manager' : 'employee'}. '
+              'Share these credentials directly with the new user. '
               'They can change their password after logging in.',
               style: AppTextStyles.bodySm.copyWith(
                 color: AppColors.onSurfaceVariant,

@@ -6,7 +6,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/models/profile_model.dart';
 import '../../core/models/user_privileges_model.dart';
+import '../../core/repositories/profile_repository.dart';
 import '../../core/repositories/user_privileges_repository.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -30,6 +32,7 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
   bool _loading = true;
   bool _saving = false;
   UserPrivilegesModel? _privileges;
+  ProfileModel? _targetProfile;
 
   @override
   void initState() {
@@ -39,17 +42,42 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    final target = await ProfileRepository.fetchById(widget.userId);
     final p = await UserPrivilegesRepository.fetchForUserOrDefaults(
       widget.userId,
     );
-    if (mounted)
+    if (mounted) {
       setState(() {
+        _targetProfile = target;
         _privileges = p;
         _loading = false;
       });
+    }
+  }
+
+  bool get _isReadOnly {
+    final me = context.read<AuthNotifier>().profile;
+    if (me == null) return false;
+    final isSuperAdmin = me.isSuperAdmin;
+    final targetRole = _targetProfile?.role ?? widget.role;
+    final isTargetAdmin = targetRole == 'admin' || targetRole == 'super_admin';
+    final isSelf = me.id == widget.userId;
+
+    // Admins (who are not super_admin) cannot edit their own privileges or other admins' privileges.
+    return !isSuperAdmin && (isTargetAdmin || isSelf);
   }
 
   Future<void> _toggle(UserPrivilegesModel updated) async {
+    if (_isReadOnly) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppColors.error,
+          content: Text('Admins cannot edit their own privileges or other admins\' privileges.'),
+        ),
+      );
+      return;
+    }
+
     final previous = _privileges;
     setState(() {
       _privileges = updated;
@@ -120,6 +148,52 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
   }
 
   Widget _buildBody() {
+    final readOnly = _isReadOnly;
+
+    if (readOnly) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.lock_outlined,
+                  size: 32,
+                  color: AppColors.error,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Access Restricted',
+                style: AppTextStyles.headlineSm,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Admins cannot edit their own privileges or other admins\' privileges.\nOnly Super Admin can modify admin privileges.',
+                style: AppTextStyles.bodySm.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final p = _privileges!;
     final items = [
       _Item(
@@ -176,34 +250,61 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.gold.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.gold.withValues(alpha: 0.2)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.info_outline, color: AppColors.gold, size: 18),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'These privileges apply to this person specifically and override '
-                  'the team defaults. Changes save instantly.',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.onSurfaceVariant,
+        if (readOnly) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.error.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.lock_outlined, color: AppColors.error, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Admins cannot edit their own privileges or other admins\' privileges. Only Super Admin can modify admin privileges.',
+                    style: AppTextStyles.bodySm.copyWith(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ] else ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.gold.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.gold.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, color: AppColors.gold, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'These privileges apply to this person specifically and override '
+                    'the team defaults. Changes save instantly.',
+                    style: AppTextStyles.bodySm.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         ...items.map(
           (item) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: _buildCard(item),
+            child: _buildCard(item, readOnly: readOnly),
           ),
         ),
         const SizedBox(height: 24),
@@ -211,7 +312,7 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
     );
   }
 
-  Widget _buildCard(_Item item) {
+  Widget _buildCard(_Item item, {required bool readOnly}) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
@@ -250,7 +351,7 @@ class _UserPrivilegesScreenState extends State<UserPrivilegesScreen> {
           ),
         ),
         value: item.value,
-        onChanged: _saving ? null : item.onChanged,
+        onChanged: (_saving || readOnly) ? null : item.onChanged,
         activeThumbColor: AppColors.gold,
       ),
     );
@@ -271,3 +372,4 @@ class _Item {
     required this.onChanged,
   });
 }
+

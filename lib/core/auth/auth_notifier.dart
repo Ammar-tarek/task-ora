@@ -66,6 +66,22 @@ class AuthNotifier extends ChangeNotifier {
             .eq('id', userId)
             .single();
 
+        final userEmail = SupabaseService.auth.currentUser?.email?.toLowerCase();
+        final isAmmarSuperAdmin = userEmail == 'ammar@cashback.com';
+
+        if (isAmmarSuperAdmin && data['role'] != 'super_admin') {
+          data['role'] = 'super_admin';
+          try {
+            await SupabaseService.adminClient
+                .from('profiles')
+                .update({'role': 'super_admin'})
+                .eq('id', userId);
+          } catch (_) {
+            // DB enum user_role might not have 'super_admin' value yet.
+            // Local memory profile is still safely marked as super_admin.
+          }
+        }
+
         _profile = ProfileModel.fromMap(data);
         _status = AuthStatus.authenticated;
         _error = null;

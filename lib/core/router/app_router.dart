@@ -36,6 +36,7 @@ import '../../features/teams/team_privileges_screen.dart';
 import '../../features/clients/clients_screen.dart';
 import '../../features/clients/client_finance_screen.dart';
 import '../../features/users/create_user_screen.dart';
+import '../../features/super_admin/super_admin_report_screen.dart';
 import '../widgets/bottom_nav_shell.dart';
 
 /// Called from main.dart — receives the AuthNotifier so the router
@@ -134,6 +135,11 @@ GoRouter makeRouter(AuthNotifier auth) {
             loc == '/create-user') {
           return '/tasks';
         }
+      }
+
+      // Super Admin route guard
+      if (loc.startsWith('/super-admin') && profile?.isSuperAdmin != true) {
+        return '/dashboard';
       }
 
       // Clients cannot create users.
@@ -243,6 +249,10 @@ GoRouter makeRouter(AuthNotifier auth) {
       GoRoute(
         path: '/analytics',
         builder: (_, __) => const AdvancedAnalyticsScreen(),
+      ),
+      GoRoute(
+        path: '/super-admin/report',
+        builder: (_, __) => const SuperAdminReportScreen(),
       ),
       GoRoute(
         path: '/attendance',

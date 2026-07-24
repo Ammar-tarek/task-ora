@@ -10,6 +10,7 @@ import '../../core/providers/theme_controller.dart';
 import '../../core/services/n8n_service.dart';
 import '../../core/services/wifi_attendance_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../super_admin/reset_app_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -432,6 +433,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 16),
                   ],
+                ),
+              ),
+              const Divider(height: 1),
+            ],
+
+            // Super Admin Control Panel — Exclusive for Super Admin (ammar@cashback.com)
+            if (profile?.isSuperAdmin == true) ...[
+              const _SectionTitle(title: 'SUPER ADMIN CONTROLS'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.stars, color: AppColors.gold, size: 22),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Super Admin Master Panel',
+                            style: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Exclusive controls reserved for Super Admin (ammar@cashback.com).',
+                        style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.gold,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.person_add_outlined, size: 18),
+                            label: const Text('Create New Admin / User'),
+                            onPressed: () => context.push('/create-user'),
+                          ),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.gold,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.analytics_outlined, size: 18),
+                            label: const Text('Generate Master Detailed Report'),
+                            onPressed: () => context.push('/super-admin/report'),
+                          ),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.error,
+                              side: const BorderSide(color: AppColors.error),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.delete_forever_outlined, size: 18),
+                            label: const Text('Reset Application Data'),
+                            onPressed: () async {
+                              await showDialog<bool>(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (_) => const ResetAppDialog(),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const Divider(height: 1),
