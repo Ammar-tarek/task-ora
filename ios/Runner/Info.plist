@@ -70,5 +70,13 @@
 	<string>This app requires location permission to detect your office Wi-Fi network for automated attendance check-in and check-out.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>This app requires location permission to detect your office Wi-Fi network for automated attendance check-in and check-out.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app requires local network permission to scan your office Wi-Fi network for automated attendance check-in and check-out.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app requires access to your photo library to attach photos to tasks and upload profile pictures.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>This app requires permission to save generated PDF reports and files to your photo library.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app requires camera access to take photos for task attachments and profile pictures.</string>
 </dict>
 </plist>
