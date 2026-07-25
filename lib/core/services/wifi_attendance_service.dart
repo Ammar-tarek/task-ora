@@ -65,12 +65,18 @@ class WifiAttendanceService {
     await AppSettingsRepository.setWifiEnabled(enabled, updatedBy: updatedBy);
     final p = await SharedPreferences.getInstance();
     await p.setBool(_kWifiAttendance, enabled);
+
+    if (!enabled) {
+      await p.remove(_kSessionStart);
+      instance.dispose();
+    }
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   /// Call once when the authenticated employee's profile is available.
   Future<void> init(String employeeId) async {
+    if (!await isEnabled()) return;
     if (_initialized && _employeeId == employeeId) return;
     _employeeId = employeeId;
     _initialized = true;
@@ -92,7 +98,11 @@ class WifiAttendanceService {
   /// Called from app-resume (WidgetsBindingObserver) and from init.
   Future<void> checkNow() async {
     if (_employeeId == null) return;
-    if (!await isEnabled()) return;
+    if (!await isEnabled()) {
+      final p = await SharedPreferences.getInstance();
+      await p.remove(_kSessionStart);
+      return;
+    }
 
     final results = await Connectivity().checkConnectivity();
     final onWifi = results.contains(ConnectivityResult.wifi);
@@ -106,7 +116,11 @@ class WifiAttendanceService {
 
   Future<void> _onConnectivity(List<ConnectivityResult> results) async {
     if (_employeeId == null) return;
-    if (!await isEnabled()) return;
+    if (!await isEnabled()) {
+      final p = await SharedPreferences.getInstance();
+      await p.remove(_kSessionStart);
+      return;
+    }
 
     final onWifi = results.contains(ConnectivityResult.wifi);
 

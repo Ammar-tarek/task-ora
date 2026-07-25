@@ -1,16 +1,16 @@
-// lib/core/repositories/super_admin_report_repository.dart
-// Comprehensive detailed metrics and log items for Super Admin Master Report.
-
+import 'package:flutter/material.dart' show DateTimeRange;
 import '../services/supabase_service.dart';
 
 class TaskAssigneeInfo {
   final String profileId;
   final String name;
   final bool isLead;
+  final bool isPast;
   const TaskAssigneeInfo({
     required this.profileId,
     required this.name,
     required this.isLead,
+    this.isPast = false,
   });
 }
 
@@ -25,9 +25,14 @@ class DetailedTaskReportItem {
   final String? clientName;
   final String? teamName;
   final String? department;
+  final String? createdByName;
+  final String? startDate;
   final String? dueDate;
   final String? createdAt;
+  final String? updatedAt;
+  final String? attachmentUrl;
   final List<TaskAssigneeInfo> assignees;
+  final List<TaskAssigneeInfo> pastAssignees;
   final List<CommentReportItem> comments;
 
   const DetailedTaskReportItem({
@@ -41,9 +46,14 @@ class DetailedTaskReportItem {
     this.clientName,
     this.teamName,
     this.department,
+    this.createdByName,
+    this.startDate,
     this.dueDate,
     this.createdAt,
+    this.updatedAt,
+    this.attachmentUrl,
     required this.assignees,
+    this.pastAssignees = const [],
     required this.comments,
   });
 }
@@ -57,6 +67,9 @@ class AttendanceReportItem {
   final String status;
   final double hoursWorked;
   final bool isManual;
+  final String? dailyReport;
+  final String? notes;
+  final String? wifiSsid;
 
   const AttendanceReportItem({
     required this.id,
@@ -67,6 +80,9 @@ class AttendanceReportItem {
     required this.status,
     required this.hoursWorked,
     required this.isManual,
+    this.dailyReport,
+    this.notes,
+    this.wifiSsid,
   });
 }
 
@@ -79,7 +95,10 @@ class CrmReportItem {
   final String status;
   final String sourceType;
   final String? dueDate;
+  final String? paymentDate;
   final String? invoiceNumber;
+  final String? notes;
+  final String? createdAt;
 
   const CrmReportItem({
     required this.id,
@@ -90,7 +109,10 @@ class CrmReportItem {
     required this.status,
     required this.sourceType,
     this.dueDate,
+    this.paymentDate,
     this.invoiceNumber,
+    this.notes,
+    this.createdAt,
   });
 
   double get outstanding => amount - paidAmount;
@@ -104,6 +126,8 @@ class DetailedExpenseItem {
   final String description;
   final String recordedByName;
   final String status;
+  final String? receiptUrl;
+  final String? createdAt;
 
   const DetailedExpenseItem({
     required this.id,
@@ -113,6 +137,8 @@ class DetailedExpenseItem {
     required this.description,
     required this.recordedByName,
     required this.status,
+    this.receiptUrl,
+    this.createdAt,
   });
 }
 
@@ -123,6 +149,8 @@ class PenaltyReportItem {
   final String reason;
   final String date;
   final String status;
+  final String? notes;
+  final String? createdAt;
 
   const PenaltyReportItem({
     required this.id,
@@ -131,6 +159,8 @@ class PenaltyReportItem {
     required this.reason,
     required this.date,
     required this.status,
+    this.notes,
+    this.createdAt,
   });
 }
 
@@ -164,7 +194,74 @@ class CommentReportItem {
   });
 }
 
+class UserReportItem {
+  final String id;
+  final String fullName;
+  final String email;
+  final String role;
+  final String department;
+  final String? phone;
+  final bool isActive;
+  final String? createdAt;
+
+  const UserReportItem({
+    required this.id,
+    required this.fullName,
+    required this.email,
+    required this.role,
+    required this.department,
+    this.phone,
+    required this.isActive,
+    this.createdAt,
+  });
+}
+
+class ClientReportItem {
+  final String id;
+  final String companyName;
+  final String? contactName;
+  final String? email;
+  final String? phone;
+  final String status;
+  final String? notes;
+  final String? createdAt;
+
+  const ClientReportItem({
+    required this.id,
+    required this.companyName,
+    this.contactName,
+    this.email,
+    this.phone,
+    required this.status,
+    this.notes,
+    this.createdAt,
+  });
+}
+
+class TeamReportItem {
+  final String id;
+  final String name;
+  final String department;
+  final String? leaderName;
+  final int memberCount;
+
+  const TeamReportItem({
+    required this.id,
+    required this.name,
+    required this.department,
+    this.leaderName,
+    required this.memberCount,
+  });
+}
+
 class SuperAdminReportData {
+  final String reportPeriodTitle;
+
+  // Users & Clients & Teams Directory
+  final List<UserReportItem> userList;
+  final List<ClientReportItem> clientList;
+  final List<TeamReportItem> teamList;
+
   // Tasks
   final int totalTasks;
   final Map<String, int> tasksByStatus;
@@ -196,6 +293,10 @@ class SuperAdminReportData {
   final List<CommentReportItem> commentsList;
 
   const SuperAdminReportData({
+    required this.reportPeriodTitle,
+    required this.userList,
+    required this.clientList,
+    required this.teamList,
     required this.totalTasks,
     required this.tasksByStatus,
     required this.tasksByPriority,
@@ -224,31 +325,113 @@ class SuperAdminReportData {
 class SuperAdminReportRepository {
   static final _admin = SupabaseService.adminClient;
 
-  static Future<SuperAdminReportData> fetchMasterReport() async {
-    // 1. Profiles Mapping
+  static Future<SuperAdminReportData> fetchMasterReport({
+    DateTimeRange? dateRange,
+    String filterTitle = 'All Time',
+  }) async {
+    bool inRange(String? dateStr) {
+      if (dateRange == null || dateStr == null || dateStr.trim().isEmpty) return true;
+      final dt = DateTime.tryParse(dateStr.length >= 10 ? dateStr.substring(0, 10) : dateStr);
+      if (dt == null) return true;
+      final start = DateTime(dateRange.start.year, dateRange.start.month, dateRange.start.day);
+      final end = DateTime(dateRange.end.year, dateRange.end.month, dateRange.end.day, 23, 59, 59);
+      return (dt.isAfter(start) || dt.isAtSameMomentAs(start)) &&
+             (dt.isBefore(end) || dt.isAtSameMomentAs(end));
+    }
+
+    // 1. Profiles Mapping & Users Directory
     final Map<String, String> userNames = {};
+    final List<UserReportItem> userList = [];
     try {
-      final profilesData = await _admin.from('profiles').select('id, full_name');
+      final profilesData = await _admin
+          .from('profiles')
+          .select('id, full_name, email, role, department, phone, is_active, created_at')
+          .order('full_name', ascending: true);
+
       for (final p in profilesData) {
-        userNames[p['id'] as String] = p['full_name'] as String? ?? 'Unknown User';
+        final id = p['id'] as String;
+        final name = p['full_name'] as String? ?? 'Unknown User';
+        userNames[id] = name;
+
+        userList.add(
+          UserReportItem(
+            id: id,
+            fullName: name,
+            email: p['email'] as String? ?? '',
+            role: p['role'] as String? ?? 'employee',
+            department: p['department'] as String? ?? 'General',
+            phone: p['phone'] as String?,
+            isActive: p['is_active'] as bool? ?? true,
+            createdAt: p['created_at'] as String?,
+          ),
+        );
       }
     } catch (_) {}
 
-    // 2. Teams Mapping
+    // 2. Teams Mapping & Directory
     final Map<String, String> teamNames = {};
     final Map<String, String> teamDepts = {};
+    final List<TeamReportItem> teamList = [];
     try {
-      final teamsData = await _admin.from('teams').select('id, name, department');
+      final teamsData = await _admin
+          .from('teams')
+          .select('*, leader:profiles!teams_leader_id_fkey(full_name)')
+          .order('name', ascending: true);
+
       for (final tm in teamsData) {
         final id = tm['id'] as String;
         final name = tm['name'] as String? ?? 'Team';
-        final dept = tm['department'] as String?;
+        final dept = tm['department'] as String? ?? 'General';
         teamNames[id] = name;
-        teamDepts[id] = dept ?? 'General';
+        teamDepts[id] = dept;
+
+        final leaderObj = tm['leader'] as Map<String, dynamic>?;
+        final leaderId = tm['leader_id'] as String?;
+        final leaderName = leaderObj?['full_name'] as String? ?? (leaderId != null ? userNames[leaderId] : null);
+
+        int mCount = 0;
+        try {
+          final mRes = await _admin.from('team_members').select('id').eq('team_id', id);
+          mCount = mRes.length;
+        } catch (_) {}
+
+        teamList.add(
+          TeamReportItem(
+            id: id,
+            name: name,
+            department: dept,
+            leaderName: leaderName,
+            memberCount: mCount,
+          ),
+        );
       }
     } catch (_) {}
 
-    // 3. Comments
+    // 3. Clients Directory
+    final List<ClientReportItem> clientList = [];
+    try {
+      final clientData = await _admin
+          .from('client_profiles')
+          .select('id, company_name, contact_name, email, phone, status, notes, created_at')
+          .order('company_name', ascending: true);
+
+      for (final c in clientData) {
+        clientList.add(
+          ClientReportItem(
+            id: c['id'] as String? ?? '',
+            companyName: c['company_name'] as String? ?? 'Client',
+            contactName: c['contact_name'] as String?,
+            email: c['email'] as String?,
+            phone: c['phone'] as String?,
+            status: c['status'] as String? ?? 'active',
+            notes: c['notes'] as String?,
+            createdAt: c['created_at'] as String?,
+          ),
+        );
+      }
+    } catch (_) {}
+
+    // 4. Comments
     List<dynamic> commentsData = [];
     try {
       commentsData = await _admin
@@ -257,12 +440,12 @@ class SuperAdminReportRepository {
           .order('created_at', ascending: false);
     } catch (_) {}
 
-    // 4. Tasks Query
+    // 5. Tasks Query with Creator & Attachments & Audit Log Reassignments
     List<dynamic> tasksData = [];
     try {
       tasksData = await _admin
           .from('tasks')
-          .select('*, client:client_profiles(company_name), team:teams(name, department), task_assignees(profile_id, is_lead)')
+          .select('*, client:client_profiles(company_name), team:teams(name, department), creator:profiles!tasks_created_by_fkey(full_name), task_assignees(profile_id, is_lead)')
           .order('created_at', ascending: false);
     } catch (_) {
       try {
@@ -270,7 +453,6 @@ class SuperAdminReportRepository {
       } catch (_) {}
     }
 
-    // Map task titles
     final Map<String, String> taskTitles = {};
     for (final t in tasksData) {
       final id = t['id'] as String?;
@@ -281,10 +463,14 @@ class SuperAdminReportRepository {
 
     final List<CommentReportItem> commentItems = [];
     for (final c in commentsData) {
+      final cDate = c['created_at'] as String? ?? '';
+      if (!inRange(cDate)) continue;
+
       final tid = c['task_id'] as String? ?? '';
       final uid = c['user_id'] as String?;
       final author = userNames[uid] ?? 'User';
       final title = taskTitles[tid] ?? 'Task';
+
       commentItems.add(
         CommentReportItem(
           id: c['id'] as String? ?? '',
@@ -292,7 +478,7 @@ class SuperAdminReportRepository {
           authorName: author,
           taskTitle: title,
           content: c['content'] as String? ?? '',
-          createdAt: c['created_at'] as String? ?? '',
+          createdAt: cDate,
         ),
       );
     }
@@ -302,6 +488,9 @@ class SuperAdminReportRepository {
     final List<DetailedTaskReportItem> taskList = [];
 
     for (final t in tasksData) {
+      final cDate = (t['created_at'] ?? t['due_date'] ?? t['start_date']) as String?;
+      if (!inRange(cDate)) continue;
+
       final taskId = t['id'] as String? ?? '';
       final st = t['status'] as String? ?? 'todo';
       final pr = t['priority'] as String? ?? 'medium';
@@ -316,21 +505,37 @@ class SuperAdminReportRepository {
       final clientObj = t['client'] as Map<String, dynamic>?;
       final clientName = clientObj?['company_name'] as String?;
 
-      // Task Assignees
+      final creatorObj = t['creator'] as Map<String, dynamic>?;
+      final creatorId = t['created_by'] as String?;
+      final creatorName = creatorObj?['full_name'] as String? ?? (creatorId != null ? userNames[creatorId] : null);
+
+      // Task Assignees — Every employee assigned to this task
       final List<TaskAssigneeInfo> assignees = [];
+      final Set<String> currentIds = {};
+
       final rawAssignees = t['task_assignees'] as List?;
       if (rawAssignees != null) {
         for (final a in rawAssignees) {
           final pid = a['profile_id'] as String?;
-          if (pid != null) {
+          if (pid != null && userNames[pid] != null) {
+            currentIds.add(pid);
             assignees.add(
               TaskAssigneeInfo(
                 profileId: pid,
-                name: userNames[pid] ?? 'Employee',
+                name: userNames[pid]!,
                 isLead: a['is_lead'] as bool? ?? false,
               ),
             );
           }
+        }
+      }
+
+      // Direct assignee column fallback (assigned_to / assignee_id / employee_id)
+      final directAssigneeId = (t['assigned_to'] ?? t['assignee_id'] ?? t['employee_id']) as String?;
+      if (directAssigneeId != null && userNames[directAssigneeId] != null) {
+        if (!currentIds.contains(directAssigneeId)) {
+          currentIds.add(directAssigneeId);
+          assignees.add(TaskAssigneeInfo(profileId: directAssigneeId, name: userNames[directAssigneeId]!, isLead: false));
         }
       }
 
@@ -348,15 +553,19 @@ class SuperAdminReportRepository {
           clientName: clientName,
           teamName: teamName,
           department: dept,
+          createdByName: creatorName,
+          startDate: t['start_date'] as String?,
           dueDate: t['due_date'] as String?,
           createdAt: t['created_at'] as String?,
+          updatedAt: t['updated_at'] as String?,
+          attachmentUrl: t['attachment_url'] as String?,
           assignees: assignees,
           comments: taskComments,
         ),
       );
     }
 
-    // 5. Attendance Records Query (using employee_id & joined employee profile)
+    // 6. Attendance Records Query
     List<AttendanceReportItem> attendanceList = [];
     int present = 0;
     int late = 0;
@@ -370,14 +579,21 @@ class SuperAdminReportRepository {
           .order('attendance_date', ascending: false);
 
       for (final a in attData) {
+        final aDate = (a['attendance_date'] ?? a['date']) as String? ?? '';
+        if (!inRange(aDate)) continue;
+
         final empMap = a['employee'] as Map<String, dynamic>?;
         final empId = a['employee_id'] as String?;
         final empName = empMap?['full_name'] as String? ?? (empId != null ? (userNames[empId] ?? 'Employee') : 'Employee');
         final st = (a['status'] as String? ?? 'present').toLowerCase();
 
-        if (st == 'present') present++;
-        else if (st == 'late') late++;
-        else if (st == 'absent') absent++;
+        if (st == 'present') {
+          present++;
+        } else if (st == 'late') {
+          late++;
+        } else if (st == 'absent') {
+          absent++;
+        }
 
         final hrs = (a['hours_worked'] as num?)?.toDouble() ?? (a['total_hours'] as num?)?.toDouble() ?? 0.0;
         hoursWorkedSum += hrs;
@@ -386,47 +602,21 @@ class SuperAdminReportRepository {
           AttendanceReportItem(
             id: a['id'] as String? ?? '',
             userName: empName,
-            date: a['attendance_date'] as String? ?? '',
+            date: aDate,
             checkIn: a['check_in_time'] as String?,
             checkOut: a['check_out_time'] as String?,
             status: st,
             hoursWorked: hrs,
             isManual: a['is_manual_override'] as bool? ?? a['is_manual'] as bool? ?? false,
+            dailyReport: a['daily_report'] as String?,
+            notes: a['notes'] as String?,
+            wifiSsid: a['wifi_ssid'] as String?,
           ),
         );
       }
-    } catch (_) {
-      try {
-        final attData = await _admin.from('attendance').select('*').order('attendance_date', ascending: false);
-        for (final a in attData) {
-          final empId = (a['employee_id'] ?? a['profile_id']) as String?;
-          final empName = empId != null ? (userNames[empId] ?? 'Employee') : 'Employee';
-          final st = (a['status'] as String? ?? 'present').toLowerCase();
+    } catch (_) {}
 
-          if (st == 'present') present++;
-          else if (st == 'late') late++;
-          else if (st == 'absent') absent++;
-
-          final hrs = (a['hours_worked'] as num?)?.toDouble() ?? (a['total_hours'] as num?)?.toDouble() ?? 0.0;
-          hoursWorkedSum += hrs;
-
-          attendanceList.add(
-            AttendanceReportItem(
-              id: a['id'] as String? ?? '',
-              userName: empName,
-              date: (a['attendance_date'] ?? a['date']) as String? ?? '',
-              checkIn: (a['check_in_time'] ?? a['check_in']) as String?,
-              checkOut: (a['check_out_time'] ?? a['check_out']) as String?,
-              status: st,
-              hoursWorked: hrs,
-              isManual: (a['is_manual_override'] ?? a['is_manual']) as bool? ?? false,
-            ),
-          );
-        }
-      } catch (_) {}
-    }
-
-    // 6. Finance / CRM Entries Query
+    // 7. Finance / CRM Entries Query
     List<CrmReportItem> crmList = [];
     double revenueSum = 0.0;
     double paidRevenueSum = 0.0;
@@ -438,6 +628,9 @@ class SuperAdminReportRepository {
           .order('created_at', ascending: false);
 
       for (final c in crmData) {
+        final cDate = (c['created_at'] ?? c['payment_date'] ?? c['due_date']) as String?;
+        if (!inRange(cDate)) continue;
+
         final clientMap = c['client'] as Map<String, dynamic>?;
         final clientName = clientMap?['company_name'] as String? ?? 'Client';
         final amt = (c['amount'] as num?)?.toDouble() ?? (c['contract_value'] as num?)?.toDouble() ?? 0.0;
@@ -456,34 +649,16 @@ class SuperAdminReportRepository {
             status: c['status'] as String? ?? 'unpaid',
             sourceType: c['source_type'] as String? ?? 'manual',
             dueDate: c['due_date'] as String?,
+            paymentDate: c['payment_date'] as String?,
             invoiceNumber: c['invoice_number'] as String?,
+            notes: (c['notes'] ?? c['description']) as String?,
+            createdAt: c['created_at'] as String?,
           ),
         );
       }
-    } catch (_) {
-      try {
-        final crmData = await _admin.from('crm_entries').select('*');
-        for (final c in crmData) {
-          final amt = (c['amount'] as num?)?.toDouble() ?? 0.0;
-          final paid = (c['paid_amount'] as num?)?.toDouble() ?? 0.0;
-          revenueSum += amt;
-          paidRevenueSum += paid;
-          crmList.add(
-            CrmReportItem(
-              id: c['id'] as String? ?? '',
-              title: c['title'] as String? ?? 'Entry',
-              clientName: 'Client',
-              amount: amt,
-              paidAmount: paid,
-              status: c['status'] as String? ?? 'unpaid',
-              sourceType: c['source_type'] as String? ?? 'manual',
-            ),
-          );
-        }
-      } catch (_) {}
-    }
+    } catch (_) {}
 
-    // 7. Expenses Query
+    // 8. Expenses Query
     List<DetailedExpenseItem> expenseList = [];
     double expenseSum = 0.0;
     final Map<String, _CatAcc> catMap = {};
@@ -495,14 +670,17 @@ class SuperAdminReportRepository {
           .order('expense_date', ascending: false);
 
       for (final e in expData) {
+        final eDate = (e['expense_date'] ?? e['created_at']) as String? ?? '';
+        if (!inRange(eDate)) continue;
+
         final amt = (e['amount'] as num?)?.toDouble() ?? 0.0;
         expenseSum += amt;
 
-        final catObj = e['category'] as Map<String, dynamic>?;
+        final catObj = e['category'] is Map ? (e['category'] as Map) : null;
         final catName = catObj?['name'] as String? ?? (e['category'] is String ? e['category'] as String : 'General');
         catMap.putIfAbsent(catName, () => _CatAcc()).add(amt);
 
-        final recorderObj = e['recorder'] as Map<String, dynamic>?;
+        final recorderObj = e['recorder'] is Map ? (e['recorder'] as Map) : null;
         final recId = e['recorded_by'] as String?;
         final recorderName = recorderObj?['full_name'] as String? ?? (recId != null ? (userNames[recId] ?? 'User') : 'User');
 
@@ -511,35 +689,16 @@ class SuperAdminReportRepository {
             id: e['id'] as String? ?? '',
             categoryName: catName,
             amount: amt,
-            date: e['expense_date'] as String? ?? '',
+            date: eDate,
             description: e['description'] as String? ?? '',
             recordedByName: recorderName,
             status: e['status'] as String? ?? 'approved',
+            receiptUrl: e['receipt_url'] as String?,
+            createdAt: e['created_at'] as String?,
           ),
         );
       }
-    } catch (_) {
-      try {
-        final expData = await _admin.from('expenses').select('*');
-        for (final e in expData) {
-          final amt = (e['amount'] as num?)?.toDouble() ?? 0.0;
-          expenseSum += amt;
-          final catName = (e['category'] as String?) ?? 'General';
-          catMap.putIfAbsent(catName, () => _CatAcc()).add(amt);
-          expenseList.add(
-            DetailedExpenseItem(
-              id: e['id'] as String? ?? '',
-              categoryName: catName,
-              amount: amt,
-              date: (e['expense_date'] ?? e['created_at']) as String? ?? '',
-              description: e['description'] as String? ?? '',
-              recordedByName: 'User',
-              status: e['status'] as String? ?? 'approved',
-            ),
-          );
-        }
-      } catch (_) {}
-    }
+    } catch (_) {}
 
     final List<ExpenseCategoryReportItem> expenseCategories = catMap.entries.map((e) {
       return ExpenseCategoryReportItem(
@@ -549,7 +708,7 @@ class SuperAdminReportRepository {
       );
     }).toList();
 
-    // 8. Penalties Query
+    // 9. Penalties Query
     List<PenaltyReportItem> penaltyList = [];
     double penaltiesSum = 0.0;
     try {
@@ -559,6 +718,9 @@ class SuperAdminReportRepository {
           .order('issue_date', ascending: false);
 
       for (final p in penData) {
+        final pDate = (p['issue_date'] ?? p['created_at']) as String? ?? '';
+        if (!inRange(pDate)) continue;
+
         final amt = (p['amount'] as num?)?.toDouble() ?? 0.0;
         penaltiesSum += amt;
 
@@ -572,35 +734,21 @@ class SuperAdminReportRepository {
             employeeName: empName,
             amount: amt,
             reason: p['reason'] as String? ?? 'Penalty',
-            date: p['issue_date'] as String? ?? '',
+            date: pDate,
             status: p['status'] as String? ?? 'active',
+            notes: p['notes'] as String?,
+            createdAt: p['created_at'] as String?,
           ),
         );
       }
-    } catch (_) {
-      try {
-        final penData = await _admin.from('penalties').select('*');
-        for (final p in penData) {
-          final amt = (p['amount'] as num?)?.toDouble() ?? 0.0;
-          penaltiesSum += amt;
-          final empId = p['employee_id'] as String?;
-          final empName = empId != null ? (userNames[empId] ?? 'Employee') : 'Employee';
-          penaltyList.add(
-            PenaltyReportItem(
-              id: p['id'] as String? ?? '',
-              employeeName: empName,
-              amount: amt,
-              reason: p['reason'] as String? ?? 'Penalty',
-              date: (p['issue_date'] ?? p['created_at']) as String? ?? '',
-              status: p['status'] as String? ?? 'active',
-            ),
-          );
-        }
-      } catch (_) {}
-    }
+    } catch (_) {}
 
     return SuperAdminReportData(
-      totalTasks: tasksData.length,
+      reportPeriodTitle: filterTitle,
+      userList: userList,
+      clientList: clientList,
+      teamList: teamList,
+      totalTasks: taskList.length,
       tasksByStatus: tasksByStatus,
       tasksByPriority: tasksByPriority,
       taskList: taskList,

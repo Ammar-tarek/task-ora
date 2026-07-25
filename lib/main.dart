@@ -84,10 +84,14 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
     if (auth == null) return;
 
     final profile = auth.profile;
-    // Start WiFi attendance tracking for employees AND managers.
+    // Start WiFi attendance tracking ONLY for non-admin employees and managers.
+    // Super Admin & Admin accounts are NEVER auto-tracked.
     if (auth.isLoggedIn &&
-        (profile?.isEmployee == true || profile?.isManager == true)) {
-      WifiAttendanceService.instance.init(profile!.id);
+        profile != null &&
+        !profile.isAdmin &&
+        !profile.isSuperAdmin &&
+        (profile.isEmployee || profile.isManager)) {
+      WifiAttendanceService.instance.init(profile.id);
     } else {
       WifiAttendanceService.instance.dispose();
     }
@@ -105,8 +109,11 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       final profile = context.read<AuthNotifier>().profile;
-      // Track attendance for both employees and managers
-      if (profile?.isEmployee == true || profile?.isManager == true) {
+      // Track attendance for employees/managers (never for Super Admin or Admin)
+      if (profile != null &&
+          !profile.isAdmin &&
+          !profile.isSuperAdmin &&
+          (profile.isEmployee || profile.isManager)) {
         WifiAttendanceService.instance.checkNow();
       }
       // Refresh privileges so admin/manager edits take effect on next foreground.

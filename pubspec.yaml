@@ -54,8 +54,8 @@ flutter_launcher_icons:
   image_path: "assets/app_icon.png"
   remove_alpha_ios: true
   min_sdk_android: 21
-  # Android adaptive icon: full-bleed logo background, transparent foreground.
-  adaptive_icon_background: "assets/app_icon.png"
+  # Android adaptive icon: solid white background, transparent foreground logo.
+  adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/app_icon_fg.png"
   web:
     generate: true

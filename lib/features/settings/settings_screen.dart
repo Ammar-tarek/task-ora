@@ -222,7 +222,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Switch(
                           value: _wifiEnabled,
                           onChanged: isAdmin
-                              ? (v) => setState(() => _wifiEnabled = v)
+                              ? (v) async {
+                                  setState(() => _wifiEnabled = v);
+                                  final adminId = context.read<AuthNotifier>().profile?.id;
+                                  await WifiAttendanceService.setEnabled(v, updatedBy: adminId);
+                                }
                               : null,
                           activeThumbColor: AppColors.gold,
                           activeTrackColor: AppColors.primary,
