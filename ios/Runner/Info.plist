@@ -78,5 +78,10 @@
 	<string>This app requires permission to save generated PDF reports and files to your photo library.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>This app requires camera access to take photos for task attachments and profile pictures.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+	</array>
 </dict>
 </plist>

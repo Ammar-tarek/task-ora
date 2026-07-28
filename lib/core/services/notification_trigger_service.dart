@@ -19,8 +19,26 @@ class NotificationTriggerService {
   RealtimeChannel? _channel;
   ProfileModel? _profile;
 
-  // HR-flavoured types go to the HR channel; everything else to Tasks.
-  static const _hrTypes = {'attendance_alert', 'penalty_applied'};
+  // Deduplication set to guarantee that duplicate Realtime event dispatches
+  // or reconnects never trigger duplicate mobile notifications.
+  final Set<String> _processedIds = <String>{};
+
+  // HR / Financial / System types go to the HR channel; everything else to Tasks.
+  static const _hrTypes = {
+    'attendance_alert',
+    'attendance_checkin',
+    'attendance_checkout',
+    'attendance_approved',
+    'penalty_applied',
+    'penalty_created',
+    'penalty_updated',
+    'expense_created',
+    'expense_approved',
+    'expense_rejected',
+    'role_changed',
+    'team_changed',
+    'announcement_created',
+  };
 
   /// Call after the user signs in (profile is available).
   void start(ProfileModel profile) {
@@ -42,18 +60,38 @@ class NotificationTriggerService {
               ),
               callback: (payload) {
                 final row = payload.newRecord;
+                final recipientId = row['recipient_id'] as String?;
+                if (recipientId != null && recipientId != profile.id) return;
+
+                final notifId = row['id'] as String?;
+                if (notifId != null) {
+                  if (_processedIds.contains(notifId)) return;
+                  _processedIds.add(notifId);
+                  if (_processedIds.length > 200) {
+                    _processedIds.remove(_processedIds.first);
+                  }
+                }
+
                 final type = row['type'] as String? ?? 'system';
                 final refType = row['reference_type'] as String?;
                 final refId = row['reference_id'] as String?;
+                final title = row['title'] as String? ?? 'CashBack Notification';
+                final body = row['body'] as String? ?? '';
+
+                final intId = notifId != null
+                    ? (notifId.hashCode.abs() % 100000)
+                    : (DateTime.now().millisecondsSinceEpoch % 100000);
+
                 LocalNotificationService.show(
-                  title: row['title'] as String? ?? 'CB TO-DO',
-                  body: row['body'] as String? ?? '',
+                  id: intId,
+                  title: title,
+                  body: body,
                   type: _hrTypes.contains(type)
                       ? LocalNotificationService.typeHr
                       : LocalNotificationService.typeTask,
                   payload: (refType != null && refId != null)
                       ? '$refType:$refId'
-                      : null,
+                      : 'notifications',
                 );
               },
             )
@@ -68,6 +106,7 @@ class NotificationTriggerService {
       SupabaseService.adminClient.removeChannel(_channel!);
       _channel = null;
     }
+    _processedIds.clear();
     _profile = null;
   }
 }

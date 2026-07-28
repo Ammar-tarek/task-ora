@@ -45,17 +45,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final profile = context.read<AuthNotifier>().profile;
     if (profile == null) return;
 
-    List<AppNotification> rawData;
+    List<AppNotification> rawData = await NotificationRepository.fetchForUser(profile.id);
 
     if (profile.isAdmin) {
-      // Admin sees all notifications
-      rawData = await NotificationRepository.fetchAll();
+      final allNotifs = await NotificationRepository.fetchAll();
+      rawData = [...rawData, ...allNotifs];
     } else if (profile.isManager && profile.teamId != null) {
-      // Manager sees own + team employees' notifications
-      rawData = await NotificationRepository.fetchForTeam(profile.teamId!);
-    } else {
-      // Employee / client sees only own
-      rawData = await NotificationRepository.fetchForUser(profile.id);
+      final teamNotifs = await NotificationRepository.fetchForTeam(profile.teamId!);
+      rawData = [...rawData, ...teamNotifs];
     }
 
     // 1) Filter out notifications ignored / dismissed by this user
@@ -64,23 +61,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final ignoredIds = (prefs.getStringList(ignoredKey) ?? []).toSet();
     final filtered = rawData.where((n) => !ignoredIds.contains(n.id)).toList();
 
-    // 2) Deduplicate identical notifications (same title, body, referenceType, referenceId)
+    // 2) Deduplicate by notification ID and normalized (title + body + referenceId) key
+    final seenIds = <String>{};
     final seenKeys = <String>{};
     final uniqueData = <AppNotification>[];
+
     for (final n in filtered) {
-      final key =
-          '${n.title.trim()}|${n.body.trim()}|${n.referenceType}|${n.referenceId}';
+      if (seenIds.contains(n.id)) continue;
+      seenIds.add(n.id);
+
+      final normalizedTitle = n.title.trim().toLowerCase();
+      final normalizedBody = n.body.trim().toLowerCase();
+      final key = '$normalizedTitle|$normalizedBody|${n.referenceType}|${n.referenceId}';
+
       if (!seenKeys.contains(key)) {
         seenKeys.add(key);
         uniqueData.add(n);
       }
     }
 
-    if (mounted)
+    if (mounted) {
       setState(() {
         _notifications = uniqueData;
         _loading = false;
       });
+    }
   }
 
   Future<void> _ignoreNotification(String id) async {

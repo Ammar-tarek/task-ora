@@ -1,6 +1,28 @@
 import 'package:flutter/material.dart' show DateTimeRange;
 import '../services/supabase_service.dart';
 
+String formatTo12Hour(String? timeStr) {
+  if (timeStr == null || timeStr.trim().isEmpty || timeStr == '-') return '-';
+  try {
+    final dt = DateTime.tryParse(timeStr);
+    if (dt != null) {
+      final h = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+      final p = dt.hour >= 12 ? 'PM' : 'AM';
+      final m = dt.minute.toString().padLeft(2, '0');
+      return '${h.toString().padLeft(2, '0')}:$m $p';
+    }
+    final parts = timeStr.trim().split(':');
+    if (parts.length >= 2) {
+      int h = int.parse(parts[0]);
+      int m = int.parse(parts[1]);
+      final p = h >= 12 ? 'PM' : 'AM';
+      h = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')} $p';
+    }
+  } catch (_) {}
+  return timeStr;
+}
+
 class TaskAssigneeInfo {
   final String profileId;
   final String name;
@@ -23,6 +45,7 @@ class DetailedTaskReportItem {
   final int completionPercentage;
   final double? cost;
   final String? clientName;
+  final String? clientId;
   final String? teamName;
   final String? department;
   final String? createdByName;
@@ -44,6 +67,7 @@ class DetailedTaskReportItem {
     required this.completionPercentage,
     this.cost,
     this.clientName,
+    this.clientId,
     this.teamName,
     this.department,
     this.createdByName,
@@ -60,6 +84,7 @@ class DetailedTaskReportItem {
 
 class AttendanceReportItem {
   final String id;
+  final String employeeId;
   final String userName;
   final String date;
   final String? checkIn;
@@ -73,6 +98,7 @@ class AttendanceReportItem {
 
   const AttendanceReportItem({
     required this.id,
+    required this.employeeId,
     required this.userName,
     required this.date,
     this.checkIn,
@@ -84,12 +110,16 @@ class AttendanceReportItem {
     this.notes,
     this.wifiSsid,
   });
+
+  String get checkIn12h => formatTo12Hour(checkIn);
+  String get checkOut12h => formatTo12Hour(checkOut);
 }
 
 class CrmReportItem {
   final String id;
   final String title;
   final String clientName;
+  final String? clientId;
   final double amount;
   final double paidAmount;
   final String status;
@@ -104,6 +134,7 @@ class CrmReportItem {
     required this.id,
     required this.title,
     required this.clientName,
+    this.clientId,
     required this.amount,
     required this.paidAmount,
     required this.status,
@@ -116,6 +147,30 @@ class CrmReportItem {
   });
 
   double get outstanding => amount - paidAmount;
+}
+
+class ClientMeetingReportItem {
+  final String id;
+  final String clientId;
+  final String title;
+  final String? description;
+  final String startTime;
+  final String endTime;
+  final String? location;
+  final String? meetingNotes;
+  final String status;
+
+  const ClientMeetingReportItem({
+    required this.id,
+    required this.clientId,
+    required this.title,
+    this.description,
+    required this.startTime,
+    required this.endTime,
+    this.location,
+    this.meetingNotes,
+    required this.status,
+  });
 }
 
 class DetailedExpenseItem {
@@ -144,6 +199,7 @@ class DetailedExpenseItem {
 
 class PenaltyReportItem {
   final String id;
+  final String employeeId;
   final String employeeName;
   final double amount;
   final String reason;
@@ -154,6 +210,7 @@ class PenaltyReportItem {
 
   const PenaltyReportItem({
     required this.id,
+    required this.employeeId,
     required this.employeeName,
     required this.amount,
     required this.reason,
@@ -179,6 +236,7 @@ class ExpenseCategoryReportItem {
 class CommentReportItem {
   final String id;
   final String taskId;
+  final String authorId;
   final String authorName;
   final String taskTitle;
   final String content;
@@ -187,6 +245,7 @@ class CommentReportItem {
   const CommentReportItem({
     required this.id,
     required this.taskId,
+    required this.authorId,
     required this.authorName,
     required this.taskTitle,
     required this.content,
@@ -254,10 +313,49 @@ class TeamReportItem {
   });
 }
 
+class EmployeeDossier {
+  final UserReportItem user;
+  final List<DetailedTaskReportItem> assignedTasks;
+  final List<AttendanceReportItem> attendanceLogs;
+  final List<PenaltyReportItem> penalties;
+  final List<CommentReportItem> comments;
+
+  const EmployeeDossier({
+    required this.user,
+    required this.assignedTasks,
+    required this.attendanceLogs,
+    required this.penalties,
+    required this.comments,
+  });
+
+  double get totalHours => attendanceLogs.fold(0.0, (acc, a) => acc + a.hoursWorked);
+  double get totalPenalties => penalties.fold(0.0, (acc, p) => acc + p.amount);
+}
+
+class ClientDossier {
+  final ClientReportItem client;
+  final List<DetailedTaskReportItem> tasks;
+  final List<CrmReportItem> crmEntries;
+  final List<ClientMeetingReportItem> meetings;
+  final List<CommentReportItem> comments;
+
+  const ClientDossier({
+    required this.client,
+    required this.tasks,
+    required this.crmEntries,
+    required this.meetings,
+    required this.comments,
+  });
+
+  double get totalContractValue => crmEntries.fold(0.0, (acc, c) => acc + c.amount);
+  double get totalPaid => crmEntries.fold(0.0, (acc, c) => acc + c.paidAmount);
+  double get totalOutstanding => totalContractValue - totalPaid;
+}
+
 class SuperAdminReportData {
   final String reportPeriodTitle;
 
-  // Users & Clients & Teams Directory
+  // Directory lists
   final List<UserReportItem> userList;
   final List<ClientReportItem> clientList;
   final List<TeamReportItem> teamList;
@@ -280,6 +378,9 @@ class SuperAdminReportData {
   final double totalRevenue;
   final double totalPaidRevenue;
   final List<CrmReportItem> crmList;
+
+  // Meetings
+  final List<ClientMeetingReportItem> meetingList;
 
   // Expenses & Penalties
   final double totalExpenses;
@@ -310,6 +411,7 @@ class SuperAdminReportData {
     required this.totalRevenue,
     required this.totalPaidRevenue,
     required this.crmList,
+    required this.meetingList,
     required this.totalExpenses,
     required this.totalPenalties,
     required this.expenseList,
@@ -320,6 +422,75 @@ class SuperAdminReportData {
   });
 
   double get netBalance => totalRevenue - totalExpenses - totalPenalties;
+
+  /// Tasks categorized into Department map
+  Map<String, List<DetailedTaskReportItem>> get tasksByDepartment {
+    final Map<String, List<DetailedTaskReportItem>> map = {};
+    for (final t in taskList) {
+      final dept = (t.department != null && t.department!.trim().isNotEmpty)
+          ? t.department!
+          : 'General';
+      map.putIfAbsent(dept, () => []).add(t);
+    }
+    return map;
+  }
+
+  /// Detailed Employee Dossiers for every staff member in userList
+  List<EmployeeDossier> get employeeDossiers {
+    return userList.map((u) {
+      final userTasks = taskList.where((t) {
+        return t.assignees.any((a) => a.profileId == u.id);
+      }).toList();
+
+      final userAtt = attendanceList.where((a) {
+        return a.employeeId == u.id || a.userName.toLowerCase() == u.fullName.toLowerCase();
+      }).toList();
+
+      final userPenalties = penaltyList.where((p) {
+        return p.employeeId == u.id || p.employeeName.toLowerCase() == u.fullName.toLowerCase();
+      }).toList();
+
+      final userComments = commentsList.where((c) {
+        return c.authorId == u.id || c.authorName.toLowerCase() == u.fullName.toLowerCase();
+      }).toList();
+
+      return EmployeeDossier(
+        user: u,
+        assignedTasks: userTasks,
+        attendanceLogs: userAtt,
+        penalties: userPenalties,
+        comments: userComments,
+      );
+    }).toList();
+  }
+
+  /// Detailed Client Dossiers for every registered client
+  List<ClientDossier> get clientDossiers {
+    return clientList.map((c) {
+      final clientTasks = taskList.where((t) {
+        return (t.clientId != null && t.clientId == c.id) ||
+            (t.clientName != null && t.clientName!.toLowerCase() == c.companyName.toLowerCase());
+      }).toList();
+
+      final clientCrm = crmList.where((entry) {
+        return (entry.clientId != null && entry.clientId == c.id) ||
+            (entry.clientName.toLowerCase() == c.companyName.toLowerCase());
+      }).toList();
+
+      final clientMeetings = meetingList.where((m) => m.clientId == c.id).toList();
+
+      final taskIds = clientTasks.map((t) => t.id).toSet();
+      final clientComments = commentsList.where((cm) => taskIds.contains(cm.taskId)).toList();
+
+      return ClientDossier(
+        client: c,
+        tasks: clientTasks,
+        crmEntries: clientCrm,
+        meetings: clientMeetings,
+        comments: clientComments,
+      );
+    }).toList();
+  }
 }
 
 class SuperAdminReportRepository {
@@ -339,36 +510,8 @@ class SuperAdminReportRepository {
              (dt.isBefore(end) || dt.isAtSameMomentAs(end));
     }
 
-    // 1. Profiles Mapping & Users Directory
+    // 1. User Names map & Teams Mapping & Directory
     final Map<String, String> userNames = {};
-    final List<UserReportItem> userList = [];
-    try {
-      final profilesData = await _admin
-          .from('profiles')
-          .select('id, full_name, email, role, department, phone, is_active, created_at')
-          .order('full_name', ascending: true);
-
-      for (final p in profilesData) {
-        final id = p['id'] as String;
-        final name = p['full_name'] as String? ?? 'Unknown User';
-        userNames[id] = name;
-
-        userList.add(
-          UserReportItem(
-            id: id,
-            fullName: name,
-            email: p['email'] as String? ?? '',
-            role: p['role'] as String? ?? 'employee',
-            department: p['department'] as String? ?? 'General',
-            phone: p['phone'] as String?,
-            isActive: p['is_active'] as bool? ?? true,
-            createdAt: p['created_at'] as String?,
-          ),
-        );
-      }
-    } catch (_) {}
-
-    // 2. Teams Mapping & Directory
     final Map<String, String> teamNames = {};
     final Map<String, String> teamDepts = {};
     final List<TeamReportItem> teamList = [];
@@ -407,20 +550,67 @@ class SuperAdminReportRepository {
       }
     } catch (_) {}
 
-    // 3. Clients Directory
+    // 2. Profiles Mapping & Users Directory (Safe Query without non-existent columns)
+    final List<UserReportItem> userList = [];
+    try {
+      List<dynamic> profilesData = [];
+      try {
+        profilesData = await _admin
+            .from('profiles')
+            .select('id, full_name, phone, role, status, team_id, created_at, team:teams(name, department)')
+            .order('full_name', ascending: true);
+      } catch (_) {
+        profilesData = await _admin
+            .from('profiles')
+            .select('id, full_name, phone, role, status, team_id, created_at')
+            .order('full_name', ascending: true);
+      }
+
+      for (final p in profilesData) {
+        final id = p['id'] as String;
+        final name = p['full_name'] as String? ?? 'Unknown User';
+        userNames[id] = name;
+
+        final teamObj = p['team'] is Map ? (p['team'] as Map) : null;
+        final teamId = p['team_id'] as String?;
+        final dept = teamObj?['department'] as String? ?? (teamId != null ? (teamDepts[teamId] ?? 'General') : 'General');
+        final st = (p['status'] as String? ?? 'active').toLowerCase();
+
+        userList.add(
+          UserReportItem(
+            id: id,
+            fullName: name,
+            email: p['email'] as String? ?? '',
+            role: (p['role'] as String? ?? 'employee').toLowerCase(),
+            department: dept,
+            phone: p['phone'] as String?,
+            isActive: st == 'active',
+            createdAt: p['created_at'] as String?,
+          ),
+        );
+      }
+    } catch (_) {}
+
+    // 3. Clients Directory (Safe select *)
     final List<ClientReportItem> clientList = [];
     try {
       final clientData = await _admin
           .from('client_profiles')
-          .select('id, company_name, contact_name, email, phone, status, notes, created_at')
+          .select('*')
           .order('company_name', ascending: true);
 
       for (final c in clientData) {
+        final cid = c['id'] as String? ?? '';
+        final cName = c['company_name'] as String? ?? 'Client';
+        if (cid.isNotEmpty) {
+          userNames[cid] = cName;
+        }
+
         clientList.add(
           ClientReportItem(
-            id: c['id'] as String? ?? '',
-            companyName: c['company_name'] as String? ?? 'Client',
-            contactName: c['contact_name'] as String?,
+            id: cid,
+            companyName: cName,
+            contactName: (c['contact_person'] ?? c['contact_name']) as String?,
             email: c['email'] as String?,
             phone: c['phone'] as String?,
             status: c['status'] as String? ?? 'active',
@@ -431,16 +621,16 @@ class SuperAdminReportRepository {
       }
     } catch (_) {}
 
-    // 4. Comments
+    // 4. Task Comments Query (Safe select * and author_id mapping)
     List<dynamic> commentsData = [];
     try {
       commentsData = await _admin
           .from('task_comments')
-          .select('id, task_id, user_id, content, created_at')
+          .select('*')
           .order('created_at', ascending: false);
     } catch (_) {}
 
-    // 5. Tasks Query with Creator & Attachments & Audit Log Reassignments
+    // 5. Tasks Query
     List<dynamic> tasksData = [];
     try {
       tasksData = await _admin
@@ -467,7 +657,7 @@ class SuperAdminReportRepository {
       if (!inRange(cDate)) continue;
 
       final tid = c['task_id'] as String? ?? '';
-      final uid = c['user_id'] as String?;
+      final uid = (c['author_id'] ?? c['user_id'] ?? c['profile_id']) as String? ?? '';
       final author = userNames[uid] ?? 'User';
       final title = taskTitles[tid] ?? 'Task';
 
@@ -475,6 +665,7 @@ class SuperAdminReportRepository {
         CommentReportItem(
           id: c['id'] as String? ?? '',
           taskId: tid,
+          authorId: uid,
           authorName: author,
           taskTitle: title,
           content: c['content'] as String? ?? '',
@@ -503,13 +694,13 @@ class SuperAdminReportRepository {
       final dept = teamObj?['department'] as String? ?? (teamId != null ? teamDepts[teamId] : null);
 
       final clientObj = t['client'] as Map<String, dynamic>?;
+      final clientId = t['client_id'] as String?;
       final clientName = clientObj?['company_name'] as String?;
 
       final creatorObj = t['creator'] as Map<String, dynamic>?;
       final creatorId = t['created_by'] as String?;
       final creatorName = creatorObj?['full_name'] as String? ?? (creatorId != null ? userNames[creatorId] : null);
 
-      // Task Assignees — Every employee assigned to this task
       final List<TaskAssigneeInfo> assignees = [];
       final Set<String> currentIds = {};
 
@@ -530,7 +721,6 @@ class SuperAdminReportRepository {
         }
       }
 
-      // Direct assignee column fallback (assigned_to / assignee_id / employee_id)
       final directAssigneeId = (t['assigned_to'] ?? t['assignee_id'] ?? t['employee_id']) as String?;
       if (directAssigneeId != null && userNames[directAssigneeId] != null) {
         if (!currentIds.contains(directAssigneeId)) {
@@ -551,6 +741,7 @@ class SuperAdminReportRepository {
           completionPercentage: (t['completion_percentage'] as num?)?.toInt() ?? 0,
           cost: (t['cost'] as num?)?.toDouble(),
           clientName: clientName,
+          clientId: clientId,
           teamName: teamName,
           department: dept,
           createdByName: creatorName,
@@ -583,8 +774,8 @@ class SuperAdminReportRepository {
         if (!inRange(aDate)) continue;
 
         final empMap = a['employee'] as Map<String, dynamic>?;
-        final empId = a['employee_id'] as String?;
-        final empName = empMap?['full_name'] as String? ?? (empId != null ? (userNames[empId] ?? 'Employee') : 'Employee');
+        final empId = a['employee_id'] as String? ?? '';
+        final empName = empMap?['full_name'] as String? ?? (empId.isNotEmpty ? (userNames[empId] ?? 'Employee') : 'Employee');
         final st = (a['status'] as String? ?? 'present').toLowerCase();
 
         if (st == 'present') {
@@ -601,6 +792,7 @@ class SuperAdminReportRepository {
         attendanceList.add(
           AttendanceReportItem(
             id: a['id'] as String? ?? '',
+            employeeId: empId,
             userName: empName,
             date: aDate,
             checkIn: a['check_in_time'] as String?,
@@ -616,7 +808,7 @@ class SuperAdminReportRepository {
       }
     } catch (_) {}
 
-    // 7. Finance / CRM Entries Query
+    // 7. Finance / CRM Query
     List<CrmReportItem> crmList = [];
     double revenueSum = 0.0;
     double paidRevenueSum = 0.0;
@@ -632,6 +824,7 @@ class SuperAdminReportRepository {
         if (!inRange(cDate)) continue;
 
         final clientMap = c['client'] as Map<String, dynamic>?;
+        final clientId = c['client_id'] as String?;
         final clientName = clientMap?['company_name'] as String? ?? 'Client';
         final amt = (c['amount'] as num?)?.toDouble() ?? (c['contract_value'] as num?)?.toDouble() ?? 0.0;
         final paid = (c['paid_amount'] as num?)?.toDouble() ?? 0.0;
@@ -644,6 +837,7 @@ class SuperAdminReportRepository {
             id: c['id'] as String? ?? '',
             title: c['title'] as String? ?? 'Financial Entry',
             clientName: clientName,
+            clientId: clientId,
             amount: amt,
             paidAmount: paid,
             status: c['status'] as String? ?? 'unpaid',
@@ -658,7 +852,37 @@ class SuperAdminReportRepository {
       }
     } catch (_) {}
 
-    // 8. Expenses Query
+    // 8. Client Meetings / Events Query
+    List<ClientMeetingReportItem> meetingList = [];
+    try {
+      final eventsData = await _admin
+          .from('events')
+          .select('id, title, description, start_time, end_time, location, client_id, meeting_notes, status, created_at')
+          .order('start_time', ascending: false);
+
+      for (final e in eventsData) {
+        final stDate = e['start_time'] as String?;
+        if (!inRange(stDate)) continue;
+        final cid = e['client_id'] as String?;
+        if (cid == null || cid.isEmpty) continue;
+
+        meetingList.add(
+          ClientMeetingReportItem(
+            id: e['id'] as String? ?? '',
+            clientId: cid,
+            title: e['title'] as String? ?? 'Meeting',
+            description: e['description'] as String?,
+            startTime: stDate ?? '',
+            endTime: e['end_time'] as String? ?? '',
+            location: e['location'] as String?,
+            meetingNotes: e['meeting_notes'] as String?,
+            status: e['status'] as String? ?? 'scheduled',
+          ),
+        );
+      }
+    } catch (_) {}
+
+    // 9. Expenses Query
     List<DetailedExpenseItem> expenseList = [];
     double expenseSum = 0.0;
     final Map<String, _CatAcc> catMap = {};
@@ -708,7 +932,7 @@ class SuperAdminReportRepository {
       );
     }).toList();
 
-    // 9. Penalties Query
+    // 10. Penalties Query
     List<PenaltyReportItem> penaltyList = [];
     double penaltiesSum = 0.0;
     try {
@@ -725,12 +949,13 @@ class SuperAdminReportRepository {
         penaltiesSum += amt;
 
         final empObj = p['employee'] as Map<String, dynamic>?;
-        final empId = p['employee_id'] as String?;
-        final empName = empObj?['full_name'] as String? ?? (empId != null ? (userNames[empId] ?? 'Employee') : 'Employee');
+        final empId = p['employee_id'] as String? ?? '';
+        final empName = empObj?['full_name'] as String? ?? (empId.isNotEmpty ? (userNames[empId] ?? 'Employee') : 'Employee');
 
         penaltyList.add(
           PenaltyReportItem(
             id: p['id'] as String? ?? '',
+            employeeId: empId,
             employeeName: empName,
             amount: amt,
             reason: p['reason'] as String? ?? 'Penalty',
@@ -761,6 +986,7 @@ class SuperAdminReportRepository {
       totalRevenue: revenueSum,
       totalPaidRevenue: paidRevenueSum,
       crmList: crmList,
+      meetingList: meetingList,
       totalExpenses: expenseSum,
       totalPenalties: penaltiesSum,
       expenseList: expenseList,

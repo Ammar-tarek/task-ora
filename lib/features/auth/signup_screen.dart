@@ -229,7 +229,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
               ),
               const SizedBox(width: 14),
-              Text('CB TO-DO', style: AppTextStyles.headlineMd),
+              Text('CashBack', style: AppTextStyles.headlineMd),
             ],
           ),
           const SizedBox(height: 32),

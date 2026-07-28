@@ -9,6 +9,8 @@ import '../services/supabase_service.dart';
 import 'notification_repository.dart';
 import 'team_repository.dart';
 
+import 'app_settings_repository.dart';
+
 class TaskRepository {
   static final _client = SupabaseService.client;
   static final _adminClient = SupabaseService.adminClient;
@@ -32,14 +34,33 @@ class TaskRepository {
     ProfileModel profile, {
     String? overrideTeamId,
   }) async {
+    List<TaskModel> tasks = [];
     if (profile.isAdminOrManager) {
       final teamId =
           overrideTeamId ?? (profile.isManager ? profile.teamId : null);
-      return _fetchAll(teamId: teamId);
+      tasks = await _fetchAll(teamId: teamId);
+    } else if (profile.isEmployee) {
+      tasks = await _fetchEmployeeTasks(profile);
+    } else if (profile.isClient) {
+      tasks = await _fetchClientTasks(profile);
     }
-    if (profile.isEmployee) return _fetchEmployeeTasks(profile);
-    if (profile.isClient) return _fetchClientTasks(profile);
-    return [];
+
+    if (!profile.isSuperAdmin) {
+      final cutoff = await AppSettingsRepository.getWorkDataCutoffDate();
+      if (cutoff != null && cutoff.trim().isNotEmpty) {
+        final cutoffDt = DateTime.tryParse(cutoff);
+        if (cutoffDt != null) {
+          tasks.removeWhere((t) {
+            final dtStr = t.createdAt;
+            final dt = DateTime.tryParse(dtStr.length >= 10 ? dtStr.substring(0, 10) : dtStr);
+            if (dt == null) return false;
+            return dt.isBefore(cutoffDt);
+          });
+        }
+      }
+    }
+
+    return tasks;
   }
 
   static Future<List<TaskModel>> _fetchAll({String? teamId}) async {
@@ -470,6 +491,36 @@ class TaskRepository {
         'content': content,
         'is_internal': isInternal,
       });
+
+      try {
+        final taskData = await fetchTaskDetail(taskId);
+        if (taskData != null) {
+          final title = taskData['title'] as String? ?? 'Task';
+          final teamId = taskData['team_id'] as String?;
+          final assignees = taskData['assignees'] as List? ?? [];
+          final assigneeIds = assignees.map((a) => a['id'] as String).toList();
+
+          final authorData = await _client
+              .from('profiles')
+              .select('full_name')
+              .eq('id', authorId)
+              .maybeSingle();
+          final authorName = authorData?['full_name'] as String? ?? 'A user';
+          final preview = content.length > 50 ? '${content.substring(0, 50)}…' : content;
+
+          await NotificationRepository.notifyAction(
+            title: 'New Comment on "$title"',
+            body: '$authorName: $preview',
+            type: 'task_comment',
+            referenceType: 'task',
+            referenceId: taskId,
+            teamId: teamId,
+            targetUserIds: assigneeIds,
+            actorId: authorId,
+          );
+        }
+      } catch (_) {}
+
       return true;
     } catch (_) {
       return false;
@@ -480,12 +531,33 @@ class TaskRepository {
   // CRUD helpers
   // ═══════════════════════════════════════════════════════════════════════════
 
-  static Future<void> updateTaskStatus(String taskId, String newStatus) async {
+  static Future<void> updateTaskStatus(String taskId, String newStatus, {String? updatedBy}) async {
     try {
       await _client
           .from('tasks')
           .update({'status': newStatus})
           .eq('id', taskId);
+
+      try {
+        final taskData = await fetchTaskDetail(taskId);
+        if (taskData != null) {
+          final title = taskData['title'] as String? ?? 'Task';
+          final teamId = taskData['team_id'] as String?;
+          final assignees = taskData['assignees'] as List? ?? [];
+          final assigneeIds = assignees.map((a) => a['id'] as String).toList();
+
+          await NotificationRepository.notifyAction(
+            title: 'Task Status Updated',
+            body: 'Task "$title" status changed to "$newStatus".',
+            type: 'task_status_changed',
+            referenceType: 'task',
+            referenceId: taskId,
+            teamId: teamId,
+            targetUserIds: assigneeIds,
+            actorId: updatedBy,
+          );
+        }
+      } catch (_) {}
     } on PostgrestException catch (e) {
       throw Exception('Status update failed [${e.code}]: ${e.message}');
     }
@@ -522,7 +594,21 @@ class TaskRepository {
           })
           .select('id')
           .single();
-      return result['id'] as String;
+      final taskId = result['id'] as String;
+
+      try {
+        await NotificationRepository.notifyAction(
+          title: 'New Task Created',
+          body: 'Task "$title" has been created.',
+          type: 'task_created',
+          referenceType: 'task',
+          referenceId: taskId,
+          teamId: teamId,
+          actorId: createdBy,
+        );
+      } catch (_) {}
+
+      return taskId;
     } catch (_) {
       return null;
     }
@@ -554,7 +640,7 @@ class TaskRepository {
         'completion_percentage': completionPercentage,
         // explicit null clears the FK; only set when admin chose to change it
         if (clientId != null || clearClient) 'client_id': clientId,
-        if (teamId != null) 'team_id': teamId,
+        'team_id': teamId,
       };
       if (description != null) payload['description'] = description;
       if (cost != null) payload['cost'] = cost;
@@ -566,6 +652,24 @@ class TaskRepository {
       if (editedBy != null) {
         await logTaskEdit(id, editedBy, editSummary ?? 'Task updated');
       }
+
+      try {
+        final taskData = await fetchTaskDetail(id);
+        if (taskData != null) {
+          final assignees = taskData['assignees'] as List? ?? [];
+          final assigneeIds = assignees.map((a) => a['id'] as String).toList();
+          await NotificationRepository.notifyAction(
+            title: 'Task Updated',
+            body: 'Task "$title" details were updated.',
+            type: 'task_updated',
+            referenceType: 'task',
+            referenceId: id,
+            teamId: teamId,
+            targetUserIds: assigneeIds,
+            actorId: editedBy,
+          );
+        }
+      } catch (_) {}
 
       return true;
     } on PostgrestException catch (e) {
@@ -594,6 +698,28 @@ class TaskRepository {
       if (editedBy != null) {
         await logTaskEdit(id, editedBy, 'Status / progress updated');
       }
+
+      try {
+        final taskData = await fetchTaskDetail(id);
+        if (taskData != null) {
+          final title = taskData['title'] as String? ?? 'Task';
+          final teamId = taskData['team_id'] as String?;
+          final assignees = taskData['assignees'] as List? ?? [];
+          final assigneeIds = assignees.map((a) => a['id'] as String).toList();
+
+          await NotificationRepository.notifyAction(
+            title: 'Task Progress Updated',
+            body: 'Task "$title" progress updated to $completionPercentage% ($status).',
+            type: 'task_status_changed',
+            referenceType: 'task',
+            referenceId: id,
+            teamId: teamId,
+            targetUserIds: assigneeIds,
+            actorId: editedBy,
+          );
+        }
+      } catch (_) {}
+
       return true;
     } on PostgrestException catch (e) {
       throw Exception('Update failed [${e.code}]: ${e.message}');
@@ -604,7 +730,32 @@ class TaskRepository {
 
   static Future<bool> deleteTask(String id) async {
     try {
+      String? title;
+      String? teamId;
+      List<String> assigneeIds = [];
+      try {
+        final taskData = await fetchTaskDetail(id);
+        if (taskData != null) {
+          title = taskData['title'] as String?;
+          teamId = taskData['team_id'] as String?;
+          final assignees = taskData['assignees'] as List? ?? [];
+          assigneeIds = assignees.map((a) => a['id'] as String).toList();
+        }
+      } catch (_) {}
+
       await _client.from('tasks').delete().eq('id', id);
+
+      if (title != null) {
+        try {
+          await NotificationRepository.notifyAction(
+            title: 'Task Deleted',
+            body: 'Task "$title" was removed.',
+            type: 'task_deleted',
+            teamId: teamId,
+            targetUserIds: assigneeIds,
+          );
+        } catch (_) {}
+      }
       return true;
     } catch (_) {
       return false;
@@ -615,9 +766,23 @@ class TaskRepository {
     String taskId,
     List<String> profileIds, {
     required String assignedBy,
+  }) {
+    return assignEmployees(
+      taskId: taskId,
+      profileIds: profileIds,
+      assignedBy: assignedBy,
+    );
+  }
+
+  /// Replaces the task_assignees list for [taskId].
+  static Future<bool> assignEmployees({
+    required String taskId,
+    required List<String> profileIds,
+    required String assignedBy,
   }) async {
     try {
       await _client.from('task_assignees').delete().eq('task_id', taskId);
+
       if (profileIds.isNotEmpty) {
         final inserts = profileIds
             .map(
@@ -632,44 +797,23 @@ class TaskRepository {
         await _client.from('task_assignees').insert(inserts);
       }
 
-      // Notify the employees and the team lead (manager)
+      // Notify the employees, team lead (manager), and ALL admins & super admins
       try {
         final taskData = await fetchTaskDetail(taskId);
         if (taskData != null) {
           final title = taskData['title'] as String? ?? 'New Task';
           final teamId = taskData['team_id'] as String?;
 
-          // Notify the employees
-          for (final pId in profileIds) {
-            if (pId != assignedBy) {
-              await NotificationRepository.createNotification(
-                recipientId: pId,
-                type: 'task_assigned',
-                title: 'New task assigned',
-                body: 'You have been assigned: $title',
-                referenceType: 'task',
-                referenceId: taskId,
-              );
-            }
-          }
-
-          // Notify the manager/team lead (if any)
-          if (teamId != null) {
-            final team = await TeamRepository.fetchById(teamId);
-            final teamLeadId = team?.teamLeadId;
-            if (teamLeadId != null &&
-                teamLeadId != assignedBy &&
-                !profileIds.contains(teamLeadId)) {
-              await NotificationRepository.createNotification(
-                recipientId: teamLeadId,
-                type: 'task_assigned',
-                title: 'Task assigned in your team',
-                body: 'A task "$title" has been assigned to team members.',
-                referenceType: 'task',
-                referenceId: taskId,
-              );
-            }
-          }
+          await NotificationRepository.notifyAction(
+            title: 'Task Assigned',
+            body: 'Task "$title" has been assigned to team members.',
+            type: 'task_assigned',
+            referenceType: 'task',
+            referenceId: taskId,
+            teamId: teamId,
+            targetUserIds: profileIds,
+            actorId: assignedBy,
+          );
         }
       } catch (_) {}
 

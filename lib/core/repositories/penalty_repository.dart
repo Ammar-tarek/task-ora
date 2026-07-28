@@ -1,6 +1,7 @@
 // lib/core/repositories/penalty_repository.dart
 
 import '../services/supabase_service.dart';
+import 'notification_repository.dart';
 
 class PenaltyItem {
   final String id;
@@ -144,6 +145,29 @@ class PenaltyRepository {
             'applied_at': DateTime.now().toIso8601String(),
           })
           .eq('id', penaltyId);
+
+      try {
+        final p = await _admin
+            .from('penalties')
+            .select('employee_id, amount, reason')
+            .eq('id', penaltyId)
+            .maybeSingle();
+        if (p != null) {
+          final empId = p['employee_id'] as String?;
+          final amt = p['amount'];
+          final reason = p['reason'] as String? ?? 'Penalty';
+          if (empId != null) {
+            await NotificationRepository.notifyAction(
+              title: '⚠️ Penalty Applied',
+              body: 'A penalty of \$$amt ($reason) has been applied.',
+              type: 'penalty_applied',
+              referenceType: 'penalty',
+              referenceId: penaltyId,
+              targetUserIds: [empId],
+            );
+          }
+        }
+      } catch (_) {}
     } catch (_) {}
   }
 
@@ -156,7 +180,7 @@ class PenaltyRepository {
     required String date,
   }) async {
     try {
-      await _admin.from('penalties').insert({
+      final res = await _admin.from('penalties').insert({
         'employee_id': employeeId,
         'penalty_type_id': penaltyTypeId,
         'reason': reason,
@@ -164,7 +188,19 @@ class PenaltyRepository {
         'approved_by': approvedBy,
         'penalty_date': date,
         'is_applied': false,
-      });
+      }).select('id').maybeSingle();
+
+      final pId = res?['id'] as String?;
+
+      await NotificationRepository.notifyAction(
+        title: '⚠️ Penalty Created',
+        body: 'A penalty of \$$amount was logged for: $reason.',
+        type: 'penalty_created',
+        referenceType: 'penalty',
+        referenceId: pId,
+        targetUserIds: [employeeId],
+        actorId: approvedBy,
+      );
     } catch (_) {}
   }
 

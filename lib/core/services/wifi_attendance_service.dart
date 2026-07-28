@@ -152,13 +152,6 @@ class WifiAttendanceService {
     if (!prefs.containsKey(_kSessionStart)) {
       prefs.setInt(_kSessionStart, DateTime.now().millisecondsSinceEpoch);
       await AttendanceRepository.autoCheckIn(_employeeId!);
-      // Notify the employee that their attendance was recorded.
-      LocalNotificationService.show(
-        title: '✅ Checked In',
-        body: 'Your attendance has been automatically recorded.',
-        type: LocalNotificationService.typeHr,
-        id: 2001,
-      );
     }
   }
 
@@ -176,14 +169,6 @@ class WifiAttendanceService {
     await AttendanceRepository.autoCheckOut(
       _employeeId!,
       accumulatedMinutes: minutes,
-    );
-    // Notify the employee that their check-out was recorded.
-    LocalNotificationService.show(
-      title: '🔔 Checked Out',
-      body:
-          'You have been automatically checked out after ${minutes}m session.',
-      type: LocalNotificationService.typeHr,
-      id: 2002,
     );
   }
 

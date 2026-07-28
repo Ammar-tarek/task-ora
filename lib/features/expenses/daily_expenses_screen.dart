@@ -716,6 +716,7 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
   final _descCtrl = TextEditingController();
   final _paidCtrl = TextEditingController();
 
+  late List<Map<String, dynamic>> _cats;
   String? _catId;
   DateTime _date = DateTime.now();
   bool _saving = false;
@@ -723,8 +724,9 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
   @override
   void initState() {
     super.initState();
-    if (widget.categories.isNotEmpty) {
-      _catId = widget.categories.first['id'] as String;
+    _cats = List<Map<String, dynamic>>.from(widget.categories);
+    if (_cats.isNotEmpty) {
+      _catId = _cats.first['id'] as String;
     }
   }
 
@@ -734,6 +736,50 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
     _descCtrl.dispose();
     _paidCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _addNewCategory() async {
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Category'),
+        content: TextField(
+          controller: ctrl,
+          decoration: const InputDecoration(
+            labelText: 'Category Name',
+            hintText: 'e.g. Marketing',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (name != null && name.isNotEmpty) {
+      final ok = await ExpenseRepository.createCategory(name: name);
+      if (ok) {
+        final updated = await ExpenseRepository.fetchCategories();
+        if (mounted) {
+          setState(() {
+            _cats = updated;
+            final match = _cats.firstWhere(
+              (c) => c['name'] == name,
+              orElse: () => _cats.last,
+            );
+            _catId = match['id'] as String;
+          });
+        }
+      }
+    }
   }
 
   Future<void> _save() async {
@@ -765,19 +811,35 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _catId,
-                  decoration: const InputDecoration(labelText: 'Category'),
-                  items: widget.categories
-                      .map(
-                        (c) => DropdownMenuItem<String>(
-                          value: c['id'] as String,
-                          child: Text(c['name'] as String? ?? ''),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() => _catId = v),
-                  validator: (v) => v == null ? 'Required' : null,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _catId,
+                        decoration: const InputDecoration(labelText: 'Category'),
+                        items: _cats
+                            .map(
+                              (c) => DropdownMenuItem<String>(
+                                value: c['id'] as String,
+                                child: Text(c['name'] as String? ?? ''),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) => setState(() => _catId = v),
+                        validator: (v) => v == null ? 'Required' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: IconButton(
+                        icon: const Icon(Icons.add_circle_outline, color: AppColors.gold),
+                        tooltip: 'Add new category',
+                        onPressed: _addNewCategory,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
 

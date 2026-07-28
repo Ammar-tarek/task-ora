@@ -56,18 +56,18 @@ class AppColors {
   static void setDarkMode(bool dark) {
     _dark = dark;
     if (dark) {
-      primary = const Color(0xFF2A2622);
-      primaryContainer = const Color(0xFF35312C);
-      background = const Color(0xFF141312);
-      surface = const Color(0xFF201E1C);
-      surfaceHigh = const Color(0xFF2A2725);
-      surfaceContainerLow = const Color(0xFF1A1817);
-      surfaceContainerLowest = const Color(0xFF232120);
-      onSurface = const Color(0xFFEDE8E5);
-      onSurfaceVariant = const Color(0xFFB4AFAC);
-      outline = const Color(0xFF938E8B);
-      outlineVariant = const Color(0xFF3B3836);
-      errorContainer = const Color(0xFF5A1A16);
+      primary = const Color(0xFFC9A84C);
+      primaryContainer = const Color(0xFF1E293B);
+      background = const Color(0xFF0F172A);
+      surface = const Color(0xFF1E293B);
+      surfaceHigh = const Color(0xFF334155);
+      surfaceContainerLow = const Color(0xFF0F172A);
+      surfaceContainerLowest = const Color(0xFF1E293B);
+      onSurface = const Color(0xFFF8FAFC);
+      onSurfaceVariant = const Color(0xFF94A3B8);
+      outline = const Color(0xFF475569);
+      outlineVariant = const Color(0xFF334155);
+      errorContainer = const Color(0xFF7F1D1D);
     } else {
       primary = const Color(0xFF000000);
       primaryContainer = const Color(0xFF1C1B1B);
@@ -232,7 +232,7 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.onPrimary,
+          foregroundColor: dark ? const Color(0xFF000000) : AppColors.onPrimary,
           textStyle: AppTextStyles.labelMd.copyWith(fontSize: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),

@@ -673,5 +673,17 @@ CREATE TABLE public.client_task_column_visibility (
   CONSTRAINT client_task_column_visibility_configured_by_fkey FOREIGN KEY (configured_by) REFERENCES public.profiles(id)
 );
 
+CREATE TABLE public.app_versions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  platform text NOT NULL DEFAULT 'android'::text,
+  latest_version text NOT NULL,
+  min_required_version text NOT NULL,
+  download_url text NOT NULL,
+  release_notes text,
+  is_mandatory boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT app_versions_pkey PRIMARY KEY (id)
+);
+
 -- Enable Supabase Realtime for notifications table
 ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;

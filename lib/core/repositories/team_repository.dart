@@ -6,6 +6,7 @@
 import '../models/team_model.dart';
 import '../models/profile_model.dart';
 import '../services/supabase_service.dart';
+import 'notification_repository.dart';
 
 class TeamRepository {
   static final _client = SupabaseService.client;
@@ -187,6 +188,21 @@ class TeamRepository {
           .from('profiles')
           .update({'team_id': teamId})
           .eq('id', userId);
+
+      try {
+        await NotificationRepository.notifyAction(
+          title: 'Team Assignment Updated',
+          body: teamId != null
+              ? 'You have been assigned to a new department team.'
+              : 'Your department team assignment was updated.',
+          type: 'team_changed',
+          referenceType: 'profile',
+          referenceId: userId,
+          teamId: teamId,
+          targetUserIds: [userId],
+        );
+      } catch (_) {}
+
       return true;
     } catch (_) {
       return false;

@@ -7,6 +7,7 @@ import 'core/services/realtime_service.dart';
 import 'core/services/wifi_attendance_service.dart';
 import 'core/services/local_notification_service.dart';
 import 'core/services/notification_trigger_service.dart';
+import 'core/services/apk_update_service.dart';
 import 'core/auth/auth_notifier.dart';
 import 'core/providers/locale_controller.dart';
 import 'core/providers/team_filter_notifier.dart';
@@ -84,21 +85,19 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
     if (auth == null) return;
 
     final profile = auth.profile;
-    // Start WiFi attendance tracking ONLY for non-admin employees and managers.
-    // Super Admin & Admin accounts are NEVER auto-tracked.
-    if (auth.isLoggedIn &&
-        profile != null &&
-        !profile.isAdmin &&
-        !profile.isSuperAdmin &&
-        (profile.isEmployee || profile.isManager)) {
+    // Start WiFi attendance tracking for logged in users (employees, managers, admins, super admins).
+    if (auth.isLoggedIn && profile != null) {
       WifiAttendanceService.instance.init(profile.id);
     } else {
       WifiAttendanceService.instance.dispose();
     }
 
-    // Start / stop realtime notification triggers based on login state.
+    // Start / stop realtime notification triggers based on login state & check updates.
     if (auth.isLoggedIn && profile != null) {
       NotificationTriggerService.instance.start(profile);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ApkUpdateService.checkForUpdates(context);
+      });
     } else {
       NotificationTriggerService.instance.stop();
     }
@@ -109,12 +108,9 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       final profile = context.read<AuthNotifier>().profile;
-      // Track attendance for employees/managers (never for Super Admin or Admin)
-      if (profile != null &&
-          !profile.isAdmin &&
-          !profile.isSuperAdmin &&
-          (profile.isEmployee || profile.isManager)) {
+      if (profile != null) {
         WifiAttendanceService.instance.checkNow();
+        ApkUpdateService.checkForUpdates(context);
       }
       // Refresh privileges so admin/manager edits take effect on next foreground.
       context.read<TeamPrivilegesNotifier>().reload();
@@ -128,7 +124,7 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
     final localeCtrl = context.watch<LocaleController>();
 
     return MaterialApp.router(
-      title: 'CB TO-DO',
+      title: 'CashBack',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.build(),
       routerConfig: widget.router,

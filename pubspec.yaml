@@ -1,8 +1,8 @@
 name: task_ora
-description: "TaskOra Operations Dashboard"
+description: "CashBack Operations Dashboard"
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.2+3
 
 environment:
   sdk: ^3.11.5
@@ -19,6 +19,7 @@ dependencies:
   fl_chart: ^0.68.0
   intl: ^0.20.2
   flutter_local_notifications: ^18.0.1
+  url_launcher: ^6.3.1
 
   # Printing & PDF Export
   pdf: ^3.11.1
@@ -40,6 +41,11 @@ dependencies:
   # WiFi auto-attendance
   connectivity_plus: ^6.1.5
   network_info_plus: ^6.1.4
+
+  # Auto update & APK download
+  background_downloader: ^8.5.0
+  open_filex: ^4.5.0
+  package_info_plus: ^8.0.0
 
 dev_dependencies:
   flutter_test:

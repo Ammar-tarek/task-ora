@@ -10,6 +10,7 @@ class AppSettingsRepository {
 
   static const kWifiSsid = 'company_wifi_ssid';
   static const kWifiEnabled = 'wifi_attendance_enabled';
+  static const kWorkDataCutoffDate = 'work_data_cutoff_date';
 
   /// Read a single setting value. Returns null if missing.
   static Future<String?> get(String key) async {
@@ -47,4 +48,13 @@ class AppSettingsRepository {
 
   static Future<void> setWifiEnabled(bool enabled, {String? updatedBy}) =>
       set(kWifiEnabled, enabled ? 'true' : 'false', updatedBy: updatedBy);
+
+  static Future<String?> getWorkDataCutoffDate() async =>
+      await get(kWorkDataCutoffDate);
+
+  static Future<void> setWorkDataCutoffDate(String dateStr, {String? updatedBy}) =>
+      set(kWorkDataCutoffDate, dateStr.trim(), updatedBy: updatedBy);
+
+  static Future<void> clearWorkDataCutoffDate({String? updatedBy}) =>
+      set(kWorkDataCutoffDate, '', updatedBy: updatedBy);
 }

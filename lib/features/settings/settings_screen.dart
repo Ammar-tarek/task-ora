@@ -9,6 +9,7 @@ import '../../core/providers/locale_controller.dart';
 import '../../core/providers/theme_controller.dart';
 import '../../core/services/n8n_service.dart';
 import '../../core/services/wifi_attendance_service.dart';
+import '../../core/services/apk_update_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../super_admin/reset_app_dialog.dart';
 
@@ -760,12 +761,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const Divider(height: 1),
 
-            // About
-            const _SectionTitle(title: 'ABOUT'),
-            const _SettingsTile(
-              icon: Icons.info_outlined,
-              title: 'App Version',
-              subtitle: '1.0.0+1',
+            // About & Updates
+            const _SectionTitle(title: 'ABOUT & UPDATES'),
+            _SettingsTile(
+              icon: Icons.system_update_outlined,
+              title: 'Check for Updates',
+              subtitle: 'v1.0.2+3',
+              onTap: () => ApkUpdateService.checkForUpdates(
+                context,
+                showNoUpdateToast: true,
+              ),
             ),
             _SettingsTile(
               icon: Icons.privacy_tip_outlined,

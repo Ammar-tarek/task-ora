@@ -2,6 +2,7 @@
 
 import '../services/supabase_service.dart';
 import '../utils/app_time.dart';
+import 'notification_repository.dart';
 
 class AttendanceRecord {
   final String id;
@@ -71,6 +72,8 @@ class AttendanceRecord {
         return 'Late';
       case 'half_day':
         return 'Half Day';
+      case 'rejected':
+        return 'Rejected';
       default:
         return status;
     }
@@ -398,6 +401,27 @@ class AttendanceRepository {
         'check_in_time': now,
         'status': 'present',
       }, onConflict: 'employee_id, attendance_date');
+
+      try {
+        final empProfile = await _admin
+            .from('profiles')
+            .select('full_name, team_id')
+            .eq('id', employeeId)
+            .maybeSingle();
+        final empName = empProfile?['full_name'] as String? ?? 'Employee';
+        final teamId = empProfile?['team_id'] as String?;
+
+        await NotificationRepository.notifyAction(
+          title: '✅ Checked In',
+          body: '$empName has checked in for today.',
+          type: 'attendance_checkin',
+          referenceType: 'attendance',
+          referenceId: employeeId,
+          teamId: teamId,
+          targetUserIds: [employeeId],
+        );
+      } catch (_) {}
+
       return null;
     } catch (e) {
       final s = e.toString();
@@ -451,6 +475,27 @@ class AttendanceRepository {
           })
           .eq('employee_id', employeeId)
           .eq('attendance_date', today);
+
+      try {
+        final empProfile = await _admin
+            .from('profiles')
+            .select('full_name, team_id')
+            .eq('id', employeeId)
+            .maybeSingle();
+        final empName = empProfile?['full_name'] as String? ?? 'Employee';
+        final teamId = empProfile?['team_id'] as String?;
+
+        await NotificationRepository.notifyAction(
+          title: '🔔 Checked Out',
+          body: '$empName has checked out.',
+          type: 'attendance_checkout',
+          referenceType: 'attendance',
+          referenceId: employeeId,
+          teamId: teamId,
+          targetUserIds: [employeeId],
+        );
+      } catch (_) {}
+
       return null;
     } catch (e) {
       final s = e.toString();
@@ -519,6 +564,26 @@ class AttendanceRepository {
           })
           .eq('employee_id', employeeId)
           .eq('attendance_date', today);
+
+      try {
+        final empProfile = await _admin
+            .from('profiles')
+            .select('full_name, team_id')
+            .eq('id', employeeId)
+            .maybeSingle();
+        final empName = empProfile?['full_name'] as String? ?? 'Employee';
+        final teamId = empProfile?['team_id'] as String?;
+
+        await NotificationRepository.notifyAction(
+          title: '🔔 Checked Out',
+          body: '$empName auto checked out (${accumulatedMinutes}m session).',
+          type: 'attendance_checkout',
+          referenceType: 'attendance',
+          referenceId: employeeId,
+          teamId: teamId,
+          targetUserIds: [employeeId],
+        );
+      } catch (_) {}
     } catch (_) {}
   }
 
@@ -600,6 +665,108 @@ class AttendanceRepository {
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           })
           .eq('id', attendanceId);
+
+      try {
+        final row = await _admin
+            .from('attendance')
+            .select('employee_id, attendance_date')
+            .eq('id', attendanceId)
+            .maybeSingle();
+        if (row != null) {
+          final empId = row['employee_id'] as String?;
+          final date = row['attendance_date'] as String? ?? '';
+          if (empId != null) {
+            await NotificationRepository.notifyAction(
+              title: 'Attendance Approved',
+              body: 'Your attendance record for $date has been approved.',
+              type: 'attendance_approved',
+              referenceType: 'attendance',
+              referenceId: empId,
+              targetUserIds: [empId],
+              actorId: approvedBy,
+            );
+          }
+        }
+      } catch (_) {}
+    } catch (_) {}
+  }
+
+  /// Admin / manager rejects an attendance record.
+  static Future<void> rejectAttendance({
+    required String attendanceId,
+    required String rejectedBy,
+  }) async {
+    try {
+      await _admin
+          .from('attendance')
+          .update({
+            'status': 'rejected',
+            'is_approved': false,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', attendanceId);
+
+      try {
+        final row = await _admin
+            .from('attendance')
+            .select('employee_id, attendance_date')
+            .eq('id', attendanceId)
+            .maybeSingle();
+        if (row != null) {
+          final empId = row['employee_id'] as String?;
+          final date = row['attendance_date'] as String? ?? '';
+          if (empId != null) {
+            await NotificationRepository.notifyAction(
+              title: '❌ Attendance Rejected',
+              body: 'Your attendance record for $date was rejected.',
+              type: 'attendance_alert',
+              referenceType: 'attendance',
+              referenceId: empId,
+              targetUserIds: [empId],
+              actorId: rejectedBy,
+            );
+          }
+        }
+      } catch (_) {}
+    } catch (_) {}
+  }
+
+  /// Admin / manager marks an attendance record as Late.
+  static Future<void> setLateAttendance({
+    required String attendanceId,
+    required String updatedBy,
+  }) async {
+    try {
+      await _admin
+          .from('attendance')
+          .update({
+            'status': 'late',
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', attendanceId);
+
+      try {
+        final row = await _admin
+            .from('attendance')
+            .select('employee_id, attendance_date')
+            .eq('id', attendanceId)
+            .maybeSingle();
+        if (row != null) {
+          final empId = row['employee_id'] as String?;
+          final date = row['attendance_date'] as String? ?? '';
+          if (empId != null) {
+            await NotificationRepository.notifyAction(
+              title: '⏰ Attendance Marked Late',
+              body: 'Your attendance for $date was marked as Late.',
+              type: 'attendance_alert',
+              referenceType: 'attendance',
+              referenceId: empId,
+              targetUserIds: [empId],
+              actorId: updatedBy,
+            );
+          }
+        }
+      } catch (_) {}
     } catch (_) {}
   }
 

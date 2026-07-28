@@ -1,6 +1,7 @@
 // lib/core/repositories/expense_repository.dart
 
 import '../services/supabase_service.dart';
+import 'notification_repository.dart';
 
 class ExpenseItem {
   final String id;
@@ -93,7 +94,7 @@ class ExpenseRepository {
     // adminClient: expenses RLS is admin-only, so managers/employees would be
     // blocked on the regular client. UI gates who can reach this.
     try {
-      await _admin.from('expenses').insert({
+      final res = await _admin.from('expenses').insert({
         'category_id': categoryId,
         'amount': amount,
         'description': description,
@@ -101,7 +102,18 @@ class ExpenseRepository {
         'expense_date': date,
         'paid_to': paidTo,
         'status': 'pending',
-      });
+      }).select('id').maybeSingle();
+
+      final expId = res?['id'] as String?;
+
+      await NotificationRepository.notifyAction(
+        title: 'New Expense Logged',
+        body: 'Expense of \$$amount ($description) was logged.',
+        type: 'expense_created',
+        referenceType: 'expense',
+        referenceId: expId,
+        actorId: recordedBy,
+      );
     } catch (_) {}
   }
 
@@ -115,6 +127,67 @@ class ExpenseRepository {
           .from('expenses')
           .update({'status': 'approved', 'approved_by': approvedById})
           .eq('id', expenseId);
+
+      try {
+        final exp = await _admin
+            .from('expenses')
+            .select('recorded_by, amount, description')
+            .eq('id', expenseId)
+            .maybeSingle();
+        if (exp != null) {
+          final recorderId = exp['recorded_by'] as String?;
+          final amt = exp['amount'];
+          final desc = exp['description'] as String? ?? 'Expense';
+          if (recorderId != null) {
+            await NotificationRepository.notifyAction(
+              title: 'Expense Approved',
+              body: 'Your expense of \$$amt ($desc) was approved.',
+              type: 'expense_approved',
+              referenceType: 'expense',
+              referenceId: expenseId,
+              targetUserIds: [recorderId],
+              actorId: approvedById,
+            );
+          }
+        }
+      } catch (_) {}
+    } catch (_) {}
+  }
+
+  /// Admin / manager rejects an expense.
+  static Future<void> rejectExpense(
+    String expenseId,
+    String rejectedById,
+  ) async {
+    try {
+      await _admin
+          .from('expenses')
+          .update({'status': 'rejected', 'approved_by': rejectedById})
+          .eq('id', expenseId);
+
+      try {
+        final exp = await _admin
+            .from('expenses')
+            .select('recorded_by, amount, description')
+            .eq('id', expenseId)
+            .maybeSingle();
+        if (exp != null) {
+          final recorderId = exp['recorded_by'] as String?;
+          final amt = exp['amount'];
+          final desc = exp['description'] as String? ?? 'Expense';
+          if (recorderId != null) {
+            await NotificationRepository.notifyAction(
+              title: 'Expense Rejected',
+              body: 'Your expense of \$$amt ($desc) was rejected.',
+              type: 'expense_rejected',
+              referenceType: 'expense',
+              referenceId: expenseId,
+              targetUserIds: [recorderId],
+              actorId: rejectedById,
+            );
+          }
+        }
+      } catch (_) {}
     } catch (_) {}
   }
 
@@ -134,7 +207,34 @@ class ExpenseRepository {
           .select()
           .eq('is_active', true)
           .order('name');
-      return List<Map<String, dynamic>>.from(data as List);
+      final list = List<Map<String, dynamic>>.from(data as List);
+      if (list.isNotEmpty) return list;
+
+      // Auto-seed default categories if empty
+      const defaults = [
+        'Food',
+        'Office',
+        'Transport',
+        'Software',
+        'Infrastructure',
+        'Training',
+        'Other',
+      ];
+      for (final name in defaults) {
+        try {
+          await _admin.from('expense_categories').insert({
+            'name': name,
+            'is_active': true,
+          });
+        } catch (_) {}
+      }
+
+      final seeded = await _admin
+          .from('expense_categories')
+          .select()
+          .eq('is_active', true)
+          .order('name');
+      return List<Map<String, dynamic>>.from(seeded as List);
     } catch (_) {
       return [];
     }

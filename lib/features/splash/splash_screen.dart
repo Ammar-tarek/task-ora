@@ -74,7 +74,7 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'CB TO-DO',
+                  'CashBack',
                   style: AppTextStyles.displayMd.copyWith(
                     color: Colors.white,
                     letterSpacing: 2,

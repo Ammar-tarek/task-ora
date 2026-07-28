@@ -172,7 +172,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Text('CB TO-DO', style: AppTextStyles.headlineSm),
+                  Text('CashBack', style: AppTextStyles.headlineSm),
                 ],
               ),
               actions: [

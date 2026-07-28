@@ -121,10 +121,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         _selectedDate,
         teamId: teamId,
       );
-      // Managers are tracked too — load their own today record for the
-      // self-service check-in/out card.
+      // Load own today record for the self-service check-in/out card.
       AttendanceRecord? mine;
-      if (profile.isManager) {
+      if (profile != null) {
         mine = await AttendanceRepository.fetchTodayForEmployee(profile.id);
       }
       if (mounted)
@@ -275,6 +274,47 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     await AttendanceRepository.approveAttendance(
       attendanceId: record.id,
       approvedBy: profile.id,
+    );
+    _load();
+  }
+
+  Future<void> _rejectRecord(AttendanceRecord record) async {
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile == null) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: const Text('Reject Attendance?'),
+        content: Text('Are you sure you want to reject the attendance record for ${record.employeeName} on ${record.date}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.statusHigh, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await AttendanceRepository.rejectAttendance(
+        attendanceId: record.id,
+        rejectedBy: profile.id,
+      );
+      _load();
+    }
+  }
+
+  Future<void> _markLateRecord(AttendanceRecord record) async {
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile == null) return;
+    await AttendanceRepository.setLateAttendance(
+      attendanceId: record.id,
+      updatedBy: profile.id,
     );
     _load();
   }
@@ -534,8 +574,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               const SizedBox(height: 80),
                             ],
 
-                            // ── Manager's own check-in/out card (managers are tracked) ──
-                            if (isManager && profile?.isManager == true) ...[
+                            // ── Management check-in/out card (managers, admins, super admins) ──
+                            if (isManager) ...[
                               _SelfServiceCard(
                                 record: _myRecord,
                                 onCheckIn: _doCheckIn,
@@ -659,7 +699,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                     onEdit: canManageAttendance
                                         ? () => _showOverrideDialog(r)
                                         : null,
-                                    // A manager cannot approve their OWN attendance (admin can).
                                     onApprove:
                                         (!canManageAttendance ||
                                             r.isApproved ||
@@ -667,6 +706,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                                 r.employeeId == profile?.id))
                                         ? null
                                         : () => _approveRecord(r),
+                                    onLate:
+                                        (!canManageAttendance ||
+                                            r.status == 'late' ||
+                                            (profile?.isManager == true &&
+                                                r.employeeId == profile?.id))
+                                        ? null
+                                        : () => _markLateRecord(r),
+                                    onReject:
+                                        (!canManageAttendance ||
+                                            r.status == 'rejected' ||
+                                            (profile?.isManager == true &&
+                                                r.employeeId == profile?.id))
+                                        ? null
+                                        : () => _rejectRecord(r),
                                     onReport: () => _viewReport(r),
                                   ),
                                 ),
@@ -868,12 +921,16 @@ class _AttendanceRow extends StatelessWidget {
     required this.isManager,
     this.onEdit,
     this.onApprove,
+    this.onReject,
+    this.onLate,
     this.onReport,
   });
   final AttendanceRecord record;
   final bool isManager;
   final VoidCallback? onEdit;
   final VoidCallback? onApprove;
+  final VoidCallback? onReject;
+  final VoidCallback? onLate;
   final VoidCallback? onReport;
 
   Color get _statusColor {
@@ -881,6 +938,7 @@ class _AttendanceRow extends StatelessWidget {
       case 'present':
         return AppColors.statusDone;
       case 'absent':
+      case 'rejected':
         return AppColors.statusHigh;
       case 'late':
         return AppColors.gold;
@@ -1080,6 +1138,20 @@ class _AttendanceRow extends StatelessWidget {
           AppColors.statusDone,
           'Approve attendance',
           onApprove,
+        ),
+      if (onLate != null)
+        btn(
+          Icons.access_time_outlined,
+          AppColors.gold,
+          'Mark as Late',
+          onLate,
+        ),
+      if (onReject != null)
+        btn(
+          Icons.cancel_outlined,
+          AppColors.statusHigh,
+          'Reject attendance',
+          onReject,
         ),
     ];
   }
@@ -1850,6 +1922,52 @@ class __EmployeeMonthlyAttendanceDialogState
     _load();
   }
 
+  Future<void> _rejectRecord(AttendanceRecord record) async {
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile == null) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: const Text('Reject Attendance?'),
+        content: Text(
+            'Are you sure you want to reject the attendance record for ${record.employeeName} on ${record.date}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.statusHigh,
+                foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await AttendanceRepository.rejectAttendance(
+        attendanceId: record.id,
+        rejectedBy: profile.id,
+      );
+      widget.onRefreshParent();
+      _load();
+    }
+  }
+
+  Future<void> _markLateRecord(AttendanceRecord record) async {
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile == null) return;
+    await AttendanceRepository.setLateAttendance(
+      attendanceId: record.id,
+      updatedBy: profile.id,
+    );
+    widget.onRefreshParent();
+    _load();
+  }
+
   Future<void> _showOverrideDialog(AttendanceRecord record) async {
     await showDialog(
       context: context,
@@ -1984,6 +2102,20 @@ class __EmployeeMonthlyAttendanceDialogState
                                 r.employeeId == profile?.id))
                         ? null
                         : () => _approveRecord(r),
+                    onLate:
+                        (!canManageAttendance ||
+                            r.status == 'late' ||
+                            (profile?.isManager == true &&
+                                r.employeeId == profile?.id))
+                        ? null
+                        : () => _markLateRecord(r),
+                    onReject:
+                        (!canManageAttendance ||
+                            r.status == 'rejected' ||
+                            (profile?.isManager == true &&
+                                r.employeeId == profile?.id))
+                        ? null
+                        : () => _rejectRecord(r),
                     onReport: () => _viewReport(r),
                   );
                 },

@@ -3,9 +3,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import '../../core/auth/auth_notifier.dart';
+import '../../core/repositories/app_settings_repository.dart';
 import '../../core/repositories/super_admin_report_repository.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/super_admin_pdf_exporter.dart';
+import '../tasks/task_detail_sheet.dart';
 
 class SuperAdminReportScreen extends StatefulWidget {
   const SuperAdminReportScreen({super.key});
@@ -26,10 +30,15 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
   String _filterLabel = 'All Time';
   DateTimeRange? _selectedDateRange;
 
+  // Cutoff date state
+  String? _currentCutoffDate;
+  bool _savingCutoff = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
+    _loadCutoffDate();
     _loadReport();
   }
 
@@ -37,6 +46,66 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCutoffDate() async {
+    final date = await AppSettingsRepository.getWorkDataCutoffDate();
+    if (mounted) {
+      setState(() => _currentCutoffDate = (date != null && date.trim().isNotEmpty) ? date.trim() : null);
+    }
+  }
+
+  Future<void> _pickAndSaveCutoffDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().subtract(const Duration(days: 30)),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+
+    if (picked != null) {
+      final dateStr = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+      setState(() => _savingCutoff = true);
+      try {
+        final profile = context.read<AuthNotifier>().profile;
+        await AppSettingsRepository.setWorkDataCutoffDate(dateStr, updatedBy: profile?.id);
+        if (mounted) {
+          setState(() {
+            _currentCutoffDate = dateStr;
+            _savingCutoff = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Cutoff date set to $dateStr. Older work data will be hidden for non-Super-Admin roles.'),
+              backgroundColor: AppColors.statusDone,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) setState(() => _savingCutoff = false);
+      }
+    }
+  }
+
+  Future<void> _clearCutoffDate() async {
+    setState(() => _savingCutoff = true);
+    try {
+      final profile = context.read<AuthNotifier>().profile;
+      await AppSettingsRepository.clearWorkDataCutoffDate(updatedBy: profile?.id);
+      if (mounted) {
+        setState(() {
+          _currentCutoffDate = null;
+          _savingCutoff = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cutoff date cleared. Non-Super-Admins can view all historical work data.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _savingCutoff = false);
+    }
   }
 
   String _monthName(int m) {
@@ -168,19 +237,29 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
   }
 
   Future<void> _pickCustomDateRange() async {
+    final isDark = AppColors.isDark;
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       builder: (context, child) {
+        final colorScheme = isDark
+            ? ColorScheme.dark(
+                primary: AppColors.gold,
+                onPrimary: Colors.black,
+                surface: AppColors.surfaceContainerLowest,
+                onSurface: AppColors.onSurface,
+              )
+            : ColorScheme.light(
+                primary: AppColors.gold,
+                onPrimary: Colors.white,
+                surface: AppColors.surfaceContainerLowest,
+                onSurface: AppColors.onSurface,
+              );
         return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: AppColors.gold,
-              onPrimary: Colors.black,
-              surface: AppColors.surfaceContainerLow,
-              onSurface: AppColors.onSurface,
-            ),
+          data: (isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
+            colorScheme: colorScheme,
+            dialogTheme: DialogThemeData(backgroundColor: AppColors.surfaceContainerLowest),
           ),
           child: child!,
         );
@@ -268,6 +347,7 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
               'Total Employees: ${d.userList.length}\n'
               'Total Clients: ${d.clientList.length}\n'
               'Total Tasks: ${d.totalTasks}\n'
+              'Total Departments: ${d.tasksByDepartment.length}\n'
               'Total Attendance Records: ${d.totalAttendanceRecords}\n'
               'Total Hours Logged: ${d.totalHoursWorked.toStringAsFixed(1)} h\n'
               'Total Billed Revenue: \$${d.totalRevenue.toStringAsFixed(2)}\n'
@@ -312,7 +392,7 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
           children: [
             const Text('Super Admin Master Detailed Report'),
             Text(
-              'Complete multi-page analytics & un-truncated logs',
+              'Complete multi-page analytics & un-truncated dossiers',
               style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
             ),
           ],
@@ -359,9 +439,10 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
           indicatorColor: AppColors.gold,
           tabs: const [
             Tab(icon: Icon(Icons.pie_chart_outline, size: 18), text: 'Overview & KPI'),
-            Tab(icon: Icon(Icons.badge_outlined, size: 18), text: 'Staff & Clients'),
-            Tab(icon: Icon(Icons.task_alt_outlined, size: 18), text: 'Tasks All Details'),
-            Tab(icon: Icon(Icons.access_time_outlined, size: 18), text: 'Attendance & Daily Reports'),
+            Tab(icon: Icon(Icons.category_outlined, size: 18), text: 'Tasks by Department'),
+            Tab(icon: Icon(Icons.badge_outlined, size: 18), text: 'Staff & Employee Dossiers'),
+            Tab(icon: Icon(Icons.access_time_outlined, size: 18), text: 'Attendance per Employee'),
+            Tab(icon: Icon(Icons.business_outlined, size: 18), text: 'Client Dossiers & Meetings'),
             Tab(icon: Icon(Icons.attach_money_outlined, size: 18), text: 'Finance & Expenses'),
             Tab(icon: Icon(Icons.forum_outlined, size: 18), text: 'Comments Feed'),
           ],
@@ -386,16 +467,21 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
                           ],
                         ),
                       )
-                    : TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildOverviewTab(),
-                          _buildStaffAndClientsTab(),
-                          _buildTasksTab(),
-                          _buildAttendanceTab(),
-                          _buildFinanceTab(),
-                          _buildCommentsTab(),
-                        ],
+                    : RefreshIndicator(
+                        onRefresh: _loadReport,
+                        color: AppColors.gold,
+                        child: TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildOverviewTab(),
+                            _buildTasksByDepartmentTab(),
+                            _buildStaffAndEmployeeDossiersTab(),
+                            _buildAttendancePerEmployeeTab(),
+                            _buildClientDossiersTab(),
+                            _buildFinanceTab(),
+                            _buildCommentsTab(),
+                          ],
+                        ),
                       ),
           ),
         ],
@@ -472,14 +558,79 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     );
   }
 
-  // ── 1. Overview & Graphs ──────────────────────────────────────────────────
+  // ── 1. Overview & Graphs + Super Admin Cutoff Control ─────────────────────
   Widget _buildOverviewTab() {
     final d = _data!;
+    final isSuperAdmin = context.watch<AuthNotifier>().profile?.isSuperAdmin == true;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Super Admin Cutoff Control Banner
+          if (isSuperAdmin) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: AppColors.gold.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.lock_clock_outlined, color: AppColors.gold, size: 22),
+                      const SizedBox(width: 10),
+                      Text('Super Admin Control: Previous Work Data Cutoff', style: AppTextStyles.headlineSm.copyWith(fontSize: 16)),
+                      const Spacer(),
+                      if (_currentCutoffDate != null)
+                        Chip(
+                          label: Text('Active Cutoff: $_currentCutoffDate', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                          backgroundColor: AppColors.gold,
+                          labelStyle: const TextStyle(color: Colors.black),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Select a specific date to hide previous month/period work data (tasks, finance, attendance, expenses) for all non-Super-Admin roles (Admins, Managers, Employees, Clients). The Super Admin will retain full access to all historical data.',
+                    style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.gold,
+                          foregroundColor: Colors.black,
+                        ),
+                        icon: _savingCutoff
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                            : const Icon(Icons.calendar_today, size: 16),
+                        label: const Text('Choose Cutoff Date'),
+                        onPressed: _savingCutoff ? null : _pickAndSaveCutoffDate,
+                      ),
+                      if (_currentCutoffDate != null) ...[
+                        const SizedBox(width: 12),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                          icon: const Icon(Icons.clear, size: 16),
+                          label: const Text('Clear Cutoff (Show All Data)'),
+                          onPressed: _savingCutoff ? null : _clearCutoffDate,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           // KPI Cards
           LayoutBuilder(
             builder: (ctx, constraints) {
@@ -493,15 +644,16 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
                 childAspectRatio: 2.2,
                 children: [
                   _kpiCard('Total Tasks', '${d.totalTasks}', Icons.check_circle_outline, AppColors.gold),
-                  _kpiCard('Hours Logged', '${d.totalHoursWorked.toStringAsFixed(1)} h', Icons.timer_outlined, AppColors.statusInProgress),
+                  _kpiCard('Departments', '${d.tasksByDepartment.length}', Icons.category_outlined, AppColors.statusInProgress),
+                  _kpiCard('Hours Logged', '${d.totalHoursWorked.toStringAsFixed(1)} h', Icons.timer_outlined, AppColors.statusDone),
                   _kpiCard('Net Balance', '\$${d.netBalance.toStringAsFixed(2)}', Icons.account_balance_wallet_outlined, d.netBalance >= 0 ? AppColors.statusDone : AppColors.error),
-                  _kpiCard('Attendance Logs', '${d.totalAttendanceRecords}', Icons.badge_outlined, AppColors.statusDone),
                   _kpiCard('Total Revenue', '\$${d.totalRevenue.toStringAsFixed(2)}', Icons.trending_up, AppColors.statusDone),
                   _kpiCard('Paid Revenue', '\$${d.totalPaidRevenue.toStringAsFixed(2)}', Icons.payments_outlined, AppColors.statusDone),
                   _kpiCard('Total Expenses', '\$${d.totalExpenses.toStringAsFixed(2)}', Icons.trending_down, AppColors.error),
                   _kpiCard('Penalties Sum', '\$${d.totalPenalties.toStringAsFixed(2)}', Icons.gavel, AppColors.gold),
                   _kpiCard('Staff / Employees', '${d.userList.length}', Icons.people_alt_outlined, AppColors.statusInProgress),
                   _kpiCard('Active Clients', '${d.clientList.length}', Icons.business_outlined, AppColors.gold),
+                  _kpiCard('Scheduled Meetings', '${d.meetingList.length}', Icons.event_outlined, AppColors.statusDone),
                   _kpiCard('Total Comments', '${d.totalComments}', Icons.comment_outlined, AppColors.statusMedium),
                 ],
               );
@@ -514,7 +666,6 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
             spacing: 20,
             runSpacing: 20,
             children: [
-              // Task Status Distribution Pie Chart
               _chartContainer(
                 title: 'Task Status Breakdown',
                 width: 380,
@@ -538,8 +689,6 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
                         ),
                       ),
               ),
-
-              // Attendance Ratio Pie Chart
               _chartContainer(
                 title: 'Attendance Ratios',
                 width: 380,
@@ -565,92 +714,22 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     );
   }
 
-  // ── 2. Staff & Clients Directory ─────────────────────────────────────────
-  Widget _buildStaffAndClientsTab() {
-    final d = _data!;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Staff & Employees Master Directory (${d.userList.length})', style: AppTextStyles.headlineSm),
-          const SizedBox(height: 10),
-          d.userList.isEmpty
-              ? const Text('No staff members registered.')
-              : Card(
-                  color: AppColors.surfaceContainerLowest,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Full Name')),
-                        DataColumn(label: Text('Email')),
-                        DataColumn(label: Text('Role')),
-                        DataColumn(label: Text('Department')),
-                        DataColumn(label: Text('Phone')),
-                        DataColumn(label: Text('Status')),
-                      ],
-                      rows: d.userList.map((u) => DataRow(cells: [
-                        DataCell(Text(u.fullName, style: AppTextStyles.labelMd)),
-                        DataCell(Text(u.email.isNotEmpty ? u.email : '-')),
-                        DataCell(_chip(u.role.toUpperCase(), AppColors.gold)),
-                        DataCell(Text(u.department)),
-                        DataCell(Text(u.phone ?? '-')),
-                        DataCell(_chip(u.isActive ? 'Active' : 'Inactive', u.isActive ? AppColors.statusDone : AppColors.error)),
-                      ])).toList(),
-                    ),
-                  ),
-                ),
-          const SizedBox(height: 28),
-
-          Text('Clients Directory (${d.clientList.length})', style: AppTextStyles.headlineSm),
-          const SizedBox(height: 10),
-          d.clientList.isEmpty
-              ? const Text('No client profiles registered.')
-              : Card(
-                  color: AppColors.surfaceContainerLowest,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Company Name')),
-                        DataColumn(label: Text('Contact Person')),
-                        DataColumn(label: Text('Email')),
-                        DataColumn(label: Text('Phone')),
-                        DataColumn(label: Text('Status')),
-                        DataColumn(label: Text('Notes')),
-                      ],
-                      rows: d.clientList.map((c) => DataRow(cells: [
-                        DataCell(Text(c.companyName, style: AppTextStyles.labelMd)),
-                        DataCell(Text(c.contactName ?? '-')),
-                        DataCell(Text(c.email ?? '-')),
-                        DataCell(Text(c.phone ?? '-')),
-                        DataCell(_chip(c.status.toUpperCase(), AppColors.statusDone)),
-                        DataCell(Text(c.notes ?? '-')),
-                      ])).toList(),
-                    ),
-                  ),
-                ),
-        ],
-      ),
-    );
-  }
-
-  // ── 3. Tasks & All Details ────────────────────────────────────────────────
-  Widget _buildTasksTab() {
-    final list = _data?.taskList ?? [];
-    if (list.isEmpty) {
-      return const Center(child: Text('No tasks found in system.'));
+  // ── 2. Tasks Categorized by Department ───────────────────────────────────
+  Widget _buildTasksByDepartmentTab() {
+    final deptMap = _data?.tasksByDepartment ?? {};
+    if (deptMap.isEmpty) {
+      return const Center(child: Text('No task data found.'));
     }
 
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: list.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 14),
+      itemCount: deptMap.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 20),
       itemBuilder: (ctx, i) {
-        final t = list[i];
+        final entry = deptMap.entries.elementAt(i);
+        final deptName = entry.key;
+        final tasks = entry.value;
+
         return Card(
           color: AppColors.surfaceContainerLowest,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -659,122 +738,129 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header: Title & Badges
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: Text(t.title, style: AppTextStyles.headlineSm),
-                    ),
-                    _chip(t.priority.toUpperCase(), _priorityColor(t.priority)),
-                    const SizedBox(width: 8),
-                    _chip(t.status.toUpperCase(), _statusColor(t.status)),
+                    Text('Department: ${deptName.toUpperCase()}', style: AppTextStyles.headlineSm.copyWith(color: AppColors.gold)),
+                    _chip('${tasks.length} Tasks', AppColors.primary),
                   ],
                 ),
-                if (t.description != null && t.description!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(t.description!, style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
-                ],
                 const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Task Title')),
+                      DataColumn(label: Text('Status')),
+                      DataColumn(label: Text('Priority')),
+                      DataColumn(label: Text('Progress')),
+                      DataColumn(label: Text('Assigned Staff')),
+                      DataColumn(label: Text('Due Date')),
+                    ],
+                    rows: tasks.map((t) {
+                      final assigneesStr = t.assignees.isNotEmpty
+                          ? t.assignees.map((a) => a.name).join(', ')
+                          : 'Unassigned';
+                      return DataRow(cells: [
+                        DataCell(Text(t.title, style: AppTextStyles.labelMd)),
+                        DataCell(_chip(t.status.toUpperCase(), _statusColor(t.status))),
+                        DataCell(_chip(t.priority.toUpperCase(), _priorityColor(t.priority))),
+                        DataCell(Text('${t.completionPercentage}%')),
+                        DataCell(Text(assigneesStr)),
+                        DataCell(Text(t.dueDate != null ? (t.dueDate!.length >= 10 ? t.dueDate!.substring(0, 10) : t.dueDate!) : '-')),
+                      ]);
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-                // Progress Bar
+  // ── 3. Staff Directory & Detailed Employee Dossiers ──────────────────────
+  Widget _buildStaffAndEmployeeDossiersTab() {
+    final dossiers = _data?.employeeDossiers ?? [];
+    if (dossiers.isEmpty) {
+      return const Center(child: Text('No staff registered.'));
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: dossiers.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (ctx, i) {
+        final d = dossiers[i];
+        final u = d.user;
+
+        return Card(
+          color: AppColors.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Progress: ${t.completionPercentage}%', style: AppTextStyles.labelMd),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: t.completionPercentage / 100.0,
-                          backgroundColor: AppColors.outlineVariant,
-                          color: t.completionPercentage == 100 ? AppColors.statusDone : AppColors.gold,
-                          minHeight: 8,
-                        ),
-                      ),
+                    Text(u.fullName, style: AppTextStyles.headlineSm),
+                    Row(
+                      children: [
+                        _chip(u.role.toUpperCase(), AppColors.gold),
+                        const SizedBox(width: 6),
+                        _chip(u.department, AppColors.primary),
+                        const SizedBox(width: 6),
+                        _chip(u.isActive ? 'Active' : 'Inactive', u.isActive ? AppColors.statusDone : AppColors.error),
+                      ],
                     ),
                   ],
                 ),
+                const SizedBox(height: 6),
+                Text('Email: ${u.email.isNotEmpty ? u.email : "-"}   |   Phone: ${u.phone ?? "-"}', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
                 const SizedBox(height: 12),
                 const Divider(),
                 const SizedBox(height: 8),
 
-                // Details Grid: Client, Department / Team, Cost, Dates, Creator
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 10,
-                  children: [
-                    if (t.clientName != null)
-                      _detailBadge(Icons.business, 'Client: ${t.clientName}'),
-                    if (t.teamName != null)
-                      _detailBadge(Icons.groups, 'Team: ${t.teamName}${t.department != null ? " (${t.department})" : ""}'),
-                    if (t.createdByName != null)
-                      _detailBadge(Icons.person_outline, 'Created By: ${t.createdByName}'),
-                    if (t.cost != null)
-                      _detailBadge(Icons.attach_money, 'Cost: \$${t.cost!.toStringAsFixed(2)}'),
-                    if (t.startDate != null)
-                      _detailBadge(Icons.play_arrow_outlined, 'Start: ${t.startDate!.length >= 10 ? t.startDate!.substring(0, 10) : t.startDate}'),
-                    if (t.dueDate != null)
-                      _detailBadge(Icons.calendar_today, 'Due: ${t.dueDate!.length >= 10 ? t.dueDate!.substring(0, 10) : t.dueDate}'),
-                    if (t.createdAt != null)
-                      _detailBadge(Icons.schedule, 'Created: ${t.createdAt!.length >= 10 ? t.createdAt!.substring(0, 10) : t.createdAt}'),
-                    if (t.attachmentUrl != null && t.attachmentUrl!.isNotEmpty)
-                      _detailBadge(Icons.attach_file, 'Attachment: ${t.attachmentUrl}'),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                // Assigned Employees
-                if (t.assignees.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.people_outline, size: 16, color: AppColors.gold),
-                      const SizedBox(width: 6),
-                      Text('Assigned Staff (${t.assignees.length}): ', style: AppTextStyles.labelMd),
-                      Expanded(
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: t.assignees.map((a) {
-                            return _chip('${a.name}${a.isLead ? " (Lead)" : ""}', a.isLead ? AppColors.gold : AppColors.primary);
-                          }).toList(),
-                        ),
+                Text('Assigned Tasks (${d.assignedTasks.length}):', style: AppTextStyles.labelMd.copyWith(color: AppColors.gold)),
+                const SizedBox(height: 6),
+                d.assignedTasks.isEmpty
+                    ? Text('No tasks assigned.', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant))
+                    : Column(
+                        children: d.assignedTasks.map((t) {
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(t.title, style: AppTextStyles.bodySm.copyWith(fontWeight: FontWeight.bold)),
+                            subtitle: Text('Status: ${t.status.toUpperCase()} (${t.completionPercentage}%) - Progress/Accomplishment: ${t.description ?? "N/A"}'),
+                            trailing: _chip(t.priority.toUpperCase(), _priorityColor(t.priority)),
+                          );
+                        }).toList(),
                       ),
-                    ],
-                  ),
-                ] else ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.people_outline, size: 16, color: AppColors.onSurfaceVariant),
-                      const SizedBox(width: 6),
-                      Text('Assigned Staff: Unassigned', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
-                    ],
-                  ),
-                ],
+                const SizedBox(height: 12),
 
-                // Task Specific Comments
-                if (t.comments.isNotEmpty) ...[
+                Text('Attendance Summary (${d.attendanceLogs.length} logs, Total Logged: ${d.totalHours.toStringAsFixed(1)} h):', style: AppTextStyles.labelMd.copyWith(color: AppColors.gold)),
+                const SizedBox(height: 6),
+                d.attendanceLogs.isEmpty
+                    ? Text('No attendance recorded.', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant))
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: d.attendanceLogs.take(5).map((a) {
+                          return Chip(
+                            backgroundColor: AppColors.surfaceHigh,
+                            label: Text('${a.date}: In ${a.checkIn12h} - Out ${a.checkOut12h} (${a.hoursWorked.toStringAsFixed(1)}h)', style: AppTextStyles.bodySm),
+                          );
+                        }).toList(),
+                      ),
+
+                if (d.penalties.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Comments (${t.comments.length}):', style: AppTextStyles.labelMd.copyWith(color: AppColors.gold)),
-                        const SizedBox(height: 6),
-                        ...t.comments.map((c) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text('• ${c.authorName} (${c.createdAt.length >= 10 ? c.createdAt.substring(0, 10) : c.createdAt}): "${c.content}"', style: AppTextStyles.bodySm),
-                            )),
-                      ],
-                    ),
-                  ),
+                  Text('Penalties Issued (${d.penalties.length}, Total: \$${d.totalPenalties.toStringAsFixed(2)}):', style: AppTextStyles.labelMd.copyWith(color: AppColors.error)),
+                  const SizedBox(height: 4),
+                  ...d.penalties.map((p) => Text('• ${p.date} - \$${p.amount.toStringAsFixed(2)}: ${p.reason} (${p.status})', style: AppTextStyles.bodySm)),
                 ],
               ],
             ),
@@ -784,72 +870,152 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     );
   }
 
-  // ── 4. Attendance & Employee Daily Work Reports ─────────────────────────
-  Widget _buildAttendanceTab() {
-    final list = _data?.attendanceList ?? [];
-    if (list.isEmpty) {
-      return const Center(child: Text('No attendance records found.'));
+  // ── 4. Attendance Tables per Employee (12-hour format & Date column) ──────
+  Widget _buildAttendancePerEmployeeTab() {
+    final dossiers = (_data?.employeeDossiers ?? []).where((d) => d.attendanceLogs.isNotEmpty).toList();
+    if (dossiers.isEmpty) {
+      return const Center(child: Text('No attendance records logged.'));
     }
 
-    return SingleChildScrollView(
+    return ListView.separated(
       padding: const EdgeInsets.all(16),
-      child: Card(
-        color: AppColors.surfaceContainerLowest,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            columns: const [
-              DataColumn(label: Text('Employee Name')),
-              DataColumn(label: Text('Date')),
-              DataColumn(label: Text('Check-In')),
-              DataColumn(label: Text('Check-Out')),
-              DataColumn(label: Text('Hours Logged')),
-              DataColumn(label: Text('Status')),
-              DataColumn(label: Text('Override / Method')),
-              DataColumn(label: Text('Daily Written Work Report')),
-            ],
-            rows: list.map((a) {
-              final String reportTxt = (a.dailyReport != null && a.dailyReport!.isNotEmpty)
-                  ? a.dailyReport!
-                  : (a.notes ?? 'No report submitted');
-              return DataRow(
-                cells: [
-                  DataCell(Text(a.userName, style: AppTextStyles.labelMd)),
-                  DataCell(Text(a.date)),
-                  DataCell(Text(a.checkIn ?? '-')),
-                  DataCell(Text(a.checkOut ?? '-')),
-                  DataCell(Text('${a.hoursWorked.toStringAsFixed(1)} h')),
-                  DataCell(_chip(
-                    a.status.toUpperCase(),
-                    a.status == 'present'
-                        ? AppColors.statusDone
-                        : a.status == 'late'
-                            ? AppColors.gold
-                            : AppColors.error,
-                  )),
-                  DataCell(Text(a.isManual ? 'Manual Override' : (a.wifiSsid != null ? 'WiFi (${a.wifiSsid})' : 'Auto'))),
-                  DataCell(
-                    SizedBox(
-                      width: 250,
-                      child: Text(
-                        reportTxt,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySm,
-                      ),
-                    ),
+      itemCount: dossiers.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (ctx, i) {
+        final d = dossiers[i];
+
+        return Card(
+          color: AppColors.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Attendance Table: ${d.user.fullName}', style: AppTextStyles.headlineSm.copyWith(color: AppColors.gold)),
+                    _chip('${d.attendanceLogs.length} Records', AppColors.primary),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Date (YYYY-MM-DD)')),
+                      DataColumn(label: Text('Check In (12h)')),
+                      DataColumn(label: Text('Check Out (12h)')),
+                      DataColumn(label: Text('Hours Logged')),
+                      DataColumn(label: Text('Status')),
+                      DataColumn(label: Text('Method')),
+                      DataColumn(label: Text('Daily Work Report / Notes')),
+                    ],
+                    rows: d.attendanceLogs.map((a) => DataRow(cells: [
+                      DataCell(Text(a.date, style: AppTextStyles.labelMd)),
+                      DataCell(Text(a.checkIn12h)),
+                      DataCell(Text(a.checkOut12h)),
+                      DataCell(Text('${a.hoursWorked.toStringAsFixed(1)} h')),
+                      DataCell(_chip(a.status.toUpperCase(), a.status == 'present' ? AppColors.statusDone : AppColors.gold)),
+                      DataCell(Text(a.isManual ? 'Manual' : (a.wifiSsid != null ? 'WiFi' : 'Auto'))),
+                      DataCell(Text(a.dailyReport ?? a.notes ?? '-')),
+                    ])).toList(),
                   ),
-                ],
-              );
-            }).toList(),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  // ── 5. Finance & Expenses ─────────────────────────────────────────────────
+  // ── 5. Client Dossiers & Scheduled Meetings ──────────────────────────────
+  Widget _buildClientDossiersTab() {
+    final clientDossiers = _data?.clientDossiers ?? [];
+    if (clientDossiers.isEmpty) {
+      return const Center(child: Text('No registered clients.'));
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: clientDossiers.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (ctx, i) {
+        final cd = clientDossiers[i];
+        final c = cd.client;
+
+        return Card(
+          color: AppColors.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(c.companyName, style: AppTextStyles.headlineSm),
+                    _chip(c.status.toUpperCase(), AppColors.statusDone),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text('Contact: ${c.contactName ?? "-"}   |   Email: ${c.email ?? "-"}   |   Phone: ${c.phone ?? "-"}', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+
+                Text('Client Tasks (${cd.tasks.length}):', style: AppTextStyles.labelMd.copyWith(color: AppColors.gold)),
+                const SizedBox(height: 6),
+                cd.tasks.isEmpty
+                    ? Text('No tasks created for this client.', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant))
+                    : Column(
+                        children: cd.tasks.map((t) => ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(t.title, style: AppTextStyles.bodySm.copyWith(fontWeight: FontWeight.bold)),
+                          subtitle: Text('Status: ${t.status.toUpperCase()} (${t.completionPercentage}%)'),
+                        )).toList(),
+                      ),
+                const SizedBox(height: 12),
+
+                Text('Financials & Contracts (${cd.crmEntries.length}, Value: \$${cd.totalContractValue.toStringAsFixed(2)}, Paid: \$${cd.totalPaid.toStringAsFixed(2)}, Outstanding: \$${cd.totalOutstanding.toStringAsFixed(2)}):', style: AppTextStyles.labelMd.copyWith(color: AppColors.gold)),
+                const SizedBox(height: 6),
+                cd.crmEntries.isEmpty
+                    ? Text('No financial records.', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant))
+                    : Column(
+                        children: cd.crmEntries.map((crm) => ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(crm.title, style: AppTextStyles.bodySm.copyWith(fontWeight: FontWeight.bold)),
+                          subtitle: Text('Billed: \$${crm.amount.toStringAsFixed(2)} | Paid: \$${crm.paidAmount.toStringAsFixed(2)} | Outstanding: \$${crm.outstanding.toStringAsFixed(2)} | Status: ${crm.status.toUpperCase()}'),
+                        )).toList(),
+                      ),
+                const SizedBox(height: 12),
+
+                Text('Scheduled Meetings & Events (${cd.meetings.length}):', style: AppTextStyles.labelMd.copyWith(color: AppColors.gold)),
+                const SizedBox(height: 6),
+                cd.meetings.isEmpty
+                    ? Text('No meetings recorded.', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant))
+                    : Column(
+                        children: cd.meetings.map((m) => ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(m.title, style: AppTextStyles.bodySm.copyWith(fontWeight: FontWeight.bold)),
+                          subtitle: Text('Start: ${m.startTime} | Status: ${m.status.toUpperCase()} | Location/Notes: ${m.location ?? m.meetingNotes ?? "N/A"}'),
+                        )).toList(),
+                      ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ── 6. Finance & Expenses ─────────────────────────────────────────────────
   Widget _buildFinanceTab() {
     final d = _data!;
     return SingleChildScrollView(
@@ -857,23 +1023,10 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Finance Summaries
-          Row(
-            children: [
-              Expanded(child: _kpiCard('CRM Billed Revenue', '\$${d.totalRevenue.toStringAsFixed(2)}', Icons.trending_up, AppColors.statusDone)),
-              const SizedBox(width: 16),
-              Expanded(child: _kpiCard('Paid Revenue', '\$${d.totalPaidRevenue.toStringAsFixed(2)}', Icons.payments_outlined, AppColors.statusDone)),
-              const SizedBox(width: 16),
-              Expanded(child: _kpiCard('Total Expenses', '\$${d.totalExpenses.toStringAsFixed(2)}', Icons.trending_down, AppColors.error)),
-            ],
-          ),
-          const SizedBox(height: 28),
-
-          // CRM / Financial Entries Table
-          Text('CRM & Financial Transactions (${d.crmList.length})', style: AppTextStyles.headlineSm),
+          Text('CRM & Revenue Transactions (${d.crmList.length})', style: AppTextStyles.headlineSm),
           const SizedBox(height: 10),
           d.crmList.isEmpty
-              ? const Text('No financial transactions recorded.')
+              ? const Text('No revenue entries.')
               : Card(
                   color: AppColors.surfaceContainerLowest,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -881,35 +1034,30 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       columns: const [
-                        DataColumn(label: Text('Invoice # / Title')),
+                        DataColumn(label: Text('Title / Invoice')),
                         DataColumn(label: Text('Client')),
-                        DataColumn(label: Text('Billed Amount')),
-                        DataColumn(label: Text('Paid Amount')),
+                        DataColumn(label: Text('Billed')),
+                        DataColumn(label: Text('Paid')),
                         DataColumn(label: Text('Outstanding')),
                         DataColumn(label: Text('Status')),
-                        DataColumn(label: Text('Due Date')),
-                        DataColumn(label: Text('Notes')),
                       ],
                       rows: d.crmList.map((c) => DataRow(cells: [
-                        DataCell(Text(c.invoiceNumber != null ? '[#${c.invoiceNumber}] ${c.title}' : c.title, style: AppTextStyles.labelMd)),
+                        DataCell(Text(c.title, style: AppTextStyles.labelMd)),
                         DataCell(Text(c.clientName)),
                         DataCell(Text('\$${c.amount.toStringAsFixed(2)}')),
                         DataCell(Text('\$${c.paidAmount.toStringAsFixed(2)}')),
-                        DataCell(Text('\$${c.outstanding.toStringAsFixed(2)}', style: TextStyle(color: c.outstanding > 0 ? AppColors.error : AppColors.statusDone))),
-                        DataCell(_chip(c.status.toUpperCase(), c.status == 'paid' ? AppColors.statusDone : AppColors.gold)),
-                        DataCell(Text(c.dueDate != null ? (c.dueDate!.length >= 10 ? c.dueDate!.substring(0, 10) : c.dueDate!) : '-')),
-                        DataCell(Text(c.notes ?? '-')),
+                        DataCell(Text('\$${c.outstanding.toStringAsFixed(2)}')),
+                        DataCell(_chip(c.status.toUpperCase(), c.status == 'paid' ? AppColors.statusDone : AppColors.error)),
                       ])).toList(),
                     ),
                   ),
                 ),
           const SizedBox(height: 28),
 
-          // Detailed Expense Items Table
           Text('Expense Entries (${d.expenseList.length})', style: AppTextStyles.headlineSm),
           const SizedBox(height: 10),
           d.expenseList.isEmpty
-              ? const Text('No expense items recorded.')
+              ? const Text('No expense entries.')
               : Card(
                   color: AppColors.surfaceContainerLowest,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -923,48 +1071,14 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
                         DataColumn(label: Text('Date')),
                         DataColumn(label: Text('Recorded By')),
                         DataColumn(label: Text('Status')),
-                        DataColumn(label: Text('Receipt')),
                       ],
                       rows: d.expenseList.map((e) => DataRow(cells: [
-                        DataCell(_chip(e.categoryName, AppColors.gold)),
+                        DataCell(Text(e.categoryName, style: AppTextStyles.labelMd)),
                         DataCell(Text(e.description.isNotEmpty ? e.description : '-')),
-                        DataCell(Text('\$${e.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.error))),
+                        DataCell(Text('\$${e.amount.toStringAsFixed(2)}')),
                         DataCell(Text(e.date)),
                         DataCell(Text(e.recordedByName)),
                         DataCell(_chip(e.status.toUpperCase(), AppColors.statusDone)),
-                        DataCell(Text(e.receiptUrl != null ? 'Attached' : '-')),
-                      ])).toList(),
-                    ),
-                  ),
-                ),
-          const SizedBox(height: 28),
-
-          // Penalties List
-          Text('Penalties Log (${d.penaltyList.length})', style: AppTextStyles.headlineSm),
-          const SizedBox(height: 10),
-          d.penaltyList.isEmpty
-              ? const Text('No penalties recorded.')
-              : Card(
-                  color: AppColors.surfaceContainerLowest,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Employee Name')),
-                        DataColumn(label: Text('Reason')),
-                        DataColumn(label: Text('Amount')),
-                        DataColumn(label: Text('Date')),
-                        DataColumn(label: Text('Status')),
-                        DataColumn(label: Text('Notes')),
-                      ],
-                      rows: d.penaltyList.map((p) => DataRow(cells: [
-                        DataCell(Text(p.employeeName, style: AppTextStyles.labelMd)),
-                        DataCell(Text(p.reason)),
-                        DataCell(Text('\$${p.amount.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.error))),
-                        DataCell(Text(p.date)),
-                        DataCell(_chip(p.status.toUpperCase(), AppColors.gold)),
-                        DataCell(Text(p.notes ?? '-')),
                       ])).toList(),
                     ),
                   ),
@@ -974,11 +1088,11 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     );
   }
 
-  // ── 6. Comments ───────────────────────────────────────────────────────────
+  // ── 7. Comments Feed ──────────────────────────────────────────────────────
   Widget _buildCommentsTab() {
     final list = _data?.commentsList ?? [];
     if (list.isEmpty) {
-      return const Center(child: Text('No comments recorded across tasks.'));
+      return const Center(child: Text('No comments recorded.'));
     }
 
     return ListView.separated(
@@ -989,26 +1103,17 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
         final c = list[i];
         return Card(
           color: AppColors.surfaceContainerLowest,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: AppColors.gold.withValues(alpha: 0.1),
-              child: Text(
-                c.authorName.isNotEmpty ? c.authorName[0].toUpperCase() : 'U',
-                style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.bold),
-              ),
-            ),
-            title: Row(
+            title: Text(c.taskTitle, style: AppTextStyles.labelMd.copyWith(color: AppColors.gold)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(c.authorName, style: AppTextStyles.labelMd),
-                const SizedBox(width: 8),
-                Text('on ${c.taskTitle}', style: AppTextStyles.bodySm.copyWith(color: AppColors.gold)),
+                const SizedBox(height: 4),
+                ClickableCommentText(text: c.content, style: AppTextStyles.bodyMd),
+                const SizedBox(height: 4),
+                Text('By ${c.authorName} on ${c.createdAt.length >= 10 ? c.createdAt.substring(0, 10) : c.createdAt}', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
               ],
-            ),
-            subtitle: Text(c.content, style: AppTextStyles.bodyMd),
-            trailing: Text(
-              c.createdAt.length >= 10 ? c.createdAt.substring(0, 10) : c.createdAt,
-              style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
             ),
           ),
         );
@@ -1016,47 +1121,21 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     );
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  Widget _chip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
-      ),
-    );
-  }
-
-  Widget _detailBadge(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: AppColors.onSurfaceVariant),
-        const SizedBox(width: 4),
-        Text(text, style: AppTextStyles.bodySm),
-      ],
-    );
-  }
-
-  Widget _kpiCard(String label, String value, IconData icon, Color color) {
+  // Helper widgets
+  Widget _kpiCard(String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.5)),
+        border: Border.all(color: AppColors.outlineVariant),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 22),
@@ -1067,9 +1146,9 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(label, style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
+                Text(title, style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant), maxLines: 1),
                 const SizedBox(height: 2),
-                Text(value, style: AppTextStyles.headlineSm),
+                Text(value, style: AppTextStyles.headlineSm.copyWith(fontSize: 16, color: color), maxLines: 1),
               ],
             ),
           ),
@@ -1086,37 +1165,48 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.5)),
+        border: Border.all(color: AppColors.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: AppTextStyles.labelMd),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Expanded(child: child),
         ],
       ),
     );
   }
 
-  Color _statusColor(String status) {
-    switch (status.toLowerCase()) {
+  Widget _chip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(text, style: AppTextStyles.bodySm.copyWith(color: color, fontWeight: FontWeight.bold, fontSize: 10)),
+    );
+  }
+
+  Color _statusColor(String s) {
+    switch (s.toLowerCase()) {
       case 'done':
       case 'completed':
+      case 'employee_done':
         return AppColors.statusDone;
       case 'in_progress':
         return AppColors.statusInProgress;
-      case 'in_review':
+      case 'on_hold':
         return AppColors.gold;
-      case 'cancelled':
-        return AppColors.error;
       default:
-        return AppColors.statusMedium;
+        return AppColors.onSurfaceVariant;
     }
   }
 
-  Color _priorityColor(String priority) {
-    switch (priority.toLowerCase()) {
+  Color _priorityColor(String p) {
+    switch (p.toLowerCase()) {
       case 'urgent':
       case 'high':
         return AppColors.error;

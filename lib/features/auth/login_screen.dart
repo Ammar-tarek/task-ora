@@ -91,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  Text('CB TO-DO', style: AppTextStyles.headlineMd),
+                  Text('CashBack', style: AppTextStyles.headlineMd),
                 ],
               ),
               const SizedBox(height: 48),
@@ -242,7 +242,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               Center(
                 child: Text(
-                  '© 2025 CB TO-DO · All rights reserved',
+                  '© 2025 CashBack · All rights reserved',
                   style: AppTextStyles.bodySm,
                 ),
               ),

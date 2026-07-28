@@ -5,6 +5,7 @@
 //   client          → read-only title / status / due date / price only
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/theme/app_theme.dart';
@@ -19,6 +20,7 @@ import '../../core/models/client_model.dart';
 import '../../core/models/team_model.dart';
 import '../../core/utils/task_permissions.dart';
 import '../../core/services/n8n_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'status_options_manager_sheet.dart';
 
 class TaskDetailSheet extends StatefulWidget {
@@ -370,6 +372,72 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   }
 
   // ── Add comment ───────────────────────────────────────────────────────────
+
+  void _showInsertLinkDialog() {
+    final urlCtrl = TextEditingController();
+    final labelCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            const Icon(Icons.link, color: AppColors.gold),
+            const SizedBox(width: 8),
+            Text('Insert Link into Comment', style: AppTextStyles.headlineSm),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: urlCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Link URL *',
+                hintText: 'https://example.com',
+                prefixIcon: Icon(Icons.http, color: AppColors.gold),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: labelCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Link Label (Optional)',
+                hintText: 'e.g. Project Specs',
+                prefixIcon: Icon(Icons.label_outline, color: AppColors.gold),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final url = urlCtrl.text.trim();
+              if (url.isNotEmpty) {
+                final label = labelCtrl.text.trim();
+                final formatted = label.isNotEmpty ? '[$label]($url)' : url;
+                setState(() {
+                  if (_commentCtrl.text.isNotEmpty) {
+                    _commentCtrl.text = '${_commentCtrl.text} $formatted';
+                  } else {
+                    _commentCtrl.text = formatted;
+                  }
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.gold, foregroundColor: Colors.black),
+            child: const Text('Insert Link'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _sendComment() async {
     final text = _commentCtrl.text.trim();
@@ -1008,8 +1076,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         if ((_task!.description ?? '').isNotEmpty) ...[
           _SectionLabel('DESCRIPTION'),
           const SizedBox(height: 6),
-          Text(
-            _task!.description!,
+          ClickableCommentText(
+            text: _task!.description!,
             style: AppTextStyles.bodyMd.copyWith(
               color: AppColors.onSurfaceVariant,
             ),
@@ -1188,8 +1256,13 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Internal / visible toggle (admin/manager only)
-                  if (_perms.canEditFull)
+                  // Insert Link button (admin/manager/super_admin)
+                  if (_perms.canEditFull) ...[
+                    IconButton(
+                      icon: const Icon(Icons.link, color: AppColors.gold, size: 20),
+                      tooltip: 'Insert Link into Comment',
+                      onPressed: _showInsertLinkDialog,
+                    ),
                     IconButton(
                       icon: Icon(
                         _commentIsInternal ? Icons.lock_outline : Icons.public,
@@ -1205,6 +1278,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                         () => _commentIsInternal = !_commentIsInternal,
                       ),
                     ),
+                  ],
                   _sendingComment
                       ? const SizedBox(
                           width: 28,
@@ -1484,6 +1558,165 @@ class _MetaChip extends StatelessWidget {
   }
 }
 
+class ClickableCommentText extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+
+  const ClickableCommentText({
+    super.key,
+    required this.text,
+    required this.style,
+  });
+
+  static Future<void> openUrl(String urlStr) async {
+    final cleanUrl = urlStr.trim();
+    if (cleanUrl.isEmpty) return;
+    try {
+      final formattedUrl = cleanUrl.startsWith(RegExp(r'https?://', caseSensitive: false))
+          ? cleanUrl
+          : 'https://$cleanUrl';
+      final uri = Uri.parse(formattedUrl);
+
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (_) {
+      try {
+        final formattedUrl = 'https://${cleanUrl.replaceAll(RegExp(r'^https?://', caseSensitive: false), '')}';
+        await launchUrl(Uri.parse(formattedUrl), mode: LaunchMode.platformDefault);
+      } catch (_) {}
+    }
+  }
+
+  @override
+  State<ClickableCommentText> createState() => _ClickableCommentTextState();
+}
+
+class _ClickableCommentTextState extends State<ClickableCommentText> {
+  final List<TapGestureRecognizer> _recognizers = [];
+
+  void _clearRecognizers() {
+    for (final r in _recognizers) {
+      r.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  @override
+  void dispose() {
+    _clearRecognizers();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _clearRecognizers();
+
+    final text = widget.text;
+    final style = widget.style;
+
+    if (text.isEmpty) return Text('', style: style);
+
+    final mdRegex = RegExp(
+      r'\[([^\]]+)\]\((https?://[^\s\)]+|www\.[^\s\)]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s\)]*)\)',
+      caseSensitive: false,
+    );
+    final rawRegex = RegExp(
+      r'(https?://[^\s<]+|www\.[^\s<]+)',
+      caseSensitive: false,
+    );
+
+    final List<_CommentLinkMatch> linkMatches = [];
+
+    for (final match in mdRegex.allMatches(text)) {
+      final label = match.group(1) ?? 'Link';
+      final url = match.group(2) ?? '';
+      linkMatches.add(_CommentLinkMatch(
+        start: match.start,
+        end: match.end,
+        label: label,
+        url: url,
+      ));
+    }
+
+    for (final match in rawRegex.allMatches(text)) {
+      final start = match.start;
+      final end = match.end;
+      final url = match.group(0) ?? '';
+      final overlaps = linkMatches.any((lm) => start < lm.end && end > lm.start);
+      if (!overlaps && url.isNotEmpty) {
+        linkMatches.add(_CommentLinkMatch(
+          start: start,
+          end: end,
+          label: url,
+          url: url,
+        ));
+      }
+    }
+
+    linkMatches.sort((a, b) => a.start.compareTo(b.start));
+
+    if (linkMatches.isEmpty) {
+      return SelectableText(text, style: style);
+    }
+
+    final List<InlineSpan> spans = [];
+    int lastEnd = 0;
+
+    for (final lm in linkMatches) {
+      if (lm.start > lastEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastEnd, lm.start),
+          style: style,
+        ));
+      }
+
+      final urlToOpen = lm.url;
+      final rec = TapGestureRecognizer()
+        ..onTap = () => ClickableCommentText.openUrl(urlToOpen);
+      _recognizers.add(rec);
+
+      spans.add(
+        TextSpan(
+          text: lm.label,
+          style: style.copyWith(
+            color: AppColors.gold,
+            decoration: TextDecoration.underline,
+            fontWeight: FontWeight.bold,
+          ),
+          recognizer: rec,
+        ),
+      );
+
+      lastEnd = lm.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastEnd),
+        style: style,
+      ));
+    }
+
+    return Text.rich(TextSpan(children: spans));
+  }
+}
+
+class _CommentLinkMatch {
+  final int start;
+  final int end;
+  final String label;
+  final String url;
+
+  _CommentLinkMatch({
+    required this.start,
+    required this.end,
+    required this.label,
+    required this.url,
+  });
+}
+
 class _CommentTile extends StatelessWidget {
   final TaskComment comment;
   const _CommentTile({required this.comment});
@@ -1520,7 +1753,7 @@ class _CommentTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text(comment.content, style: AppTextStyles.bodyMd),
+          ClickableCommentText(text: comment.content, style: AppTextStyles.bodyMd),
         ],
       ),
     );

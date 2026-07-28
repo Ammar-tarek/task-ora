@@ -185,6 +185,80 @@ class NotificationRepository {
     } catch (_) {}
   }
 
+  /// Broadcast a notification for any system/task action to:
+  /// 1. Target assigned employees / users ([targetUserIds])
+  /// 2. Team Manager / Team Lead of the team ([teamId])
+  /// 3. ALL Admins and Super Admins
+  /// Excludes [actorId] so the performing user does not receive their own action alert.
+  static Future<void> notifyAction({
+    required String title,
+    required String body,
+    required String type,
+    String? referenceType,
+    String? referenceId,
+    String? teamId,
+    List<String>? targetUserIds,
+    String? actorId,
+  }) async {
+    try {
+      final recipients = <String>{};
+
+      // 1) Target Users / Assignees
+      if (targetUserIds != null) {
+        recipients.addAll(targetUserIds.where((id) => id.isNotEmpty));
+      }
+
+      // 2) Team Lead / Manager
+      if (teamId != null && teamId.isNotEmpty) {
+        try {
+          final teamData = await _admin
+              .from('teams')
+              .select('team_lead_id')
+              .eq('id', teamId)
+              .maybeSingle();
+          if (teamData != null && teamData['team_lead_id'] != null) {
+            recipients.add(teamData['team_lead_id'] as String);
+          }
+        } catch (_) {}
+      }
+
+      // 3) ALL Admins and Super Admins
+      try {
+        final adminRows = await _admin
+            .from('profiles')
+            .select('id')
+            .or('role.eq.admin,role.eq.super_admin');
+        for (final r in (adminRows as List)) {
+          final id = r['id'] as String?;
+          if (id != null && id.isNotEmpty) {
+            recipients.add(id);
+          }
+        }
+      } catch (_) {}
+
+      // 4) Remove actorId (the person performing the action)
+      if (actorId != null && actorId.isNotEmpty) {
+        recipients.remove(actorId);
+      }
+
+      if (recipients.isEmpty) return;
+
+      // 5) Insert rows into notifications table
+      final inserts = recipients.map((rId) => {
+        'recipient_id': rId,
+        'type': type,
+        'title': title,
+        'body': body,
+        'reference_type': referenceType,
+        'reference_id': referenceId,
+        'is_read': false,
+        'channel': 'in_app',
+      }).toList();
+
+      await _admin.from('notifications').insert(inserts);
+    } catch (_) {}
+  }
+
   /// Subscribe to new notifications in real-time.
   /// Returns a stream of raw notification maps.
   /// Returns an empty stream if the table doesn't exist.

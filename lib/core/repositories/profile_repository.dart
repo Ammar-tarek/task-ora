@@ -4,6 +4,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_model.dart';
 import '../services/supabase_service.dart';
+import 'notification_repository.dart';
 
 class ProfileRepository {
   static final _client = SupabaseService.client;
@@ -188,6 +189,18 @@ class ProfileRepository {
           .from('profiles')
           .update({'role': role})
           .eq('id', userId);
+
+      try {
+        await NotificationRepository.notifyAction(
+          title: 'Role Updated',
+          body: 'Your account role has been updated to $role.',
+          type: 'role_changed',
+          referenceType: 'profile',
+          referenceId: userId,
+          targetUserIds: [userId],
+        );
+      } catch (_) {}
+
       return null;
     } on PostgrestException catch (e) {
       if (e.code == '22P02') {
@@ -251,6 +264,19 @@ class ProfileRepository {
           .from('profiles')
           .update(updates)
           .eq('id', userId);
+
+      if (role != null || status != null) {
+        try {
+          await NotificationRepository.notifyAction(
+            title: 'Account Settings Updated',
+            body: 'Your account profile settings have been updated.',
+            type: 'role_changed',
+            referenceType: 'profile',
+            referenceId: userId,
+            targetUserIds: [userId],
+          );
+        } catch (_) {}
+      }
 
       return null;
     } on AuthException catch (e) {
