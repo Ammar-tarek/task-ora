@@ -178,6 +178,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+
+            // Update Card
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.gold.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.system_update_outlined,
+                    color: AppColors.gold,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Check & Download Updates',
+                          style: AppTextStyles.labelMd,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Check Supabase and install latest APK release.',
+                          style: AppTextStyles.bodySm.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      foregroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                    ),
+                    onPressed: () => ApkUpdateService.checkForUpdates(
+                      context,
+                      showNoUpdateToast: true,
+                      forceDialog: true,
+                    ),
+                    icon: const Icon(Icons.download_rounded, size: 16),
+                    label: const Text('Update'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
 
             // Team section — admin / manager only
             if (isManager) ...[

@@ -13,7 +13,11 @@ class ApkUpdateService {
 
   /// Checks Supabase app_versions table and prompts the user to download and install
   /// if a newer version is available.
-  static Future<void> checkForUpdates(BuildContext context, {bool showNoUpdateToast = false}) async {
+  static Future<void> checkForUpdates(
+    BuildContext context, {
+    bool showNoUpdateToast = false,
+    bool forceDialog = false,
+  }) async {
     if (_checking) return;
     _checking = true;
 
@@ -21,18 +25,31 @@ class ApkUpdateService {
       final info = await PackageInfo.fromPlatform();
       final currentVersion = info.version; // e.g. "1.0.0"
 
-      final data = await SupabaseService.client
-          .from('app_versions')
-          .select()
-          .eq('platform', 'android')
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
+      Map<String, dynamic>? data;
+      try {
+        data = await SupabaseService.client
+            .from('app_versions')
+            .select()
+            .eq('platform', 'android')
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+      } catch (_) {
+        data = await SupabaseService.adminClient
+            .from('app_versions')
+            .select()
+            .eq('platform', 'android')
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+      }
 
       if (data == null) {
         if (showNoUpdateToast && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('App is up to date.')),
+            const SnackBar(
+              content: Text('No version record found in app_versions table.'),
+            ),
           );
         }
         _checking = false;
@@ -40,12 +57,17 @@ class ApkUpdateService {
       }
 
       final latestVersion = data['latest_version'] as String? ?? '1.0.0';
-      final minRequiredVersion = data['min_required_version'] as String? ?? '1.0.0';
+      final minRequiredVersion =
+          data['min_required_version'] as String? ?? '1.0.0';
       final downloadUrl = data['download_url'] as String? ?? '';
-      final releaseNotes = data['release_notes'] as String? ?? 'Performance improvements and bug fixes.';
-      final isMandatory = (data['is_mandatory'] as bool? ?? false) || _isNewerVersion(currentVersion, minRequiredVersion);
+      final releaseNotes = data['release_notes'] as String? ??
+          'Performance improvements and bug fixes.';
+      final isMandatory = (data['is_mandatory'] as bool? ?? false) ||
+          _isNewerVersion(currentVersion, minRequiredVersion);
 
-      if (_isNewerVersion(currentVersion, latestVersion) && downloadUrl.isNotEmpty) {
+      final hasNewVersion = _isNewerVersion(currentVersion, latestVersion);
+
+      if ((hasNewVersion || forceDialog) && downloadUrl.isNotEmpty) {
         if (context.mounted) {
           _showUpdateDialog(
             context,
@@ -57,10 +79,19 @@ class ApkUpdateService {
         }
       } else if (showNoUpdateToast && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('CashBack is up to date (v$currentVersion).')),
+          SnackBar(
+            content: Text(
+              'App is up to date (Current: v$currentVersion, Latest: v$latestVersion).',
+            ),
+          ),
         );
       }
-    } catch (_) {
+    } catch (e) {
+      if (showNoUpdateToast && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Update check failed: $e')),
+        );
+      }
     } finally {
       _checking = false;
     }
