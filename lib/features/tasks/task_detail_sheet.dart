@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/repositories/team_repository.dart';
@@ -149,6 +151,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       if (_perms.canEditFull) {
         _clients = await ClientRepository.fetchClients();
       }
+      if (!mounted) return;
 
       // Assignee picker — members of the TASK's team (not the viewer's).
       // Admin editing a Marketing task must see Marketing people.
@@ -189,6 +192,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       if (_perms.canSeeEditHistory) {
         _editLogs = await TaskRepository.fetchEditHistory(widget.taskId);
       }
+      if (!mounted) return;
 
       // Status options — admin bootstraps on first run; all roles just fetch
       final uid = context.read<AuthNotifier>().profile?.id ?? '';
@@ -253,6 +257,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       final costVal = double.tryParse(_costCtrl.text.trim());
       final currentUid = context.read<AuthNotifier>().profile!.id;
 
+      final updaterName = context.read<AuthNotifier>().profile?.fullName ?? '';
       await TaskRepository.updateTask(
         id: widget.taskId,
         title: _titleCtrl.text.trim(),
@@ -294,7 +299,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               description: _descCtrl.text.trim().isEmpty
                   ? null
                   : _descCtrl.text.trim(),
-              updatedBy: context.read<AuthNotifier>().profile?.fullName ?? '',
+              updatedBy: updaterName,
             );
           }
         } catch (_) {}
@@ -368,6 +373,69 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       _showSnack('Could not delete: $e', isError: true);
     } finally {
       if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  bool _archiving = false;
+
+  Future<void> _toggleArchive() async {
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile == null || _task == null) return;
+
+    final isCurrentlyArchived = _task!.isArchived;
+    final actionName = isCurrentlyArchived ? 'unarchive and retrieve' : 'archive';
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: Text(isCurrentlyArchived ? 'Retrieve Task' : 'Archive Task'),
+        content: Text(
+          'Are you sure you want to $actionName "${_task!.title}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+            ),
+            child: Text(isCurrentlyArchived ? 'Retrieve' : 'Archive'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+    setState(() => _archiving = true);
+
+    try {
+      bool ok;
+      if (isCurrentlyArchived) {
+        ok = await TaskRepository.unarchiveTasks([_task!.id]);
+      } else {
+        ok = await TaskRepository.archiveTask(_task!.id, profileId: profile.id);
+      }
+
+      if (ok) {
+        _showSnack(
+          isCurrentlyArchived
+              ? 'Task retrieved and restored to active tasks'
+              : 'Task archived successfully',
+        );
+        widget.onUpdated?.call();
+        if (mounted) Navigator.pop(context);
+      } else {
+        throw Exception('Operation failed');
+      }
+    } catch (e) {
+      _showSnack('Could not update archive status: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _archiving = false);
     }
   }
 
@@ -451,6 +519,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         text,
         isInternal: _commentIsInternal,
       );
+      if (!mounted) return;
       if (ok) {
         _commentCtrl.clear();
         // Optimistic UI — add to local list
@@ -577,6 +646,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     // Mirror the create-task sheet: content-height sheet that scrolls freely.
     return Padding(
@@ -666,7 +736,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Task Details', style: AppTextStyles.headlineSm),
+            Text(S.t('task_details'), style: AppTextStyles.headlineSm),
             TStatusChip(
               label: _task!.statusLabel,
               color: _statusColor(_task!.status),
@@ -736,7 +806,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Task Details', style: AppTextStyles.headlineSm),
+            Text(S.t('task_details'), style: AppTextStyles.headlineSm),
             TStatusChip(
               label: _task!.statusLabel,
               color: _statusColor(_task!.status),
@@ -748,10 +818,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         // Title
         TextField(
           controller: _titleCtrl,
-          decoration: const InputDecoration(
-            labelText: 'TITLE',
-            hintText: 'Enter task title',
-            prefixIcon: Icon(Icons.title, color: AppColors.gold, size: 18),
+          decoration: InputDecoration(
+            labelText: S.t('title').toUpperCase(),
+            hintText: S.t('task_title'),
+            prefixIcon: const Icon(Icons.title, color: AppColors.gold, size: 18),
           ),
         ),
         const SizedBox(height: 14),
@@ -760,10 +830,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         TextField(
           controller: _descCtrl,
           maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'DESCRIPTION',
-            hintText: 'Optional description…',
-            prefixIcon: Padding(
+          decoration: InputDecoration(
+            labelText: S.t('description').toUpperCase(),
+            hintText: S.t('description'),
+            prefixIcon: const Padding(
               padding: EdgeInsets.only(bottom: 36),
               child: Icon(Icons.notes, color: AppColors.gold, size: 18),
             ),
@@ -1467,6 +1537,29 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                 ),
               ),
               const SizedBox(width: 10),
+              // Archive / Unarchive toggle for admins & managers
+              if (_perms.canEditFull && _task != null) ...[
+                SizedBox(
+                  width: 48,
+                  child: OutlinedButton(
+                    onPressed: busy ? null : _toggleArchive,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.gold,
+                      side: const BorderSide(color: AppColors.gold),
+                      padding: EdgeInsets.zero,
+                    ),
+                    child: _archiving
+                        ? _Spinner(color: AppColors.gold)
+                        : Icon(
+                            _task!.isArchived
+                                ? Icons.unarchive_outlined
+                                : Icons.archive_outlined,
+                            size: 20,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
               Expanded(
                 child: OutlinedButton(
                   onPressed: busy ? null : () => Navigator.pop(context),
@@ -1500,7 +1593,7 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Align(
     alignment: Alignment.centerLeft,
-    child: Text(text, style: AppTextStyles.labelCaps),
+    child: Text(S.t(text), style: AppTextStyles.labelCaps),
   );
 }
 
@@ -1851,7 +1944,7 @@ class _PriorityChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final sel = selected == value;
     return ChoiceChip(
-      label: Text(label),
+      label: Text(S.t(label)),
       selected: sel,
       onSelected: (_) => onSelect(value),
       selectedColor: color.withValues(alpha: 0.18),
@@ -1879,7 +1972,7 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final sel = selected == value;
     return ChoiceChip(
-      label: Text(label),
+      label: Text(S.t(label)),
       selected: sel,
       onSelected: (_) => onSelect(value),
       selectedColor: AppColors.primary,

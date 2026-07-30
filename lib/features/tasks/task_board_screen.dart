@@ -5,7 +5,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/providers/team_filter_notifier.dart';
+import '../../core/providers/theme_controller.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/repositories/team_repository.dart';
 import '../../core/services/realtime_service.dart';
@@ -38,6 +41,11 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   String? _clientId; // null = all clients
   String? _assigneeId; // null = all assignees
   bool _isTableView = true;
+  final ScrollController _boardHorizontalController = ScrollController();
+
+  // Multi-selection state for Super Admin / Admin batch operations
+  bool _isSelectionMode = false;
+  Set<String> _selectedTaskIds = {};
 
   ProfileModel? _profile;
   TaskPermissions? _perms;
@@ -110,6 +118,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   @override
   void dispose() {
+    _boardHorizontalController.dispose();
     RealtimeService.instance.unlisten(_onRealtime);
     _teamFilter?.removeListener(_onTeamChange);
     super.dispose();
@@ -214,19 +223,19 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   String get _sortLabel {
     switch (_sort) {
       case _Sort.newest:
-        return 'Newest first';
+        return S.t('newest_first');
       case _Sort.oldest:
-        return 'Oldest first';
+        return S.t('oldest_first');
       case _Sort.dueDate:
-        return 'Due date';
+        return S.t('due_date');
       case _Sort.priorityHigh:
-        return 'Priority (high→low)';
+        return S.t('priority_high_low');
       case _Sort.clientAZ:
-        return 'Client A–Z';
+        return S.t('client_az');
       case _Sort.titleAZ:
-        return 'Title A–Z';
+        return S.t('title_az');
       case _Sort.moved:
-        return 'Moved tasks';
+        return S.t('moved_tasks');
     }
   }
 
@@ -243,54 +252,54 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     return [
       NotionColumn(
         key: 'title',
-        label: 'Task',
+        label: S.t('task'),
         icon: Icons.text_fields,
         flex: 3,
       ),
       NotionColumn(
         key: 'status',
-        label: 'Status',
+        label: S.t('status'),
         icon: Icons.circle_outlined,
         flex: 2,
       ),
       if (p?.canSeePriority != false)
         NotionColumn(
           key: 'priority',
-          label: 'Priority',
+          label: S.t('priority'),
           icon: Icons.flag_outlined,
           flex: 2,
         ),
       if (p?.canSeeAssignees != false)
         NotionColumn(
           key: 'assignee',
-          label: 'Assignee',
+          label: S.t('assignee'),
           icon: Icons.person_outline,
           flex: 2,
         ),
       NotionColumn(
         key: 'due',
-        label: 'Due',
+        label: S.t('due'),
         icon: Icons.calendar_today_outlined,
         flex: 2,
       ),
       if (p?.canSeeProgress != false)
         NotionColumn(
           key: 'progress',
-          label: 'Progress',
+          label: S.t('progress'),
           icon: Icons.trending_up,
           flex: 2,
         ),
       if (p?.canSeeCost == true)
         NotionColumn(
           key: 'cost',
-          label: 'Cost / Price',
+          label: S.t('cost_price'),
           icon: Icons.monetization_on_outlined,
           flex: 2,
         ),
       if (p?.canSeeComments == true)
         NotionColumn(
           key: 'comments',
-          label: 'Comments',
+          label: S.t('comments'),
           icon: Icons.comment_outlined,
           flex: 1,
         ),
@@ -301,11 +310,12 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   // ── Load ─────────────────────────────────────────────────────────────────
 
   Future<void> _load({bool animate = true}) async {
-    if (animate)
+    if (animate) {
       setState(() {
         _loading = true;
         _error = null;
       });
+    }
     try {
       final profile = context.read<AuthNotifier>().profile;
       _profile = profile;
@@ -328,17 +338,19 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
           _teams = await TeamRepository.fetchAllAdmin();
         } catch (_) {}
       }
-      if (mounted)
+      if (mounted) {
         setState(() {
           _tasks = data as List<TaskModel>;
           _loading = false;
         });
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = e.toString();
           _loading = false;
         });
+      }
     }
   }
 
@@ -389,8 +401,6 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
               ),
           ],
         ),
-        // FittedBox prevents the chip overflowing (and overlapping the next
-        // column) when the cell is narrow on a phone.
         'status': FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
@@ -457,7 +467,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     }
   }
 
-  // ── Sort / filter dialogs ─────────────────────────────────────────────────
+  // ── Sort / filter dialogs & actions ────────────────────────────────────────
 
   void _showSortSheet() {
     showModalBottomSheet(
@@ -695,6 +705,86 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     );
   }
 
+  Future<void> _archiveTaskRow(String id) async {
+    final profile = _profile;
+    if (profile == null) return;
+    final ok = await TaskRepository.archiveTask(id, profileId: profile.id);
+    if (ok) {
+      setState(() {
+        _tasks.removeWhere((t) => t.id == id);
+        _selectedTaskIds.remove(id);
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task archived')),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to archive task')),
+        );
+        _load();
+      }
+    }
+  }
+
+  Future<void> _archiveSelectedTasks() async {
+    final profile = _profile;
+    if (profile == null || _selectedTaskIds.isEmpty) return;
+
+    final count = _selectedTaskIds.length;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Archive Selected Tasks'),
+        content: Text('Are you sure you want to archive $count selected task(s)?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Archive All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final idsToArchive = _selectedTaskIds.toList();
+    final ok = await TaskRepository.archiveMultipleTasks(
+      idsToArchive,
+      profileId: profile.id,
+    );
+
+    if (ok) {
+      setState(() {
+        _tasks.removeWhere((t) => idsToArchive.contains(t.id));
+        _selectedTaskIds.clear();
+        _isSelectionMode = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$count task(s) archived successfully!')),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to archive selected tasks.')),
+        );
+        _load();
+      }
+    }
+  }
+
   void _clearFilters() {
     setState(() {
       _filter = 'All';
@@ -708,81 +798,93 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   @override
   Widget build(BuildContext context) {
+    context.watch<ThemeController>();
+    context.watch<LocaleController>();
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: Text(
-            _isTableView ? 'Tasks — Table' : 'Tasks — Board',
-            key: ValueKey(_isTableView),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              transitionBuilder: (child, anim) => RotationTransition(
-                turns: Tween(begin: 0.5, end: 1.0).animate(anim),
-                child: child,
-              ),
-              child: Icon(
-                _isTableView
-                    ? Icons.view_kanban_outlined
-                    : Icons.table_rows_outlined,
-                key: ValueKey(_isTableView),
-              ),
-            ),
-            tooltip: _isTableView ? 'Board view' : 'Table view',
-            onPressed: () => setState(() => _isTableView = !_isTableView),
-          ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
-          const SizedBox(width: 4),
-        ],
-      ),
-      // Hide FAB for clients — they cannot create tasks
-      floatingActionButton: (_perms?.canCreateTask != false)
-          ? FloatingActionButton(
-              onPressed: () => _showCreateSheet(context),
-              backgroundColor: AppColors.primary,
-              child: const Icon(Icons.add, color: AppColors.gold),
-            )
-          : null,
+      appBar: _buildAppBar(),
+      floatingActionButton: _buildFab(),
       body: Column(
         children: [
           const TeamFilterChip(),
+          if (_isSelectionMode) _buildSelectionBanner(),
           Expanded(child: _buildBody()),
         ],
       ),
     );
   }
 
-  Widget _buildBody() {
-    if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.gold),
-      );
-    }
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 40,
-              color: AppColors.outlineVariant,
-            ),
-            const SizedBox(height: 12),
-            Text('Error loading tasks', style: AppTextStyles.labelMd),
-            const SizedBox(height: 8),
-            ElevatedButton(onPressed: _load, child: const Text('Retry')),
-          ],
+  // ── Sub-build Layout Helpers ────────────────────────────────────────────────
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      title: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: Text(
+          _isTableView
+              ? '${S.t('tasks')} — ${S.t('task_table')}'
+              : '${S.t('tasks')} — ${S.t('task_board')}',
+          key: ValueKey(_isTableView),
         ),
-      );
-    }
+      ),
+      actions: [
+        if (_profile?.isAdmin == true || _profile?.isSuperAdmin == true)
+          IconButton(
+            icon: Icon(
+              _isSelectionMode
+                  ? Icons.check_box
+                  : Icons.check_box_outlined,
+              color: _isSelectionMode ? AppColors.gold : null,
+            ),
+            tooltip: _isSelectionMode
+                ? 'Exit selection mode'
+                : 'Select multiple tasks',
+            onPressed: () {
+              setState(() {
+                _isSelectionMode = !_isSelectionMode;
+                if (!_isSelectionMode) _selectedTaskIds.clear();
+              });
+            },
+          ),
+        IconButton(
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            transitionBuilder: (child, anim) => RotationTransition(
+              turns: Tween(begin: 0.5, end: 1.0).animate(anim),
+              child: child,
+            ),
+            child: Icon(
+              _isTableView
+                  ? Icons.view_kanban_outlined
+                  : Icons.table_rows_outlined,
+              key: ValueKey(_isTableView),
+            ),
+          ),
+          tooltip: _isTableView ? 'Board view' : 'Table view',
+          onPressed: () => setState(() => _isTableView = !_isTableView),
+        ),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+        const SizedBox(width: 4),
+      ],
+    );
+  }
+
+  Widget? _buildFab() {
+    if (_perms?.canCreateTask == false) return null;
+    return FloatingActionButton(
+      onPressed: () => _showCreateSheet(context),
+      backgroundColor: AppColors.primary,
+      child: const Icon(Icons.add, color: AppColors.gold),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) return _buildLoadingView();
+    if (_error != null) return _buildErrorView();
+
     final canManage = _profile?.isAdmin == true || _profile?.isManager == true;
     final waiting = _waiting;
+
     return Column(
       children: [
         if (canManage && waiting.isNotEmpty)
@@ -797,8 +899,6 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             duration: const Duration(milliseconds: 400),
             switchInCurve: Curves.easeOut,
             switchOutCurve: Curves.easeIn,
-            // Align children to the top — default centers a short child and
-            // leaves a big empty gap above the table.
             layoutBuilder: (current, previous) => Stack(
               alignment: Alignment.topCenter,
               children: [...previous, ?current],
@@ -822,13 +922,100 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     );
   }
 
+  Widget _buildLoadingView() {
+    return const Center(
+      child: CircularProgressIndicator(color: AppColors.gold),
+    );
+  }
+
+  Widget _buildErrorView() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 40,
+            color: AppColors.outlineVariant,
+          ),
+          const SizedBox(height: 12),
+          Text('Error loading tasks', style: AppTextStyles.labelMd),
+          const SizedBox(height: 8),
+          ElevatedButton(onPressed: _load, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectionBanner() {
+    final count = _selectedTaskIds.length;
+    return Container(
+      width: double.infinity,
+      color: AppColors.gold.withValues(alpha: 0.15),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.check_box_outlined, color: AppColors.gold, size: 20),
+          const SizedBox(width: 10),
+          Text(
+            '$count selected',
+            style: AppTextStyles.labelMd.copyWith(color: AppColors.gold, fontWeight: FontWeight.bold),
+          ),
+          const Spacer(),
+          TextButton.icon(
+            onPressed: () {
+              setState(() {
+                if (_selectedTaskIds.length == _filtered.length) {
+                  _selectedTaskIds.clear();
+                } else {
+                  _selectedTaskIds = _filtered.map((t) => t.id).toSet();
+                }
+              });
+            },
+            icon: Icon(
+              _selectedTaskIds.length == _filtered.length
+                  ? Icons.deselect
+                  : Icons.select_all,
+              size: 16,
+              color: AppColors.gold,
+            ),
+            label: Text(
+              _selectedTaskIds.length == _filtered.length ? 'Deselect All' : 'Select All',
+              style: const TextStyle(color: AppColors.gold),
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            onPressed: count > 0 ? _archiveSelectedTasks : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            icon: const Icon(Icons.archive_outlined, size: 18),
+            label: Text('Archive ($count)'),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: Icon(Icons.close, size: 20, color: AppColors.onSurfaceVariant),
+            onPressed: () {
+              setState(() {
+                _isSelectionMode = false;
+                _selectedTaskIds.clear();
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   String _teamName(String? teamId) {
     if (teamId == null) return '—';
     final t = _teams.where((t) => t.id == teamId);
     return t.isEmpty ? 'Other dept' : t.first.name;
   }
 
-  /// Open a waiting-list task's full details, with an Accept action inside.
   void _openWaitingDetail(TaskModel task) {
     showModalBottomSheet(
       context: context,
@@ -860,11 +1047,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     }
   }
 
-  /// Move a task to another department. Source = task's current team (admins
-  /// can move any task; managers only their own team's tasks).
   Future<void> _moveToDepartment(TaskModel task) async {
     final sourceTeam = task.teamId ?? _profile?.teamId;
-    // Candidate targets: teams of a different department.
     String? myDept;
     for (final t in _teams) {
       if (t.id == sourceTeam) {
@@ -948,7 +1132,6 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            // Sort chip
             _FilterChipBtn(
               icon: Icons.sort,
               label: _sortLabel,
@@ -956,31 +1139,28 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
               onTap: _showSortSheet,
             ),
             const SizedBox(width: 8),
-            // Client filter (not shown to client role — they always see their own)
             if (_profile?.isClient != true) ...[
               _FilterChipBtn(
                 icon: Icons.business_outlined,
-                label: clientName ?? 'All clients',
+                label: clientName ?? S.t('all_clients'),
                 active: _clientId != null,
                 onTap: _showClientFilterSheet,
               ),
               const SizedBox(width: 8),
             ],
-            // Assignee filter
             if (_profile?.isClient != true) ...[
               _FilterChipBtn(
                 icon: Icons.person_outline,
-                label: assigneeName ?? 'All assignees',
+                label: assigneeName ?? S.t('all_assignees'),
                 active: _assigneeId != null,
                 onTap: _showAssigneeFilterSheet,
               ),
               const SizedBox(width: 8),
             ],
-            // Clear all filters
             if (_hasActiveFilters)
               _FilterChipBtn(
                 icon: Icons.close,
-                label: 'Clear',
+                label: S.t('clear'),
                 active: true,
                 activeColor: AppColors.error,
                 onTap: _clearFilters,
@@ -1002,8 +1182,6 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             selected: _filter,
             onSelected: (f) => setState(() => _filter = f),
           ),
-          // Sort / client / assignee filters are only useful for the admin's
-          // full view — hide for manager/employee to keep tasks near the top.
           if (_profile?.isAdmin == true) _buildSortFilterBar(),
           NotionTable(
             columns: _columns,
@@ -1018,6 +1196,29 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             onRowDelete: _perms?.canDeleteTask == true
                 ? (id) => _deleteTaskRow(id)
                 : null,
+            onRowArchive: (_perms?.canEditFull == true || _profile?.isSuperAdmin == true)
+                ? (id) => _archiveTaskRow(id)
+                : null,
+            isSelectionMode: _isSelectionMode,
+            selectedRowIds: _selectedTaskIds,
+            onRowSelect: (id, sel) {
+              setState(() {
+                if (sel) {
+                  _selectedTaskIds.add(id);
+                } else {
+                  _selectedTaskIds.remove(id);
+                }
+              });
+            },
+            onSelectAll: (sel) {
+              setState(() {
+                if (sel) {
+                  _selectedTaskIds = _filtered.map((t) => t.id).toSet();
+                } else {
+                  _selectedTaskIds.clear();
+                }
+              });
+            },
             onRowReorder:
                 (_perms?.canReorderTasks == true &&
                     _sort == _Sort.newest &&
@@ -1046,7 +1247,10 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   Future<void> _deleteTaskRow(String id) async {
     final ok = await TaskRepository.deleteTask(id);
     if (ok) {
-      setState(() => _tasks.removeWhere((t) => t.id == id));
+      setState(() {
+        _tasks.removeWhere((t) => t.id == id);
+        _selectedTaskIds.remove(id);
+      });
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -1063,7 +1267,6 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   }
 
   Widget _buildBoardView({Key? key}) {
-    // Apply client + assignee filters; status split is done per column below.
     final base = _filtered;
     final kanban = {
       'not_started': base.where((t) => t.status == 'not_started').toList(),
@@ -1114,32 +1317,58 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     return Column(
       key: key,
       children: [
+        _FilterBar(
+          filters: _statusFilters,
+          selected: _filter,
+          onSelected: (f) => setState(() => _filter = f),
+        ),
         if (_profile?.isAdmin == true) _buildSortFilterBar(),
         Expanded(
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.all(16),
-            children: columnDefs.map((col) {
-              final tasks = kanban[col.key] ?? [];
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: _KanbanColumn(
-                  title: col.label,
-                  color: col.color,
-                  tasks: tasks,
-                  showCost: _perms?.canSeeCost == true,
-                  showProgress: _perms?.canSeeProgress != false,
-                  onTaskTap: (id) => _showDetailSheet(context, id),
-                ),
-              );
-            }).toList(),
+          child: Scrollbar(
+            controller: _boardHorizontalController,
+            thumbVisibility: true,
+            trackVisibility: true,
+            child: ListView(
+              controller: _boardHorizontalController,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.all(16),
+              children: columnDefs.map((col) {
+                final tasks = kanban[col.key] ?? [];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _KanbanColumn(
+                    title: col.label,
+                    color: col.color,
+                    tasks: tasks,
+                    showCost: _perms?.canSeeCost == true,
+                    showProgress: _perms?.canSeeProgress != false,
+                    isSelectionMode: _isSelectionMode,
+                    selectedTaskIds: _selectedTaskIds,
+                    onTaskSelect: (id, sel) {
+                      setState(() {
+                        if (sel) {
+                          _selectedTaskIds.add(id);
+                        } else {
+                          _selectedTaskIds.remove(id);
+                        }
+                      });
+                    },
+                    onTaskTap: (id) => _showDetailSheet(context, id),
+                    onTaskDelete: _perms?.canDeleteTask == true
+                        ? (id) => _deleteTaskRow(id)
+                        : null,
+                    onTaskArchive: (_perms?.canEditFull == true || _profile?.isSuperAdmin == true)
+                        ? (id) => _archiveTaskRow(id)
+                        : null,
+                  ),
+                );
+              }).toList(),
+            ),
           ),
         ),
       ],
     );
   }
-
-  // ── Dialogs ───────────────────────────────────────────────────────────────
 
   void _showAddColumnDialog() {
     final ctrl = TextEditingController();
@@ -1200,7 +1429,6 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   }
 
   void _showDetailSheet(BuildContext context, String id) {
-    // Allow department handoff only for a manager on their own active team task.
     final matches = _tasks.where((t) => t.id == id);
     final task = matches.isEmpty ? null : matches.first;
     final canMove =
@@ -1227,7 +1455,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// Supporting widgets
+// Supporting Private Sub-Widgets
 // ════════════════════════════════════════════════════════════════════════════════
 
 class _KanbanDef {
@@ -1320,7 +1548,7 @@ class _FilterBar extends StatelessWidget {
                 (f) => Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: ChoiceChip(
-                    label: Text(f),
+                    label: Text(S.t(f)),
                     selected: selected == f,
                     onSelected: (_) => onSelected(f),
                     selectedColor: AppColors.primary,
@@ -1352,8 +1580,6 @@ class _FilterBar extends StatelessWidget {
     );
   }
 }
-
-// ── Sort/filter chip button ───────────────────────────────────────────────────
 
 class _FilterChipBtn extends StatelessWidget {
   const _FilterChipBtn({
@@ -1414,8 +1640,6 @@ class _FilterChipBtn extends StatelessWidget {
   }
 }
 
-// ── Kanban Column ─────────────────────────────────────────────────────────────
-
 class _KanbanColumn extends StatelessWidget {
   const _KanbanColumn({
     required this.title,
@@ -1423,7 +1647,12 @@ class _KanbanColumn extends StatelessWidget {
     required this.tasks,
     required this.showCost,
     required this.showProgress,
+    this.isSelectionMode = false,
+    this.selectedTaskIds,
+    this.onTaskSelect,
     this.onTaskTap,
+    this.onTaskDelete,
+    this.onTaskArchive,
   });
 
   final String title;
@@ -1431,7 +1660,12 @@ class _KanbanColumn extends StatelessWidget {
   final List<TaskModel> tasks;
   final bool showCost;
   final bool showProgress;
+  final bool isSelectionMode;
+  final Set<String>? selectedTaskIds;
+  final void Function(String id, bool selected)? onTaskSelect;
   final ValueChanged<String>? onTaskTap;
+  final ValueChanged<String>? onTaskDelete;
+  final ValueChanged<String>? onTaskArchive;
 
   @override
   Widget build(BuildContext context) {
@@ -1476,25 +1710,62 @@ class _KanbanColumn extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          ...tasks.asMap().entries.map(
-            (e) => TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: Duration(milliseconds: 300 + e.key * 80),
-              curve: Curves.easeOut,
-              builder: (_, v, child) => Opacity(
-                opacity: v,
-                child: Transform.translate(
-                  offset: Offset(0, 12 * (1 - v)),
-                  child: child,
-                ),
-              ),
-              child: _KanbanCard(
-                task: e.value,
-                showCost: showCost,
-                showProgress: showProgress,
-                onTap: onTaskTap != null ? () => onTaskTap!(e.value.id) : null,
-              ),
-            ),
+          Expanded(
+            child: tasks.isEmpty
+                ? Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        'No tasks',
+                        style: AppTextStyles.bodySm.copyWith(
+                          color:
+                              AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    itemCount: tasks.length,
+                    itemBuilder: (context, index) {
+                      final task = tasks[index];
+                      return TweenAnimationBuilder<double>(
+                        key: ValueKey(task.id),
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: Duration(milliseconds: 200 + index * 40),
+                        curve: Curves.easeOut,
+                        builder: (_, v, child) => Opacity(
+                          opacity: v,
+                          child: Transform.translate(
+                            offset: Offset(0, 12 * (1 - v)),
+                            child: child,
+                          ),
+                        ),
+                        child: _KanbanCard(
+                          task: task,
+                          showCost: showCost,
+                          showProgress: showProgress,
+                          isSelectionMode: isSelectionMode,
+                          isSelected: selectedTaskIds?.contains(task.id) ?? false,
+                          onSelectToggle: () {
+                            final curr = selectedTaskIds?.contains(task.id) ?? false;
+                            onTaskSelect?.call(task.id, !curr);
+                          },
+                          onTap: onTaskTap != null
+                              ? () => onTaskTap!(task.id)
+                              : null,
+                          onDelete: onTaskDelete != null
+                              ? () => onTaskDelete!(task.id)
+                              : null,
+                          onArchive: onTaskArchive != null
+                              ? () => onTaskArchive!(task.id)
+                              : null,
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -1507,25 +1778,93 @@ class _KanbanCard extends StatelessWidget {
     required this.task,
     required this.showCost,
     required this.showProgress,
+    this.isSelectionMode = false,
+    this.isSelected = false,
+    this.onSelectToggle,
     this.onTap,
+    this.onDelete,
+    this.onArchive,
   });
 
   final TaskModel task;
   final bool showCost;
   final bool showProgress;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final VoidCallback? onSelectToggle;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
+  final VoidCallback? onArchive;
+
+  Future<bool> _confirmCardArchive(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Archive Task'),
+        content: const Text('Are you sure you want to archive this task?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<bool> _confirmCardDelete(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Task'),
+        content: const Text('Are you sure you want to delete this task permanently?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
+    final dir = (onDelete != null && onArchive != null)
+        ? DismissDirection.horizontal
+        : (onArchive != null
+            ? DismissDirection.startToEnd
+            : (onDelete != null ? DismissDirection.endToStart : DismissDirection.none));
+
+    Widget cardContent = GestureDetector(
+      onTap: isSelectionMode ? onSelectToggle : onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
+          color: isSelected
+              ? AppColors.gold.withValues(alpha: 0.12)
+              : AppColors.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.outlineVariant),
+          border: Border.all(
+            color: isSelected ? AppColors.gold : AppColors.outlineVariant,
+            width: isSelected ? 1.5 : 1.0,
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
@@ -1537,7 +1876,24 @@ class _KanbanCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TPriorityBadge(priority: task.priorityLabel),
+            Row(
+              children: [
+                if (isSelectionMode) ...[
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: Checkbox(
+                      value: isSelected,
+                      activeColor: AppColors.gold,
+                      checkColor: Colors.black,
+                      onChanged: (_) => onSelectToggle?.call(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                TPriorityBadge(priority: task.priorityLabel),
+              ],
+            ),
             const SizedBox(height: 8),
             Text(
               task.title,
@@ -1595,10 +1951,72 @@ class _KanbanCard extends StatelessWidget {
         ),
       ),
     );
+
+    if (dir != DismissDirection.none) {
+      cardContent = Dismissible(
+        key: ValueKey('kanban_${task.id}'),
+        direction: dir,
+        background: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(left: 20),
+          decoration: BoxDecoration(
+            color: AppColors.gold.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.archive_outlined, color: AppColors.gold, size: 20),
+              const SizedBox(width: 6),
+              Text(
+                'Archive',
+                style: AppTextStyles.labelMd.copyWith(color: AppColors.gold, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+        secondaryBackground: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 20),
+          decoration: BoxDecoration(
+            color: AppColors.error.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+              const SizedBox(width: 6),
+              Text(
+                'Delete',
+                style: AppTextStyles.labelMd.copyWith(color: AppColors.error, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+        confirmDismiss: (direction) async {
+          if (direction == DismissDirection.startToEnd) {
+            return await _confirmCardArchive(context);
+          } else if (direction == DismissDirection.endToStart) {
+            return await _confirmCardDelete(context);
+          }
+          return false;
+        },
+        onDismissed: (direction) {
+          if (direction == DismissDirection.startToEnd) {
+            onArchive?.call();
+          } else if (direction == DismissDirection.endToStart) {
+            onDelete?.call();
+          }
+        },
+        child: cardContent,
+      );
+    }
+
+    return cardContent;
   }
 }
-
-// ── Create Task Bottom Sheet ──────────────────────────────────────────────────
 
 class _CreateTaskSheet extends StatefulWidget {
   final VoidCallback onCreated;
@@ -1710,7 +2128,6 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
             ),
             const SizedBox(height: 18),
 
-            // Department (only for Admin)
             if (context.read<AuthNotifier>().profile?.isAdmin == true &&
                 _teams.isNotEmpty) ...[
               Align(
@@ -1749,7 +2166,6 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
               const SizedBox(height: 18),
             ],
 
-            // Priority
             Align(
               alignment: Alignment.centerLeft,
               child: Text('PRIORITY', style: AppTextStyles.labelCaps),
@@ -1766,7 +2182,6 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
             ),
             const SizedBox(height: 18),
 
-            // Status
             Align(
               alignment: Alignment.centerLeft,
               child: Text('STATUS', style: AppTextStyles.labelCaps),
@@ -1784,7 +2199,6 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
             ),
             const SizedBox(height: 18),
 
-            // Due date
             Align(
               alignment: Alignment.centerLeft,
               child: Text('DUE DATE', style: AppTextStyles.labelCaps),
@@ -1919,7 +2333,6 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
   }
 }
 
-// ── Waiting List (department handoff inbox) ───────────────────────────────────
 class _WaitingList extends StatelessWidget {
   const _WaitingList({
     required this.tasks,

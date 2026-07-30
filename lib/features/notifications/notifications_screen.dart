@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/repositories/notification_repository.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/services/realtime_service.dart';
@@ -200,11 +202,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final unread = _notifications.where((n) => !n.isRead).length;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('Notifications${unread > 0 ? ' ($unread)' : ''}'),
+        title: Text('${S.t('notifications')}${unread > 0 ? ' ($unread)' : ''}'),
         actions: [
           if (unread > 0)
             TextButton(

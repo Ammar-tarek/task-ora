@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/models/client_model.dart';
 import '../../core/providers/team_filter_notifier.dart';
 import '../../core/repositories/client_repository.dart';
@@ -92,11 +94,12 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final profile = context.watch<AuthNotifier>().profile;
     final isAdmin = profile?.isAdmin ?? false;
     final title = (profile?.isManager == true && _filterClientType != null)
-        ? 'Finance — ${_filterClientType![0].toUpperCase()}${_filterClientType!.substring(1)}'
-        : 'Finance';
+        ? '${S.t('finance')} — ${_filterClientType![0].toUpperCase()}${_filterClientType!.substring(1)}'
+        : S.t('finance');
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -139,9 +142,9 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'TOTAL REVENUE',
+                                  S.t('total_revenue').toUpperCase(),
                                   style: AppTextStyles.labelCaps.copyWith(
-                                    color: Colors.white54,
+                                    color: AppColors.onPrimary.withValues(alpha: 0.7),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -157,43 +160,43 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                                 Row(
                                   children: [
                                     _MiniStat(
-                                      label: 'Task Services',
+                                      label: 'task_services',
                                       value: _fmtAmount(_summary.taskRevenue),
                                     ),
                                     const SizedBox(width: 20),
                                     _MiniStat(
-                                      label: 'Meetings',
+                                      label: 'meetings',
                                       value: _fmtAmount(
                                         _summary.meetingRevenue,
                                       ),
                                     ),
                                     const SizedBox(width: 20),
                                     _MiniStat(
-                                      label: 'Invoiced',
+                                      label: 'invoiced',
                                       value: _fmtAmount(_summary.totalInvoiced),
                                     ),
                                   ],
                                 ),
-                                const Divider(
-                                  color: Colors.white24,
+                                Divider(
+                                  color: AppColors.onPrimary.withValues(alpha: 0.3),
                                   height: 24,
                                 ),
                                 Row(
                                   children: [
                                     _MiniStat(
-                                      label: 'Expenses',
+                                      label: 'expenses',
                                       value: _fmtAmount(_summary.totalExpenses),
                                       isNegative: true,
                                     ),
                                     const SizedBox(width: 24),
                                     _MiniStat(
-                                      label: 'Net Profit',
+                                      label: 'net_profit',
                                       value: _fmtAmount(_summary.netProfit),
                                       isPositive: true,
                                     ),
                                     const SizedBox(width: 24),
                                     _MiniStat(
-                                      label: 'Outstanding',
+                                      label: 'outstanding',
                                       value: _fmtAmount(_summary.outstanding),
                                       isNegative: _summary.outstanding > 0,
                                     ),
@@ -209,19 +212,19 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                             children: [
                               Expanded(
                                 child: TStatCard(
-                                  title: 'PENDING INVOICES',
+                                  title: 'pending_invoices',
                                   value: '${_summary.pendingInvoices}',
                                   icon: Icons.receipt_outlined,
-                                  sub: 'Not yet paid',
+                                  sub: 'not_yet_paid',
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: TStatCard(
-                                  title: 'OVERDUE',
+                                  title: 'overdue',
                                   value: '${_summary.overdueCount}',
                                   icon: Icons.warning_amber_outlined,
-                                  sub: 'Needs attention',
+                                  sub: 'needs_attention',
                                 ),
                               ),
                             ],
@@ -230,13 +233,13 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
 
                           // ── Revenue trend chart ──────────────────────────────────────
                           TSectionHeader(
-                            title: 'Revenue Trend (6 months)',
-                            action: 'Full Analytics',
+                            title: 'revenue_trend',
+                            action: 'full_analytics',
                             onAction: () => context.push('/finance/analytics'),
                           ),
                           const SizedBox(height: 12),
                           _monthly.isEmpty
-                              ? _EmptyCard(message: 'No revenue data yet.')
+                              ? _EmptyCard(message: S.t('no_data'))
                               : _BarChart(data: _monthly),
                           const SizedBox(height: 24),
 
@@ -245,7 +248,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                             children: [
                               Expanded(
                                 child: _StatCard(
-                                  label: 'Paid',
+                                  label: 'paid',
                                   value: _fmtAmount(_summary.totalPaid),
                                   color: const Color(0xFF81C784),
                                 ),
@@ -253,7 +256,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: _StatCard(
-                                  label: 'Outstanding',
+                                  label: 'outstanding',
                                   value: _fmtAmount(_summary.outstanding),
                                   color: _summary.outstanding > 0
                                       ? AppColors.error
@@ -266,21 +269,21 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
 
                           // ── Recent expenses ──────────────────────────────────────────
                           TSectionHeader(
-                            title: 'Recent Expenses',
-                            action: 'All Expenses',
+                            title: 'recent_expenses',
+                            action: 'all_expenses',
                             onAction: () => context.push('/expenses'),
                           ),
                           const SizedBox(height: 12),
                           if (_expenses.isEmpty)
-                            _EmptyCard(message: 'No expenses recorded yet.')
+                            _EmptyCard(message: S.t('no_data'))
                           else
                             ..._expenses.map((e) => _ExpenseRow(expense: e)),
                           const SizedBox(height: 24),
 
                           // ── Clients ──────────────────────────────────────────────────
                           TSectionHeader(
-                            title: 'Clients',
-                            action: isAdmin ? 'Manage Clients' : 'View Clients',
+                            title: 'clients',
+                            action: isAdmin ? 'manage_clients' : 'view_clients',
                             onAction: () => context.push('/clients'),
                           ),
                           const SizedBox(height: 12),
@@ -379,7 +382,7 @@ class _BarChart extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    d['month'] as String,
+                    S.t(d['month'] as String),
                     style: AppTextStyles.bodySm.copyWith(fontSize: 10),
                   ),
                 ],
@@ -410,7 +413,7 @@ class _MiniStat extends StatelessWidget {
         ? const Color(0xFF81C784)
         : isNegative
         ? AppColors.error
-        : Colors.white70;
+        : AppColors.onPrimary.withValues(alpha: 0.85);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -419,9 +422,9 @@ class _MiniStat extends StatelessWidget {
           style: AppTextStyles.dataMd.copyWith(color: color, fontSize: 15),
         ),
         Text(
-          label,
+          S.t(label),
           style: AppTextStyles.bodySm.copyWith(
-            color: Colors.white38,
+            color: AppColors.onPrimary.withValues(alpha: 0.6),
             fontSize: 11,
           ),
         ),
@@ -460,7 +463,7 @@ class _StatCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            label,
+            S.t(label),
             style: AppTextStyles.bodySm.copyWith(
               color: AppColors.onSurfaceVariant,
               fontSize: 11,

@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../l10n/app_strings.dart';
+import '../services/supabase_service.dart';
 
 const _kAppLang = 'app_language';
 
@@ -27,14 +28,29 @@ class LocaleController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setLanguage(String code) async {
-    if (code == _locale.languageCode) return;
+  Future<void> setLanguage(String code, {String? userId}) async {
+    if (code == _locale.languageCode && S.lang == code) return;
     _locale = Locale(code);
     S.lang = code;
     notifyListeners();
+
     try {
       final p = await SharedPreferences.getInstance();
       await p.setString(_kAppLang, code);
     } catch (_) {}
+
+    if (userId != null && userId.isNotEmpty) {
+      try {
+        await SupabaseService.client
+            .from('profiles')
+            .update({'preferred_language': code})
+            .eq('id', userId);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> toggleLanguage({String? userId}) async {
+    final nextCode = isArabic ? 'en' : 'ar';
+    await setLanguage(nextCode, userId: userId);
   }
 }

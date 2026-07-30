@@ -64,6 +64,7 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     );
 
     if (picked != null) {
+      if (!mounted) return;
       final dateStr = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
       setState(() => _savingCutoff = true);
       try {
@@ -724,7 +725,7 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: deptMap.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 20),
+      separatorBuilder: (_, _) => const SizedBox(height: 20),
       itemBuilder: (ctx, i) {
         final entry = deptMap.entries.elementAt(i);
         final deptName = entry.key;
@@ -790,7 +791,7 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: dossiers.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      separatorBuilder: (_, _) => const SizedBox(height: 16),
       itemBuilder: (ctx, i) {
         final d = dossiers[i];
         final u = d.user;
@@ -880,7 +881,7 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: dossiers.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      separatorBuilder: (_, _) => const SizedBox(height: 16),
       itemBuilder: (ctx, i) {
         final d = dossiers[i];
 
@@ -941,7 +942,7 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: clientDossiers.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      separatorBuilder: (_, _) => const SizedBox(height: 16),
       itemBuilder: (ctx, i) {
         final cd = clientDossiers[i];
         final c = cd.client;
@@ -1098,7 +1099,7 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: list.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (ctx, i) {
         final c = list[i];
         return Card(

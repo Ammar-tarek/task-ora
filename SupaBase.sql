@@ -144,6 +144,9 @@ CREATE TABLE public.tasks (
   priority USER-DEFINED NOT NULL DEFAULT 'medium'::task_priority,
   completion_percentage integer NOT NULL DEFAULT 0 CHECK (completion_percentage >= 0 AND completion_percentage <= 100),
   is_template boolean NOT NULL DEFAULT false,
+  is_archived boolean NOT NULL DEFAULT false,
+  archived_at timestamp with time zone,
+  archived_by uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT tasks_pkey PRIMARY KEY (id),
@@ -151,6 +154,7 @@ CREATE TABLE public.tasks (
   CONSTRAINT tasks_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id),
   CONSTRAINT tasks_parent_task_id_fkey FOREIGN KEY (parent_task_id) REFERENCES public.tasks(id),
   CONSTRAINT tasks_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
+  CONSTRAINT tasks_archived_by_fkey FOREIGN KEY (archived_by) REFERENCES public.profiles(id),
   CONSTRAINT tasks_board_id_fkey FOREIGN KEY (board_id) REFERENCES public.task_boards(id),
   CONSTRAINT tasks_board_column_id_fkey FOREIGN KEY (board_column_id) REFERENCES public.task_board_columns(id)
 );

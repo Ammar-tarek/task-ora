@@ -49,7 +49,10 @@ class LocalNotificationService {
     );
 
     await _plugin.initialize(
-      const InitializationSettings(android: androidSettings, iOS: iosSettings),
+      settings: const InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      ),
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
@@ -134,10 +137,10 @@ class LocalNotificationService {
     );
 
     await _plugin.show(
-      id ?? DateTime.now().millisecondsSinceEpoch % 100000,
-      title,
-      body,
-      notifDetails,
+      id: id ?? (DateTime.now().millisecondsSinceEpoch % 100000),
+      title: title,
+      body: body,
+      notificationDetails: notifDetails,
       payload: payload,
     );
   }

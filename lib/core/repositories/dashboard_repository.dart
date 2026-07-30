@@ -67,11 +67,17 @@ class DashboardRepository {
         tasksQuery = _safeQuery(
           client
               .from('tasks')
-              .select('id, status')
-              .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId'),
+              .select('id, status, is_archived')
+              .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId')
+              .or('is_archived.is.null,is_archived.eq.false'),
         );
       } else {
-        tasksQuery = _safeQuery(client.from('tasks').select('id, status'));
+        tasksQuery = _safeQuery(
+          client
+              .from('tasks')
+              .select('id, status, is_archived')
+              .or('is_archived.is.null,is_archived.eq.false'),
+        );
       }
 
       Future<List<dynamic>> attendanceQuery;

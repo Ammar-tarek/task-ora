@@ -60,11 +60,12 @@ class _StatusOptionsManagerSheetState extends State<StatusOptionsManagerSheet> {
       await TaskStatusOptionsRepository.init(widget.adminUserId!);
     }
     final opts = await TaskStatusOptionsRepository.fetchOptions();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _options = opts;
         _loading = false;
       });
+    }
   }
 
   // ── Add ──────────────────────────────────────────────────────────────────────

@@ -68,7 +68,7 @@ class TeamRepository {
               'description': description.trim(),
             if (department != null && department.trim().isNotEmpty)
               'department': department.trim(),
-            if (teamLeadId != null) 'team_lead_id': teamLeadId,
+            'team_lead_id': ?teamLeadId,
             'is_active': true,
           })
           .select()
@@ -101,7 +101,7 @@ class TeamRepository {
                 ? department.trim()
                 : null,
             'team_lead_id': teamLeadId,
-            if (isActive != null) 'is_active': isActive,
+            'is_active': ?isActive,
           })
           .eq('id', id);
       return true;

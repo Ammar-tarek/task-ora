@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/models/client_model.dart';
 import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/repositories/client_repository.dart';
@@ -38,15 +40,17 @@ class _ClientsScreenState extends State<ClientsScreen> {
     final clients = await ClientRepository.fetchClients(
       clientType: _managerDepartment,
     );
-    if (mounted)
+    if (mounted) {
       setState(() {
         _clients = clients;
         _loading = false;
       });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final profile = context.watch<AuthNotifier>().profile;
     final privs = context.watch<TeamPrivilegesNotifier>();
     final isAdmin = profile?.isAdmin ?? false;
@@ -56,7 +60,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Clients'),
+        title: Text(S.t('clients')),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -362,8 +366,9 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
   String? _validate() {
     if (_fullNameCtrl.text.trim().isEmpty) return 'Full name is required';
     if (_emailCtrl.text.trim().isEmpty) return 'Email is required';
-    if (_passwordCtrl.text.length < 6)
+    if (_passwordCtrl.text.length < 6) {
       return 'Password must be at least 6 characters';
+    }
     if (_companyCtrl.text.trim().isEmpty) return 'Company name is required';
     if (_contactCtrl.text.trim().isEmpty) return 'Contact person is required';
     return null;

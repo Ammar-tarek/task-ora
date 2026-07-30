@@ -13,6 +13,9 @@ import '../../core/repositories/team_repository.dart';
 import '../../core/models/task_model.dart';
 import '../../core/models/profile_model.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/providers/theme_controller.dart';
+import '../../core/providers/locale_controller.dart';
+import '../../core/l10n/app_strings.dart';
 import '../tasks/task_detail_sheet.dart';
 
 // ── Cashback wisdom quotes ────────────────────────────────────────────────────
@@ -50,18 +53,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _load({bool animate = true}) async {
-    if (animate)
+    if (animate) {
       setState(() {
         _loading = true;
         _error = null;
       });
+    }
     final profile = context.read<AuthNotifier>().profile;
     if (profile == null) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = 'No profile found';
           _loading = false;
         });
+      }
       return;
     }
 
@@ -126,15 +131,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeCtrl = context.watch<ThemeController>();
+    context.watch<LocaleController>();
     final profile = context.watch<AuthNotifier>().profile;
     final isAdmin = profile?.isAdmin ?? false;
     final now = DateTime.now();
     final greeting = now.hour < 12
-        ? 'Good morning'
+        ? (S.isArabic ? 'صباح الخير' : 'Good morning')
         : now.hour < 17
-        ? 'Good afternoon'
-        : 'Good evening';
-    final dateStr = DateFormat('EEEE, d MMMM y').format(now);
+        ? (S.isArabic ? 'مساء الخير' : 'Good afternoon')
+        : (S.isArabic ? 'مساء الخير' : 'Good evening');
+    final dateStr = DateFormat('EEEE, d MMMM y', S.lang).format(now);
     final screenW = MediaQuery.of(context).size.width;
 
     return Scaffold(
@@ -159,7 +166,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     width: 64,
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.surfaceContainerLowest,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: AppColors.outlineVariant.withValues(alpha: 0.5),
@@ -176,6 +183,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ),
               actions: [
+                IconButton(
+                  tooltip: themeCtrl.isDark
+                      ? 'Switch to Light Mode'
+                      : 'Switch to Dark Mode',
+                  icon: Icon(
+                    themeCtrl.isDark
+                        ? Icons.light_mode_outlined
+                        : Icons.dark_mode_outlined,
+                    color: AppColors.gold,
+                  ),
+                  onPressed: () => themeCtrl.setDark(!themeCtrl.isDark),
+                ),
                 IconButton(
                   icon: Stack(
                     clipBehavior: Clip.none,
@@ -322,14 +341,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           childAspectRatio: ratio,
                           children: [
                             TStatCard(
-                              title: 'TOTAL TASKS',
+                              title: 'total_tasks',
                               value: '${_stats?.totalTasks ?? 0}',
                               icon: Icons.assignment_outlined,
                               accent: true,
                               onTap: () => context.go('/tasks?filter=All'),
                             ),
                             TStatCard(
-                              title: 'COMPLETED',
+                              title: 'completed',
                               value: '${_stats?.doneTasks ?? 0}',
                               icon: Icons.check_circle_outline,
                               sub: (_stats != null && _stats!.totalTasks > 0)
@@ -339,18 +358,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   context.go('/tasks?filter=Completed'),
                             ),
                             TStatCard(
-                              title: 'IN PROGRESS',
+                              title: 'in_progress',
                               value: '${_stats?.inProgressTasks ?? 0}',
                               icon: Icons.loop,
-                              sub: 'Active',
+                              sub: 'active',
                               onTap: () =>
                                   context.go('/tasks?filter=In Progress'),
                             ),
                             TStatCard(
-                              title: 'TEAM SIZE',
+                              title: 'team_size',
                               value: '${_stats?.totalEmployees ?? 0}',
                               icon: Icons.people_outline,
-                              sub: '${_stats?.presentToday ?? 0} present',
+                              sub: S.isArabic
+                                  ? '${_stats?.presentToday ?? 0} حاضر'
+                                  : '${_stats?.presentToday ?? 0} present',
                               onTap: () {
                                 if (isAdmin) {
                                   context.push('/users');
@@ -371,23 +392,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     const SizedBox(height: 24),
 
                     // ── Quick Actions ───────────────────────────────────────
-                    TSectionHeader(title: 'Quick Actions'),
+                    TSectionHeader(title: 'quick_actions'),
                     const SizedBox(height: 12),
                     _ResponsiveQuickActions(
                       screenWidth: screenW,
                       actions: [
                         _QuickActionData(
-                          'Kanban Board',
+                          'kanban_board',
                           Icons.view_kanban_outlined,
                           () => context.go('/tasks'),
                         ),
                         _QuickActionData(
-                          'Analytics',
+                          'analytics',
                           Icons.bar_chart,
                           () => context.push('/analytics'),
                         ),
                         _QuickActionData(
-                          'Attendance',
+                          'attendance',
                           Icons.how_to_reg_outlined,
                           () => context.push('/attendance'),
                         ),
@@ -399,7 +420,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     const SizedBox(height: 24),
 
                     // ── Overview cards (role-filtered) ─────────────────────
-                    TSectionHeader(title: 'Overview'),
+                    TSectionHeader(title: 'overview'),
                     const SizedBox(height: 12),
                     LayoutBuilder(
                       builder: (context, constraints) {
@@ -408,10 +429,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           _OverviewCard(
                             icon: Icons.warning_amber_rounded,
                             iconColor: AppColors.statusHigh,
-                            title: 'Recent Alerts',
+                            title: 'recent_alerts',
                             value: (_stats?.unreadNotifications ?? 0) > 0
-                                ? '${_stats!.unreadNotifications} unread'
-                                : 'No data',
+                                ? (S.isArabic
+                                    ? '${_stats!.unreadNotifications} غير مقروء'
+                                    : '${_stats!.unreadNotifications} unread')
+                                : S.t('no_data'),
                             onTap: () => context.push('/notifications'),
                           ),
                           // Revenue card — admin only
@@ -419,19 +442,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             _OverviewCard(
                               icon: Icons.account_balance_wallet_outlined,
                               iconColor: AppColors.statusDone,
-                              title: 'Total Revenue',
+                              title: 'total_revenue',
                               value: (_stats?.totalRevenue ?? 0) > 0
                                   ? '\$${NumberFormat.compact().format(_stats!.totalRevenue)}'
-                                  : 'No data',
+                                  : S.t('no_data'),
                               onTap: () => context.go('/finance'),
                             ),
                           _OverviewCard(
                             icon: Icons.how_to_reg_outlined,
                             iconColor: AppColors.statusInProgress,
-                            title: 'Attendance Today',
+                            title: 'attendance_today',
                             value: (_stats?.presentToday ?? 0) > 0
-                                ? '${_stats!.presentToday} present'
-                                : 'No data',
+                                ? (S.isArabic
+                                    ? '${_stats!.presentToday} حاضر'
+                                    : '${_stats!.presentToday} present')
+                                : S.t('no_data'),
                             onTap: () => context.push('/attendance'),
                           ),
                         ];
@@ -457,20 +482,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     const SizedBox(height: 24),
 
                     // ── Task Distribution Mini-Chart (always visible) ───────
-                    TSectionHeader(title: 'Task Distribution'),
+                    TSectionHeader(title: 'task_distribution'),
                     const SizedBox(height: 12),
                     _TaskDistributionBar(stats: _stats),
                     const SizedBox(height: 24),
 
                     // ── Recent Tasks (always visible) ───────────────────────
                     TSectionHeader(
-                      title: 'Recent Tasks',
-                      action: 'See All',
+                      title: 'recent_tasks',
+                      action: 'see_all',
                       onAction: () => context.go('/tasks'),
                     ),
                     const SizedBox(height: 12),
                     if (_recentTasks.isEmpty)
-                      _EmptyState(message: 'No data')
+                      _EmptyState(message: S.t('no_data'))
                     else
                       ..._recentTasks.map(
                         (t) => _TaskRow(
@@ -483,13 +508,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     // ── Team Members — admin only ────────────────────────────
                     if (isAdmin) ...[
                       TSectionHeader(
-                        title: 'Team Members',
-                        action: 'Manage',
+                        title: 'team_members',
+                        action: 'manage',
                         onAction: () => context.push('/users'),
                       ),
                       const SizedBox(height: 12),
                       if (_employees.isEmpty)
-                        _EmptyState(message: 'No data')
+                        _EmptyState(message: S.t('no_data'))
                       else
                         ..._employees.map((u) => _UserRow(user: u)),
                       const SizedBox(height: 24),
@@ -520,16 +545,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 // ── Admin-only finance quick actions ──────────────────────────────────────────
 List<_QuickActionData> _adminFinanceActions(BuildContext context) => [
   _QuickActionData(
-    'Finance',
+    'finance',
     Icons.account_balance_wallet_outlined,
     () => context.go('/finance'),
   ),
   _QuickActionData(
-    'Expenses',
+    'expenses',
     Icons.receipt_long_outlined,
     () => context.push('/expenses'),
   ),
-  _QuickActionData('Teams', Icons.group_outlined, () => context.push('/teams')),
+  _QuickActionData('teams', Icons.group_outlined, () => context.push('/teams')),
 ];
 
 // ── Supporting data class ──────────────────────────────────────────────────────
@@ -633,18 +658,18 @@ class _TaskDistributionBar extends StatelessWidget {
             spacing: 16,
             runSpacing: 8,
             children: [
-              _legend(context, AppColors.statusDone, 'Done', 'Completed', done),
+              _legend(context, AppColors.statusDone, S.t('done'), 'Completed', done),
               _legend(
                 context,
                 AppColors.statusInProgress,
-                'In Progress',
+                S.t('in_progress'),
                 'In Progress',
                 inProgress,
               ),
               _legend(
                 context,
                 AppColors.statusTodo,
-                'To Do',
+                S.t('todo'),
                 'To Do',
                 todo < 0 ? 0 : todo,
               ),
@@ -734,12 +759,12 @@ class _OverviewCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: AppTextStyles.bodySm),
+                  Text(S.t(title), style: AppTextStyles.bodySm),
                   const SizedBox(height: 2),
                   Text(
-                    value,
+                    S.t(value),
                     style: AppTextStyles.labelMd.copyWith(
-                      color: value == 'No data'
+                      color: (value == 'No data' || value == S.t('no_data'))
                           ? AppColors.onSurfaceVariant
                           : AppColors.onSurface,
                     ),
@@ -774,7 +799,7 @@ class _EmptyState extends StatelessWidget {
     ),
     child: Center(
       child: Text(
-        message,
+        S.t(message),
         style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
       ),
     ),
@@ -807,7 +832,7 @@ class _QuickAction extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: AppColors.gold),
             const SizedBox(width: 8),
-            Text(label, style: AppTextStyles.labelMd),
+            Text(S.t(label), style: AppTextStyles.labelMd),
           ],
         ),
       ),
@@ -899,7 +924,7 @@ class _UserRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  user.role,
+                  S.t(user.role),
                   style: AppTextStyles.bodySm,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -908,7 +933,7 @@ class _UserRow extends StatelessWidget {
             ),
           ),
           TStatusChip(
-            label: user.isActive ? 'Active' : 'Inactive',
+            label: user.isActive ? S.t('active') : S.t('inactive'),
             color: user.isActive
                 ? AppColors.statusDone
                 : AppColors.onSurfaceVariant,

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -48,12 +50,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error != null) {
       setState(() => _errorMsg = error);
     }
-    // On success: GoRouter's refreshListenable fires → redirect runs → done.
-    // No manual context.go() needed.
   }
 
   @override
   Widget build(BuildContext context) {
+    final localeCtrl = context.watch<LocaleController>();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -63,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 48),
-              // Brand
+              // Brand & Language Toggle
               Row(
                 children: [
                   Container(
@@ -71,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: 120,
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.surfaceContainerLowest,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: AppColors.outlineVariant.withValues(alpha: 0.5),
@@ -92,13 +94,38 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(width: 14),
                   Text('CashBack', style: AppTextStyles.headlineMd),
+                  const Spacer(),
+                  // Language quick button
+                  InkWell(
+                    onTap: () => localeCtrl.toggleLanguage(),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.language, color: AppColors.gold, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            localeCtrl.isArabic ? 'English' : 'العربية',
+                            style: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 48),
-              Text('Welcome back', style: AppTextStyles.displayMd),
+              Text(S.t('welcome_back'), style: AppTextStyles.displayMd),
               const SizedBox(height: 6),
               Text(
-                'Sign in to your operations dashboard',
+                S.t('login_sub'),
                 style: AppTextStyles.bodyMd.copyWith(
                   color: AppColors.onSurfaceVariant,
                 ),
@@ -143,7 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
 
               // Email
-              Text('EMAIL ADDRESS', style: AppTextStyles.labelCaps),
+              Text(S.t('email').toUpperCase(), style: AppTextStyles.labelCaps),
               const SizedBox(height: 8),
               TextField(
                 controller: _emailCtrl,
@@ -158,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
 
               // Password
-              Text('PASSWORD', style: AppTextStyles.labelCaps),
+              Text(S.t('password').toUpperCase(), style: AppTextStyles.labelCaps),
               const SizedBox(height: 8),
               TextField(
                 controller: _passCtrl,
@@ -166,7 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: AppTextStyles.bodyMd,
                 onSubmitted: (_) => _login(),
                 decoration: InputDecoration(
-                  hintText: 'Your password',
+                  hintText: '••••••••',
                   prefixIcon: const Icon(Icons.lock_outlined, size: 20),
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -187,7 +214,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: TextButton(
                   onPressed: () => context.push('/forgot-password'),
                   child: Text(
-                    'Forgot password?',
+                    S.t('forgot_password'),
                     style: AppTextStyles.labelMd.copyWith(
                       color: AppColors.gold,
                     ),
@@ -206,11 +233,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
-                            color: Colors.white,
+                            color: AppColors.onPrimary,
                             strokeWidth: 2,
                           ),
                         )
-                      : const Text('Sign In'),
+                      : Text(S.t('login')),
                 ),
               ),
               const SizedBox(height: 24),
@@ -224,11 +251,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: AppTextStyles.bodyMd,
                       children: [
                         TextSpan(
-                          text: "Don't have an account? ",
+                          text: "${S.t('dont_have_account')} ",
                           style: AppTextStyles.bodySm,
                         ),
                         TextSpan(
-                          text: 'Create Account',
+                          text: S.t('signup'),
                           style: AppTextStyles.labelMd.copyWith(
                             color: AppColors.gold,
                           ),

@@ -13,15 +13,19 @@ import 'core/providers/locale_controller.dart';
 import 'core/providers/team_filter_notifier.dart';
 import 'core/providers/team_privileges_notifier.dart';
 import 'core/providers/theme_controller.dart';
+import 'core/services/push_notification_service.dart';
 import 'package:go_router/go_router.dart';
 import 'core/router/app_router.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('ar', null);
   await SupabaseService.initialize();
   RealtimeService.instance.init(); // live auto-refresh across the app
   await LocalNotificationService.init(); // device push-notification setup
+  await PushNotificationService.init(); // FCM push notification setup
 
   final auth = AuthNotifier();
   final teamPrivs = TeamPrivilegesNotifier(auth);
@@ -92,14 +96,16 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
       WifiAttendanceService.instance.dispose();
     }
 
-    // Start / stop realtime notification triggers based on login state & check updates.
+    // Start / stop realtime notification triggers & FCM push based on login state & check updates.
     if (auth.isLoggedIn && profile != null) {
       NotificationTriggerService.instance.start(profile);
+      PushNotificationService.instance.start(profile);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) ApkUpdateService.checkForUpdates(context);
       });
     } else {
       NotificationTriggerService.instance.stop();
+      PushNotificationService.instance.stop();
     }
   }
 
@@ -120,14 +126,17 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     // Rebuild whenever the theme mode changes so the palette swap takes effect.
-    context.watch<ThemeController>();
+    final themeCtrl = context.watch<ThemeController>();
     final localeCtrl = context.watch<LocaleController>();
 
     return MaterialApp.router(
       title: 'CashBack',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.build(),
+      darkTheme: AppTheme.build(),
+      themeMode: themeCtrl.isDark ? ThemeMode.dark : ThemeMode.light,
       routerConfig: widget.router,
+      scrollBehavior: const AppScrollBehavior(),
       // App language (en/ar) — Arabic gets RTL automatically.
       locale: localeCtrl.locale,
       supportedLocales: const [Locale('en'), Locale('ar')],

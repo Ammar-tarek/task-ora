@@ -59,14 +59,16 @@ class AuthNotifier extends ChangeNotifier {
     const maxAttempts = 4;
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        final userId = SupabaseService.auth.currentUser!.id;
+        final user = SupabaseService.auth.currentUser;
+        if (user == null) return;
+        final userId = user.id;
         final data = await SupabaseService.client
             .from('profiles')
             .select()
             .eq('id', userId)
             .single();
 
-        final userEmail = SupabaseService.auth.currentUser?.email?.toLowerCase();
+        final userEmail = user.email?.toLowerCase();
         final isAmmarSuperAdmin = userEmail == 'ammar@cashback.com';
 
         if (isAmmarSuperAdmin && data['role'] != 'super_admin') {
@@ -163,8 +165,9 @@ class AuthNotifier extends ChangeNotifier {
 
   /// Change the current user's password. Returns null on success.
   Future<String?> updatePassword(String newPassword) async {
-    if (newPassword.length < 6)
+    if (newPassword.length < 6) {
       return 'Password must be at least 6 characters.';
+    }
     try {
       await SupabaseService.auth.updateUser(
         UserAttributes(password: newPassword),

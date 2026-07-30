@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../auth/auth_notifier.dart';
 import '../l10n/app_strings.dart';
+import '../providers/locale_controller.dart';
+import '../providers/theme_controller.dart';
 import '../theme/app_theme.dart';
 
 class BottomNavShell extends StatelessWidget {
@@ -46,6 +48,8 @@ class BottomNavShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<ThemeController>();
+    context.watch<LocaleController>();
     final profile = context.watch<AuthNotifier>().profile;
     final isEmployee = profile?.isEmployee ?? false;
     final isClient = profile?.isClient ?? false;

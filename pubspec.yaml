@@ -2,7 +2,7 @@ name: task_ora
 description: "CashBack Operations Dashboard"
 publish_to: 'none'
 
-version: 1.0.2+3
+version: 1.0.4+5
 
 environment:
   sdk: ^3.11.5
@@ -14,11 +14,10 @@ dependencies:
     sdk: flutter
 
   # UI
-  cupertino_icons: ^1.0.8
   google_fonts: ^6.3.3
   fl_chart: ^0.68.0
   intl: ^0.20.2
-  flutter_local_notifications: ^18.0.1
+  flutter_local_notifications: ^22.2.0
   url_launcher: ^6.3.1
 
   # Printing & PDF Export
@@ -30,6 +29,8 @@ dependencies:
 
   # Backend
   supabase_flutter: ^2.16.0
+  firebase_core: ^3.12.0
+  firebase_messaging: ^15.2.4
 
   # State management
   provider: ^6.1.2

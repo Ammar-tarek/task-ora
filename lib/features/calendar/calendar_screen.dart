@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/models/client_model.dart';
 import '../../core/models/profile_model.dart';
 import '../../core/providers/team_filter_notifier.dart';
@@ -128,10 +129,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
       return;
     }
     final members = await TeamRepository.fetchMembersAdmin(teamId);
-    if (mounted)
+    if (mounted) {
       setState(
         () => _teamMemberNames = members.map((m) => m.fullName).toList(),
       );
+    }
   }
 
   /// Events visible for the current team filter (all events when no filter set).
@@ -202,76 +204,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
   }
 
+  // ── BUILD ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final profile = context.watch<AuthNotifier>().profile;
-    final canAddEvent =
-        profile == null ||
-        profile.isAdmin ||
-        profile.isManager ||
-        profile.isClient;
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surfaceContainerLowest,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.chevron_left),
-          onPressed: () => _navigate(-1),
-        ),
-        title: GestureDetector(
-          onTap: () => setState(() {
-            _focusedDate = _today;
-            _selectedDate = _today;
-          }),
-          child: Text(_headerLabel, style: AppTextStyles.headlineSm),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: () => _navigate(1),
-          ),
-          TextButton(
-            onPressed: () => setState(() {
-              _focusedDate = _today;
-              _selectedDate = _today;
-            }),
-            child: Text(
-              'Today',
-              style: AppTextStyles.labelMd.copyWith(color: AppColors.goldDark),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh events',
-            onPressed: _loadEvents,
-          ),
-          if (profile?.isAdmin == true)
-            IconButton(
-              icon: const Icon(Icons.meeting_room_outlined),
-              tooltip: 'Manage rooms',
-              onPressed: () => _showManageRoomsSheet(context),
-            ),
-          _ViewSwitcherPill(
-            current: _view,
-            onChanged: (v) => setState(() => _view = v),
-          ),
-          const SizedBox(width: 8),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.outlineVariant),
-        ),
-      ),
-      floatingActionButton: canAddEvent
-          ? FloatingActionButton(
-              onPressed: () => _showAddEventSheet(context),
-              backgroundColor: AppColors.primary,
-              tooltip: 'Add event',
-              child: const Icon(Icons.add, color: AppColors.gold),
-            )
-          : null,
+      appBar: _buildAppBar(profile),
+      floatingActionButton: _buildFab(profile),
       body: Column(
         children: [
           const TeamFilterChip(),
@@ -290,6 +233,78 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // ── Sub-build Layout Helpers ────────────────────────────────────────────────
+
+  PreferredSizeWidget _buildAppBar(ProfileModel? profile) {
+    return AppBar(
+      backgroundColor: AppColors.surfaceContainerLowest,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.chevron_left),
+        onPressed: () => _navigate(-1),
+      ),
+      title: GestureDetector(
+        onTap: () => setState(() {
+          _focusedDate = _today;
+          _selectedDate = _today;
+        }),
+        child: Text(_headerLabel, style: AppTextStyles.headlineSm),
+      ),
+      centerTitle: true,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.chevron_right),
+          onPressed: () => _navigate(1),
+        ),
+        TextButton(
+          onPressed: () => setState(() {
+            _focusedDate = _today;
+            _selectedDate = _today;
+          }),
+          child: Text(
+            'Today',
+            style: AppTextStyles.labelMd.copyWith(color: AppColors.goldDark),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Refresh events',
+          onPressed: _loadEvents,
+        ),
+        if (profile?.isAdmin == true)
+          IconButton(
+            icon: const Icon(Icons.meeting_room_outlined),
+            tooltip: 'Manage rooms',
+            onPressed: () => _showManageRoomsSheet(context),
+          ),
+        _ViewSwitcherPill(
+          current: _view,
+          onChanged: (v) => setState(() => _view = v),
+        ),
+        const SizedBox(width: 8),
+      ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(height: 1, color: AppColors.outlineVariant),
+      ),
+    );
+  }
+
+  Widget? _buildFab(ProfileModel? profile) {
+    final canAddEvent =
+        profile == null ||
+        profile.isAdmin ||
+        profile.isManager ||
+        profile.isClient;
+    if (!canAddEvent) return null;
+    return FloatingActionButton(
+      onPressed: () => _showAddEventSheet(context),
+      backgroundColor: AppColors.primary,
+      tooltip: 'Add event',
+      child: const Icon(Icons.add, color: AppColors.gold),
     );
   }
 
@@ -525,7 +540,6 @@ class _MonthGrid extends StatelessWidget {
       focusedDate.month + 1,
       0,
     ).day;
-    // weekday: 1=Mon, 7=Sun; offset = leading empty cells
     final startOffset = firstOfMonth.weekday - 1;
     final totalCells = startOffset + daysInMonth;
     final rows = (totalCells / 7).ceil();
@@ -598,7 +612,6 @@ class _MonthGrid extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Day number
                           Align(
                             alignment: Alignment.topCenter,
                             child: Container(
@@ -628,7 +641,6 @@ class _MonthGrid extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          // Event chips (max 2 visible)
                           ...dayEvents
                               .take(2)
                               .map(
@@ -734,7 +746,7 @@ class _AgendaForDay extends StatelessWidget {
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
               itemCount: events.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (_, i) => _AgendaEventTile(
                 event: events[i],
                 onTap: () => onEventTap(events[i]),
@@ -890,7 +902,6 @@ class _WeekBodyState extends State<_WeekBody> {
 
     return Column(
       children: [
-        // Day headers row
         Container(
           color: AppColors.surfaceContainerLowest,
           child: Row(
@@ -955,7 +966,6 @@ class _WeekBodyState extends State<_WeekBody> {
             ],
           ),
         ),
-        // Time grid
         Expanded(
           child: SingleChildScrollView(
             controller: _scrollCtrl,
@@ -964,7 +974,6 @@ class _WeekBodyState extends State<_WeekBody> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Time labels
                   SizedBox(
                     width: _timeColW,
                     child: Stack(
@@ -988,7 +997,6 @@ class _WeekBodyState extends State<_WeekBody> {
                       }).toList(),
                     ),
                   ),
-                  // Columns per day
                   ...List.generate(days.length, (colIdx) {
                     final day = days[colIdx];
                     final dayEvents = widget.eventsForDay(day);
@@ -996,7 +1004,6 @@ class _WeekBodyState extends State<_WeekBody> {
                     return Expanded(
                       child: Stack(
                         children: [
-                          // Grid lines
                           Column(
                             children: hours
                                 .map(
@@ -1023,13 +1030,11 @@ class _WeekBodyState extends State<_WeekBody> {
                                 )
                                 .toList(),
                           ),
-                          // Current time line
                           if (_isSameDay(day, widget.today))
                             _CurrentTimeLine(
                               startHour: _startHour,
                               rowH: _rowH,
                             ),
-                          // Events
                           ...dayEvents.where((e) => !e.isAllDay).map((e) {
                             final topFrac =
                                 (e.start.hour + e.start.minute / 60.0) -
@@ -1125,7 +1130,6 @@ class _DayBodyState extends State<_DayBody> {
 
     return Column(
       children: [
-        // All-day strip
         if (allDayEvents.isNotEmpty)
           Container(
             color: AppColors.surfaceContainerLowest,
@@ -1166,7 +1170,6 @@ class _DayBodyState extends State<_DayBody> {
               ],
             ),
           ),
-        // Time grid
         Expanded(
           child: SingleChildScrollView(
             controller: _scrollCtrl,
@@ -1175,7 +1178,6 @@ class _DayBodyState extends State<_DayBody> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Time labels
                   SizedBox(
                     width: _timeColW,
                     child: Stack(
@@ -1194,7 +1196,6 @@ class _DayBodyState extends State<_DayBody> {
                       }).toList(),
                     ),
                   ),
-                  // Day column
                   Expanded(
                     child: Stack(
                       children: [
@@ -1574,11 +1575,12 @@ class _AddEventSheetState extends State<_AddEventSheet> {
           .map((r) => r['name'] as String? ?? '')
           .where((n) => n.isNotEmpty)
           .toList();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _rooms = names;
           _loadingRooms = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loadingRooms = false);
     }
@@ -1593,16 +1595,16 @@ class _AddEventSheetState extends State<_AddEventSheet> {
 
   Future<void> _fetchClients() async {
     final list = await ClientRepository.fetchClients();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _clients = list;
         _loadingClients = false;
       });
+    }
   }
 
   Future<void> _fetchEmployees() async {
     try {
-      // adminClient: bypass RLS so every staff member (all teams) is listed.
       final data = await SupabaseService.adminClient
           .from('profiles')
           .select('id, full_name')
@@ -1723,7 +1725,6 @@ class _AddEventSheetState extends State<_AddEventSheet> {
             Text('New Meeting / Event', style: AppTextStyles.headlineSm),
             const SizedBox(height: 16),
 
-            // Title
             TextField(
               controller: _titleCtrl,
               decoration: InputDecoration(
@@ -1736,7 +1737,6 @@ class _AddEventSheetState extends State<_AddEventSheet> {
             ),
             const SizedBox(height: 12),
 
-            // Time row
             Row(
               children: [
                 Expanded(
@@ -1788,7 +1788,6 @@ class _AddEventSheetState extends State<_AddEventSheet> {
             ),
             const SizedBox(height: 12),
 
-            // Client picker
             if (_loadingClients)
               const LinearProgressIndicator()
             else if (_clients.isEmpty)
@@ -1818,7 +1817,7 @@ class _AddEventSheetState extends State<_AddEventSheet> {
               )
             else
               DropdownButtonFormField<ClientModel>(
-                value: _selectedClient,
+                initialValue: _selectedClient,
                 decoration: InputDecoration(
                   labelText: 'Client (optional)',
                   prefixIcon: const Icon(Icons.business_outlined, size: 20),
@@ -1840,7 +1839,6 @@ class _AddEventSheetState extends State<_AddEventSheet> {
               ),
             const SizedBox(height: 12),
 
-            // Room picker
             if (_loadingRooms)
               const LinearProgressIndicator()
             else if (_rooms.isEmpty)
@@ -1872,7 +1870,7 @@ class _AddEventSheetState extends State<_AddEventSheet> {
               )
             else
               DropdownButtonFormField<String>(
-                value: _selectedRoom,
+                initialValue: _selectedRoom,
                 decoration: InputDecoration(
                   labelText: 'Meeting room (optional)',
                   prefixIcon: const Icon(Icons.meeting_room_outlined, size: 20),
@@ -1893,7 +1891,6 @@ class _AddEventSheetState extends State<_AddEventSheet> {
               ),
             const SizedBox(height: 12),
 
-            // Cost
             TextField(
               controller: _costCtrl,
               keyboardType: const TextInputType.numberWithOptions(
@@ -1909,7 +1906,6 @@ class _AddEventSheetState extends State<_AddEventSheet> {
             ),
             const SizedBox(height: 12),
 
-            // Employee multi-select
             if (_employees.isNotEmpty) ...[
               Align(
                 alignment: Alignment.centerLeft,
@@ -2051,7 +2047,6 @@ class _EditEventSheetState extends State<_EditEventSheet> {
 
   Future<void> _fetchEmployees() async {
     try {
-      // adminClient: bypass RLS so every staff member (all teams) is listed.
       final data = await SupabaseService.adminClient
           .from('profiles')
           .select('id, full_name')
@@ -2083,11 +2078,12 @@ class _EditEventSheetState extends State<_EditEventSheet> {
           .map((r) => r['name'] as String? ?? '')
           .where((n) => n.isNotEmpty)
           .toList();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _rooms = names;
           _loadingRooms = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loadingRooms = false);
     }
@@ -2194,7 +2190,6 @@ class _EditEventSheetState extends State<_EditEventSheet> {
             Text('Edit Meeting / Event', style: AppTextStyles.headlineSm),
             const SizedBox(height: 16),
 
-            // Title
             TextField(
               controller: _titleCtrl,
               decoration: InputDecoration(
@@ -2207,7 +2202,6 @@ class _EditEventSheetState extends State<_EditEventSheet> {
             ),
             const SizedBox(height: 12),
 
-            // Time row
             Row(
               children: [
                 Expanded(
@@ -2259,7 +2253,6 @@ class _EditEventSheetState extends State<_EditEventSheet> {
             ),
             const SizedBox(height: 12),
 
-            // Client picker
             if (_loadingClients)
               const LinearProgressIndicator()
             else if (_clients.isNotEmpty)
@@ -2286,7 +2279,6 @@ class _EditEventSheetState extends State<_EditEventSheet> {
               ),
             const SizedBox(height: 12),
 
-            // Room picker
             if (_loadingRooms)
               const LinearProgressIndicator()
             else if (_rooms.isEmpty)
@@ -2339,7 +2331,6 @@ class _EditEventSheetState extends State<_EditEventSheet> {
               ),
             const SizedBox(height: 12),
 
-            // Cost
             TextField(
               controller: _costCtrl,
               keyboardType: const TextInputType.numberWithOptions(
@@ -2355,7 +2346,6 @@ class _EditEventSheetState extends State<_EditEventSheet> {
             ),
             const SizedBox(height: 12),
 
-            // Attendee multi-select
             if (_employees.isNotEmpty) ...[
               Align(
                 alignment: Alignment.centerLeft,
@@ -2472,11 +2462,12 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
         });
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _error = 'Could not load rooms.';
         });
+      }
     }
   }
 
@@ -2497,11 +2488,12 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
       _capacityCtrl.clear();
       await _fetchRooms();
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _saving = false;
           _error = 'Failed to add room.';
         });
+      }
       return;
     }
     if (mounted) setState(() => _saving = false);
@@ -2546,7 +2538,6 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
           ),
           const SizedBox(height: 16),
 
-          // Add room row
           Row(
             children: [
               Expanded(
@@ -2624,7 +2615,6 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
 
           const SizedBox(height: 16),
 
-          // Room list
           if (_loading)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),

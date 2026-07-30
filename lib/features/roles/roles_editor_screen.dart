@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/models/profile_model.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -92,11 +94,12 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
         });
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _error = e.toString();
         });
+      }
     }
   }
 
@@ -171,6 +174,7 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final counts = _counts;
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -178,7 +182,7 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_isAdmin ? 'Roles & Privileges' : 'Team Privileges'),
+            Text(_isAdmin ? S.t('roles_privileges') : S.t('team_privileges')),
             if (!_isAdmin)
               Text(
                 'Your team only',
@@ -264,7 +268,7 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
                                     width: 8,
                                     height: 8,
                                     decoration: BoxDecoration(
-                                      color: isSelected ? Colors.white : color,
+                                      color: isSelected ? AppColors.onPrimary : color,
                                       shape: BoxShape.circle,
                                     ),
                                   ),
@@ -274,7 +278,7 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
                                       _roleLabels[r] ?? r,
                                       style: AppTextStyles.labelMd.copyWith(
                                         color: isSelected
-                                            ? Colors.white
+                                            ? AppColors.onPrimary
                                             : AppColors.onSurface,
                                         fontSize: 12,
                                       ),
@@ -287,7 +291,7 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
                                 '${counts[r] ?? 0} user${(counts[r] ?? 0) != 1 ? 's' : ''}',
                                 style: AppTextStyles.bodySm.copyWith(
                                   color: isSelected
-                                      ? Colors.white60
+                                      ? AppColors.onPrimary.withValues(alpha: 0.7)
                                       : AppColors.onSurfaceVariant,
                                   fontSize: 10,
                                 ),

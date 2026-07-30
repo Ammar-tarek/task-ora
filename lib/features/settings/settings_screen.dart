@@ -12,6 +12,7 @@ import '../../core/services/wifi_attendance_service.dart';
 import '../../core/services/apk_update_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../super_admin/reset_app_dialog.dart';
+import '../super_admin/archive_completed_tasks_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -62,11 +63,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _webhookStatus = null;
     });
     await N8nService.saveWebhookUrl(_webhookCtrl.text.trim());
-    if (mounted)
+    if (mounted) {
       setState(() {
         _savingWebhook = false;
         _webhookStatus = 'Saved';
       });
+    }
   }
 
   Future<void> _testWebhook() async {
@@ -88,11 +90,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       completionPercentage: 50,
       updatedBy: 'Admin (test)',
     );
-    if (mounted)
+    if (mounted) {
       setState(() {
         _testingWebhook = false;
         _webhookStatus = 'Test sent — check n8n';
       });
+    }
   }
 
   Future<void> _saveWifiSettings() async {
@@ -107,19 +110,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         updatedBy: adminId,
       );
       await WifiAttendanceService.setEnabled(_wifiEnabled, updatedBy: adminId);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _savingWifi = false;
           _wifiStatus = 'Saved';
         });
+      }
       // Re-run detection immediately so the change takes effect now.
       WifiAttendanceService.instance.checkNow();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _savingWifi = false;
           _wifiStatus = 'Could not save — check your connection';
         });
+      }
     }
   }
 
@@ -131,7 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(S.t('settings'))),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,21 +160,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Text(
                           profile?.fullName ?? '',
                           style: AppTextStyles.headlineSm.copyWith(
-                            color: Colors.white,
+                            color: AppColors.onPrimary,
                           ),
                         ),
                         Text(
                           profile?.role ?? '',
                           style: AppTextStyles.bodySm.copyWith(
-                            color: Colors.white54,
+                            color: AppColors.onPrimary.withValues(alpha: 0.7),
                           ),
                         ),
                         Text(
-                          profile?.preferredLanguage == 'ar'
-                              ? 'Arabic interface'
-                              : 'English interface',
+                          S.isArabic
+                              ? S.t('arabic_interface')
+                              : S.t('english_interface'),
                           style: AppTextStyles.bodySm.copyWith(
-                            color: Colors.white38,
+                            color: AppColors.onPrimary.withValues(alpha: 0.5),
                           ),
                         ),
                       ],
@@ -204,12 +209,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Check & Download Updates',
+                          S.t('check_updates'),
                           style: AppTextStyles.labelMd,
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Check Supabase and install latest APK release.',
+                          S.t('check_updates_sub'),
                           style: AppTextStyles.bodySm.copyWith(
                             color: AppColors.onSurfaceVariant,
                             fontSize: 11,
@@ -222,7 +227,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.gold,
-                      foregroundColor: AppColors.primary,
+                      foregroundColor: const Color(0xFF000000),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 8,
@@ -230,11 +235,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     onPressed: () => ApkUpdateService.checkForUpdates(
                       context,
-                      showNoUpdateToast: true,
+                      isManual: true,
                       forceDialog: true,
                     ),
                     icon: const Icon(Icons.download_rounded, size: 16),
-                    label: const Text('Update'),
+                    label: Text(S.t('update')),
                   ),
                 ],
               ),
@@ -243,22 +248,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // Team section — admin / manager only
             if (isManager) ...[
-              const _SectionTitle(title: 'TEAM'),
+              _SectionTitle(title: S.t('team')),
               _SettingsTile(
                 icon: Icons.people_outline,
-                title: 'User Management',
+                title: S.t('user_management'),
                 onTap: () => context.push('/users'),
               ),
               // Roles & Privileges — admins manage everyone & change roles;
               // managers manage privileges for their own team.
               _SettingsTile(
                 icon: Icons.manage_accounts_outlined,
-                title: isAdmin ? 'Roles & Privileges' : 'Team Privileges',
+                title: isAdmin ? S.t('roles_privileges') : S.t('team_privileges'),
                 onTap: () => context.push('/roles'),
               ),
               _SettingsTile(
                 icon: Icons.warning_amber_outlined,
-                title: 'Penalty Management',
+                title: S.t('penalty_management'),
                 onTap: () => context.push('/penalties'),
               ),
               const Divider(height: 1),
@@ -266,7 +271,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // ── Attendance Settings (all roles that get tracked) ─────────────
             if (profile?.isClient != true) ...[
-              const _SectionTitle(title: 'ATTENDANCE'),
+              _SectionTitle(title: S.t('attendance')),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Column(
@@ -277,7 +282,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const Icon(Icons.wifi, color: AppColors.gold, size: 20),
                         const SizedBox(width: 10),
                         Text(
-                          'WiFi Auto-Attendance',
+                          S.t('wifi_attendance'),
                           style: AppTextStyles.bodyMd,
                         ),
                         const Spacer(),
@@ -298,12 +303,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     Text(
                       isAdmin
-                          ? 'When enabled, employees and managers are automatically '
-                                'checked in when their device connects to the company '
-                                'WiFi and checked out when they disconnect.'
-                          : 'When you connect to the company WiFi, your attendance '
-                                'is recorded automatically and sent for approval. '
-                                'These settings are managed by your administrator.',
+                          ? S.t('wifi_attendance_admin_desc')
+                          : S.t('wifi_attendance_user_desc'),
                       style: AppTextStyles.bodySm.copyWith(
                         color: AppColors.onSurfaceVariant,
                       ),
@@ -316,8 +317,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         controller: _wifiSsidCtrl,
                         enabled: _wifiEnabled,
                         decoration: InputDecoration(
-                          labelText: 'Company WiFi Name (SSID)',
-                          hintText: 'e.g. CompanyOffice_5G',
+                          labelText: S.t('wifi_ssid_label'),
+                          hintText: S.t('wifi_ssid_hint'),
                           hintStyle: AppTextStyles.bodySm.copyWith(
                             color: AppColors.onSurfaceVariant,
                           ),
@@ -377,7 +378,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Company WiFi Name (SSID)',
+                                    S.t('wifi_ssid_label'),
                                     style: AppTextStyles.labelCaps.copyWith(
                                       color: AppColors.onSurfaceVariant,
                                       fontSize: 10,
@@ -386,7 +387,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   const SizedBox(height: 2),
                                   Text(
                                     _wifiSsidCtrl.text.isEmpty
-                                        ? 'Not set by administrator yet'
+                                        ? S.t('wifi_not_set')
                                         : _wifiSsidCtrl.text,
                                     style: AppTextStyles.bodyMd.copyWith(
                                       color: _wifiSsidCtrl.text.isEmpty
@@ -414,20 +415,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: ElevatedButton.icon(
                           onPressed: _savingWifi ? null : _saveWifiSettings,
                           icon: _savingWifi
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 14,
                                   height: 14,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.white,
+                                    color: AppColors.onPrimary,
                                   ),
                                 )
-                              : const Icon(
+                              : Icon(
                                   Icons.save_outlined,
                                   size: 16,
-                                  color: Colors.white,
+                                  color: AppColors.onPrimary,
                                 ),
-                          label: const Text('Save Attendance Settings'),
+                          label: Text(S.t('save_attendance_settings')),
                         ),
                       ),
                     ],
@@ -507,7 +508,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // Super Admin Control Panel — Exclusive for Super Admin (ammar@cashback.com)
             if (profile?.isSuperAdmin == true) ...[
-              const _SectionTitle(title: 'SUPER ADMIN CONTROLS'),
+              _SectionTitle(title: S.t('super_admin_controls')),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 child: Container(
@@ -525,14 +526,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const Icon(Icons.stars, color: AppColors.gold, size: 22),
                           const SizedBox(width: 10),
                           Text(
-                            'Super Admin Master Panel',
+                            S.t('super_admin_panel'),
                             style: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
                           ),
                         ],
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Exclusive controls reserved for Super Admin (ammar@cashback.com).',
+                        S.t('super_admin_panel_desc'),
                         style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
                       ),
                       const SizedBox(height: 16),
@@ -562,6 +563,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             label: const Text('Generate Master Detailed Report'),
                             onPressed: () => context.push('/super-admin/report'),
                           ),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.gold,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.archive_outlined, size: 18),
+                            label: const Text('Batch Archive Tasks'),
+                            onPressed: () async {
+                              await showDialog<bool>(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (_) => const ArchiveCompletedTasksDialog(),
+                              );
+                            },
+                          ),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.gold,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                            label: const Text('Archived Tasks Manager'),
+                            onPressed: () => context.push('/super-admin/archived-tasks'),
+                          ),
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppColors.error,
@@ -590,7 +619,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // n8n Telegram integration — admin only
             if (profile?.isAdmin == true) ...[
-              const _SectionTitle(title: 'INTEGRATIONS'),
+              _SectionTitle(title: S.t('integrations')),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Column(
@@ -604,13 +633,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           size: 20,
                         ),
                         const SizedBox(width: 10),
-                        Text('n8n Webhook URL', style: AppTextStyles.bodyMd),
+                        Text(S.t('n8n_webhook_title'), style: AppTextStyles.bodyMd),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'When a task is updated the app will POST to this URL '
-                      'with the client\'s phone number so n8n can send a Telegram notification.',
+                      S.t('n8n_webhook_desc'),
                       style: AppTextStyles.bodySm.copyWith(
                         color: AppColors.onSurfaceVariant,
                       ),
@@ -668,7 +696,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     color: AppColors.onSurfaceVariant,
                                   ),
                             label: Text(
-                              'Test',
+                              S.t('test'),
                               style: AppTextStyles.bodySm.copyWith(
                                 color: AppColors.onSurfaceVariant,
                               ),
@@ -681,20 +709,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: ElevatedButton.icon(
                             onPressed: _savingWebhook ? null : _saveWebhook,
                             icon: _savingWebhook
-                                ? const SizedBox(
+                                ? SizedBox(
                                     width: 14,
                                     height: 14,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white,
+                                      color: AppColors.onPrimary,
                                     ),
                                   )
-                                : const Icon(
+                                : Icon(
                                     Icons.save_outlined,
                                     size: 16,
-                                    color: Colors.white,
+                                    color: AppColors.onPrimary,
                                   ),
-                            label: const Text('Save URL'),
+                            label: Text(S.t('save_url')),
                           ),
                         ),
                       ],
@@ -732,13 +760,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
 
             // Preferences
-            const _SectionTitle(title: 'PREFERENCES'),
+            _SectionTitle(title: S.t('preferences')),
             SwitchListTile(
               value: _pushNotifs,
               onChanged: (v) => setState(() => _pushNotifs = v),
-              title: Text('Push Notifications', style: AppTextStyles.bodyMd),
+              title: Text(S.t('push_notifs'), style: AppTextStyles.bodyMd),
               subtitle: Text(
-                'Receive alerts in real-time',
+                S.t('push_notifs_sub'),
                 style: AppTextStyles.bodySm,
               ),
               secondary: const Icon(
@@ -751,9 +779,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SwitchListTile(
               value: _emailDigest,
               onChanged: (v) => setState(() => _emailDigest = v),
-              title: Text('Email Digest', style: AppTextStyles.bodyMd),
+              title: Text(S.t('email_digest'), style: AppTextStyles.bodyMd),
               subtitle: Text(
-                'Daily summary via email',
+                S.t('email_digest_sub'),
                 style: AppTextStyles.bodySm,
               ),
               secondary: const Icon(
@@ -766,9 +794,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SwitchListTile(
               value: context.watch<ThemeController>().isDark,
               onChanged: (v) => context.read<ThemeController>().setDark(v),
-              title: Text('Dark Mode', style: AppTextStyles.bodyMd),
+              title: Text(S.t('dark_mode'), style: AppTextStyles.bodyMd),
               subtitle: Text(
-                'Switch between light and dark theme',
+                S.t('dark_mode_sub'),
                 style: AppTextStyles.bodySm,
               ),
               secondary: const Icon(
@@ -783,8 +811,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: Text(S.t('language'), style: AppTextStyles.bodyMd),
               subtitle: Text(
                 context.watch<LocaleController>().isArabic
-                    ? 'العربية'
-                    : 'English',
+                    ? S.t('arabic')
+                    : S.t('english'),
                 style: AppTextStyles.bodySm,
               ),
               trailing: Icon(
@@ -797,9 +825,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const SizedBox(height: 16),
-                    Text(S.t('language'), style: AppTextStyles.headlineSm),
+                    Text(S.t('select_language'), style: AppTextStyles.headlineSm),
                     const Divider(),
-                    ...[('en', 'English'), ('ar', 'العربية')].map(
+                    ...[('en', S.t('english')), ('ar', S.t('arabic'))].map(
                       (l) => ListTile(
                         title: Text(l.$2, style: AppTextStyles.bodyMd),
                         trailing:
@@ -811,7 +839,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? const Icon(Icons.check, color: AppColors.gold)
                             : null,
                         onTap: () {
-                          context.read<LocaleController>().setLanguage(l.$1);
+                          final userId = context.read<AuthNotifier>().profile?.id;
+                          context.read<LocaleController>().setLanguage(l.$1, userId: userId);
                           Navigator.pop(context);
                         },
                       ),
@@ -824,24 +853,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Divider(height: 1),
 
             // About & Updates
-            const _SectionTitle(title: 'ABOUT & UPDATES'),
+            _SectionTitle(title: S.t('about_updates')),
             _SettingsTile(
               icon: Icons.system_update_outlined,
-              title: 'Check for Updates',
-              subtitle: 'v1.0.2+3',
+              title: S.t('check_updates'),
+              subtitle: 'v1.0.3+4',
               onTap: () => ApkUpdateService.checkForUpdates(
                 context,
-                showNoUpdateToast: true,
+                isManual: true,
               ),
             ),
             _SettingsTile(
               icon: Icons.privacy_tip_outlined,
-              title: 'Privacy Policy',
+              title: S.t('privacy_policy'),
               onTap: () {},
             ),
             _SettingsTile(
               icon: Icons.description_outlined,
-              title: 'Terms of Service',
+              title: S.t('terms_service'),
               onTap: () {},
             ),
             const Divider(height: 1),
@@ -857,7 +886,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                   icon: const Icon(Icons.logout, color: AppColors.statusHigh),
                   label: Text(
-                    'Sign Out',
+                    S.t('sign_out'),
                     style: AppTextStyles.labelMd.copyWith(
                       color: AppColors.statusHigh,
                     ),

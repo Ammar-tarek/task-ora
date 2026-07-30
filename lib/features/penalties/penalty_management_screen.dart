@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/repositories/penalty_repository.dart';
 import '../../core/services/realtime_service.dart';
@@ -54,15 +56,17 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
     } else {
       data = await PenaltyRepository.fetchForEmployee(profile?.id ?? '');
     }
-    if (mounted)
+    if (mounted) {
       setState(() {
         _penalties = data;
         _loading = false;
       });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final profile = context.watch<AuthNotifier>().profile;
     final privs = context.watch<TeamPrivilegesNotifier>();
     // "Manager view" = admin, a manager with the privilege, or a granted employee.
@@ -74,7 +78,7 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(isManager ? 'Penalty Management' : 'My Penalties'),
+        title: Text(isManager ? S.t('penalty_management') : S.t('penalties')),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
@@ -174,7 +178,7 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
                     child: ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                       itemCount: _penalties.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (_, i) => _PenaltyCard(
                         penalty: _penalties[i],
                         isManager: isManager,
@@ -389,8 +393,9 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    if (double.tryParse(v) == null)
+                    if (double.tryParse(v) == null) {
                       return 'Enter a valid number';
+                    }
                     return null;
                   },
                 ),

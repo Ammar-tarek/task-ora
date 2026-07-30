@@ -4,6 +4,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../auth/auth_notifier.dart';
 import '../providers/team_filter_notifier.dart';
 import '../theme/app_theme.dart';
@@ -13,6 +15,7 @@ class TeamFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final profile = context.watch<AuthNotifier>().profile;
     if (profile?.isAdmin != true) return const SizedBox.shrink();
 
@@ -28,7 +31,7 @@ class TeamFilterChip extends StatelessWidget {
     }
 
     final selectedId = filter.selectedTeamId;
-    final selectedName = filter.selectedTeam?.name ?? 'All Teams';
+    final selectedName = filter.selectedTeam?.name ?? S.t('all');
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
@@ -40,7 +43,7 @@ class TeamFilterChip extends StatelessWidget {
             color: AppColors.onSurfaceVariant,
           ),
           const SizedBox(width: 6),
-          Text('Team:', style: AppTextStyles.bodySm),
+          Text('${S.t('team')}:', style: AppTextStyles.bodySm),
           const SizedBox(width: 8),
           Expanded(
             child: SingleChildScrollView(
@@ -49,7 +52,7 @@ class TeamFilterChip extends StatelessWidget {
                 children: [
                   _chip(
                     context: context,
-                    label: 'All',
+                    label: S.t('all'),
                     selected: selectedId == null,
                     onTap: () => context.read<TeamFilterNotifier>().clear(),
                   ),

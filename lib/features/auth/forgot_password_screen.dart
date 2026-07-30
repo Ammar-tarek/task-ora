@@ -139,11 +139,11 @@ class _FormView extends StatelessWidget {
           child: ElevatedButton(
             onPressed: loading ? null : onSend,
             child: loading
-                ? const SizedBox(
+                ? SizedBox(
                     height: 20,
                     width: 20,
                     child: CircularProgressIndicator(
-                      color: Colors.white,
+                      color: AppColors.onPrimary,
                       strokeWidth: 2,
                     ),
                   )

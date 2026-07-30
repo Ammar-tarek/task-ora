@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/repositories/profile_repository.dart';
 import '../../core/repositories/team_repository.dart';
@@ -425,7 +427,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                           errorMsg = err;
                         });
                       } else {
-                        if (mounted) {
+                        if (mounted && dialogCtx.mounted) {
                           Navigator.pop(dialogCtx);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -448,6 +450,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final profile = context.watch<AuthNotifier>().profile;
     final privs = context.watch<TeamPrivilegesNotifier>();
     final isAdmin = profile?.isAdmin == true;
@@ -456,8 +459,8 @@ class _UserManagementScreenState extends State<UserManagementScreen>
 
     // Title & leading button depend on current view
     final String appBarTitle = _pickingTeam
-        ? 'Select Team'
-        : (_myTeam != null ? _myTeam!.name : 'Team Members');
+        ? S.t('team')
+        : (_myTeam != null ? _myTeam!.name : S.t('user_management'));
 
     final Widget? leading = (!_pickingTeam && _myTeam != null && isAdmin)
         ? IconButton(
@@ -823,11 +826,12 @@ class _UserCardState extends State<_UserCard> {
     if (widget.user.teamId == null) return;
     setState(() => _loadingTeam = true);
     final name = await ProfileRepository.fetchTeamName(widget.user.teamId);
-    if (mounted)
+    if (mounted) {
       setState(() {
         _teamName = name;
         _loadingTeam = false;
       });
+    }
   }
 
   Color get _roleColor {

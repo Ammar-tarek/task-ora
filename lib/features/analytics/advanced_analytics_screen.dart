@@ -4,6 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/models/team_model.dart';
 import '../../core/repositories/analytics_repository.dart';
 import '../../core/repositories/team_repository.dart';
@@ -73,19 +75,21 @@ class _AdvancedAnalyticsScreenState extends State<AdvancedAnalyticsScreen>
       teamIds = _myTeamId != null ? [_myTeamId!] : <String>[];
     }
     final rows = await AnalyticsRepository.fetchTaskStats(teamIds: teamIds);
-    if (mounted)
+    if (mounted) {
       setState(() {
         _rows = rows;
         _loading = false;
       });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Advanced Analytics'),
+        title: Text(S.t('analytics')),
         actions: [
           if (_isAdmin)
             Padding(

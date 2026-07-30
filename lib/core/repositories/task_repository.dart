@@ -45,6 +45,10 @@ class TaskRepository {
       tasks = await _fetchClientTasks(profile);
     }
 
+    if (!profile.isAdmin) {
+      tasks.removeWhere((t) => t.isArchived);
+    }
+
     if (!profile.isSuperAdmin) {
       final cutoff = await AppSettingsRepository.getWorkDataCutoffDate();
       if (cutoff != null && cutoff.trim().isNotEmpty) {
@@ -61,6 +65,257 @@ class TaskRepository {
     }
 
     return tasks;
+  }
+
+  /// Super Admin manual archive operation:
+  /// Archives all completed tasks (`status = 'completed'` and `is_archived = false`).
+  /// Stores timestamp and archived_by profile ID.
+  /// Idempotent operation — skips tasks already archived.
+  static Future<Map<String, dynamic>> archiveCompletedTasks({
+    required String superAdminId,
+  }) async {
+    final now = DateTime.now().toIso8601String();
+
+    try {
+      // 1. Fetch unarchived completed tasks
+      final unarchivedRes = await _adminClient
+          .from('tasks')
+          .select('id')
+          .eq('status', 'completed')
+          .or('is_archived.is.null,is_archived.eq.false');
+
+      final unarchivedList = unarchivedRes as List<dynamic>? ?? [];
+      final totalToArchive = unarchivedList.length;
+
+      // 2. Fetch already archived completed tasks (for summary count)
+      final alreadyArchivedRes = await _adminClient
+          .from('tasks')
+          .select('id')
+          .eq('status', 'completed')
+          .eq('is_archived', true);
+
+      final skippedCount = (alreadyArchivedRes as List<dynamic>? ?? []).length;
+
+      if (totalToArchive > 0) {
+        final idsToArchive =
+            unarchivedList.map((t) => t['id'] as String).toList();
+        await _adminClient
+            .from('tasks')
+            .update({
+              'is_archived': true,
+              'archived_at': now,
+              'archived_by': superAdminId,
+              'updated_at': now,
+            })
+            .inFilter('id', idsToArchive);
+      }
+
+      return {
+        'archivedCount': totalToArchive,
+        'skippedCount': skippedCount,
+        'timestamp': now,
+        'error': null,
+      };
+    } catch (e) {
+      return {
+        'archivedCount': 0,
+        'skippedCount': 0,
+        'timestamp': now,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Selective archive a single task regardless of status.
+  static Future<bool> archiveTask(String taskId, {required String profileId}) async {
+    final now = DateTime.now().toIso8601String();
+    try {
+      await _adminClient
+          .from('tasks')
+          .update({
+            'is_archived': true,
+            'archived_at': now,
+            'archived_by': profileId,
+            'updated_at': now,
+          })
+          .eq('id', taskId);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Batch archive multiple tasks by IDs regardless of status.
+  static Future<bool> archiveMultipleTasks(
+    List<String> taskIds, {
+    required String profileId,
+  }) async {
+    if (taskIds.isEmpty) return true;
+    final now = DateTime.now().toIso8601String();
+    try {
+      // Chunk into batches of 500 for safety with large lists
+      for (var i = 0; i < taskIds.length; i += 500) {
+        final chunk = taskIds.sublist(
+          i,
+          (i + 500 > taskIds.length) ? taskIds.length : i + 500,
+        );
+        await _adminClient
+            .from('tasks')
+            .update({
+              'is_archived': true,
+              'archived_at': now,
+              'archived_by': profileId,
+              'updated_at': now,
+            })
+            .inFilter('id', chunk);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Count unarchived tasks matching date range and status criteria.
+  static Future<int> countUnarchivedTasks({
+    DateTime? startDate,
+    DateTime? endDate,
+    String? statusFilter,
+  }) async {
+    try {
+      dynamic query = _adminClient
+          .from('tasks')
+          .select('id')
+          .or('is_archived.is.null,is_archived.eq.false');
+
+      if (statusFilter != null && statusFilter != 'all') {
+        query = query.eq('status', statusFilter);
+      }
+
+      if (startDate != null) {
+        final startIso = DateTime(startDate.year, startDate.month, startDate.day, 0, 0, 0).toIso8601String();
+        query = query.gte('created_at', startIso);
+      }
+
+      if (endDate != null) {
+        final endIso = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59).toIso8601String();
+        query = query.lte('created_at', endIso);
+      }
+
+      final res = await query;
+      return (res as List<dynamic>? ?? []).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Super Admin manual archive operation by date range and optional status filter.
+  static Future<Map<String, dynamic>> archiveTasksByFilter({
+    required String superAdminId,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? statusFilter,
+  }) async {
+    final now = DateTime.now().toIso8601String();
+
+    try {
+      dynamic query = _adminClient
+          .from('tasks')
+          .select('id')
+          .or('is_archived.is.null,is_archived.eq.false');
+
+      if (statusFilter != null && statusFilter != 'all') {
+        query = query.eq('status', statusFilter);
+      }
+
+      if (startDate != null) {
+        final startIso = DateTime(startDate.year, startDate.month, startDate.day, 0, 0, 0).toIso8601String();
+        query = query.gte('created_at', startIso);
+      }
+
+      if (endDate != null) {
+        final endIso = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59).toIso8601String();
+        query = query.lte('created_at', endIso);
+      }
+
+      final unarchivedRes = await query;
+      final unarchivedList = unarchivedRes as List<dynamic>? ?? [];
+      final totalToArchive = unarchivedList.length;
+
+      if (totalToArchive > 0) {
+        final idsToArchive =
+            unarchivedList.map((t) => t['id'] as String).toList();
+        for (var i = 0; i < idsToArchive.length; i += 500) {
+          final chunk = idsToArchive.sublist(
+            i,
+            (i + 500 > idsToArchive.length) ? idsToArchive.length : i + 500,
+          );
+          await _adminClient
+              .from('tasks')
+              .update({
+                'is_archived': true,
+                'archived_at': now,
+                'archived_by': superAdminId,
+                'updated_at': now,
+              })
+              .inFilter('id', chunk);
+        }
+      }
+
+      return {
+        'archivedCount': totalToArchive,
+        'timestamp': now,
+        'error': null,
+      };
+    } catch (e) {
+      return {
+        'archivedCount': 0,
+        'timestamp': now,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Retrieve / unarchive one or more tasks back to active task views.
+  static Future<bool> unarchiveTasks(List<String> taskIds) async {
+    if (taskIds.isEmpty) return true;
+    final now = DateTime.now().toIso8601String();
+    try {
+      await _adminClient
+          .from('tasks')
+          .update({
+            'is_archived': false,
+            'archived_at': null,
+            'archived_by': null,
+            'updated_at': now,
+          })
+          .inFilter('id', taskIds);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Fetch all archived tasks (where is_archived = true).
+  static Future<List<TaskModel>> fetchArchivedTasks() async {
+    try {
+      final data = await _adminClient
+          .from('tasks')
+          .select(_taskSelect)
+          .eq('is_archived', true)
+          .order('archived_at', ascending: false);
+      return (data as List).map((m) => TaskModel.fromMap(m)).toList();
+    } catch (_) {
+      try {
+        final data = await _adminClient
+            .from('tasks')
+            .select('*')
+            .eq('is_archived', true)
+            .order('created_at', ascending: false);
+        return (data as List).map((m) => TaskModel.fromMap(m)).toList();
+      } catch (_) {
+        return [];
+      }
+    }
   }
 
   static Future<List<TaskModel>> _fetchAll({String? teamId}) async {

@@ -103,7 +103,7 @@ class NotificationTriggerService {
 
   void _stop() {
     if (_channel != null) {
-      SupabaseService.adminClient.removeChannel(_channel!);
+      SupabaseService.client.removeChannel(_channel!);
       _channel = null;
     }
     _processedIds.clear();

@@ -23,6 +23,9 @@ class TaskModel {
   final String? boardId;
   final String? boardColumnId;
   final String createdAt;
+  final bool isArchived;
+  final String? archivedAt;
+  final String? archivedBy;
   final List<TaskAssignee> assignees;
   final List<TaskComment> comments;
   final List<TaskEditLog> editLogs;
@@ -46,6 +49,9 @@ class TaskModel {
     this.boardId,
     this.boardColumnId,
     required this.createdAt,
+    this.isArchived = false,
+    this.archivedAt,
+    this.archivedBy,
     this.assignees = const [],
     this.comments = const [],
     this.editLogs = const [],
@@ -75,6 +81,9 @@ class TaskModel {
       boardId: m['board_id'] as String?,
       boardColumnId: m['board_column_id'] as String?,
       createdAt: m['created_at'] as String? ?? '',
+      isArchived: m['is_archived'] as bool? ?? false,
+      archivedAt: m['archived_at'] as String?,
+      archivedBy: m['archived_by'] as String?,
       assignees: rawAssignees
           .map((a) => TaskAssignee.fromMap(a as Map<String, dynamic>))
           .toList(),

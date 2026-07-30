@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/providers/team_filter_notifier.dart';
 import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/repositories/attendance_repository.dart';
@@ -46,11 +48,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       month: _sumMonth,
       teamId: teamId,
     );
-    if (mounted)
+    if (mounted) {
       setState(() {
         _summaries = data;
         _summaryLoading = false;
       });
+    }
   }
 
   void _shiftMonth(int delta) {
@@ -105,6 +108,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final profile = context.read<AuthNotifier>().profile;
     // Also reload privileges so grants/restrictions take effect immediately.
     await context.read<TeamPrivilegesNotifier>().reload();
+    if (!mounted) return;
     final canManage =
         profile?.isAdmin == true ||
         context.read<TeamPrivilegesNotifier>().canManageAttendance;
@@ -123,15 +127,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       );
       // Load own today record for the self-service check-in/out card.
       AttendanceRecord? mine;
-      if (profile != null) {
-        mine = await AttendanceRepository.fetchTodayForEmployee(profile.id);
-      }
-      if (mounted)
+      mine = await AttendanceRepository.fetchTodayForEmployee(profile.id);
+      if (mounted) {
         setState(() {
           _records = data;
           _myRecord = mine;
           _loading = false;
         });
+      }
     } else {
       final results = await Future.wait([
         AttendanceRepository.fetchForEmployee(profile?.id ?? ''),
@@ -206,7 +209,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: DropdownButtonFormField<String?>(
-            value: _sumEmployeeId,
+            initialValue: _sumEmployeeId,
             isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Employee',
@@ -244,7 +247,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                   itemCount: shown.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (_, i) => _SummaryCard(
                     s: shown[i],
                     onTap: () => _showEmployeeDetails(shown[i]),
@@ -438,6 +441,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final profile = context.watch<AuthNotifier>().profile;
     final privs = context.watch<TeamPrivilegesNotifier>();
     // "Manager view" = anyone who can manage attendance: admin, a manager with
@@ -455,7 +459,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Attendance'),
+        title: Text(S.t('attendance')),
         actions: [
           // Admin/manager: switch between daily records and monthly summary.
           if (isManager)
@@ -774,7 +778,7 @@ class _SelfServiceCard extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 "Today's Status",
-                style: AppTextStyles.labelMd.copyWith(color: Colors.white),
+                style: AppTextStyles.labelMd.copyWith(color: AppColors.onPrimary),
               ),
               const Spacer(),
               if (record?.isApproved == true)
@@ -827,7 +831,7 @@ class _SelfServiceCard extends StatelessWidget {
                 icon: Icons.login_outlined,
                 active: checked,
               ),
-              const Icon(Icons.arrow_forward, color: Colors.white54, size: 20),
+              Icon(Icons.arrow_forward, color: AppColors.onPrimary.withValues(alpha: 0.5), size: 20),
               _TimeChip(
                 label: 'Check-out',
                 time: record?.checkOutTime != null
@@ -867,7 +871,7 @@ class _SelfServiceCard extends StatelessWidget {
                   onPressed: (checked && !done) ? onCheckOut : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.gold,
-                    foregroundColor: AppColors.primary,
+                    foregroundColor: const Color(0xFF000000),
                   ),
                 ),
               ),
@@ -893,19 +897,19 @@ class _TimeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      Icon(icon, color: active ? AppColors.gold : Colors.white30, size: 20),
+      Icon(icon, color: active ? AppColors.gold : AppColors.onPrimary.withValues(alpha: 0.4), size: 20),
       const SizedBox(height: 4),
       Text(
         time,
         style: AppTextStyles.labelMd.copyWith(
-          color: active ? Colors.white : Colors.white38,
+          color: active ? AppColors.onPrimary : AppColors.onPrimary.withValues(alpha: 0.6),
           fontSize: 13,
         ),
       ),
       Text(
         label,
         style: AppTextStyles.bodySm.copyWith(
-          color: Colors.white38,
+          color: AppColors.onPrimary.withValues(alpha: 0.6),
           fontSize: 10,
         ),
       ),
@@ -1267,8 +1271,9 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
       context: context,
       initialTime: isIn ? _inTime : _outTime,
     );
-    if (picked != null)
+    if (picked != null) {
       setState(() => isIn ? _inTime = picked : _outTime = picked);
+    }
   }
 
   Future<void> _pickDate() async {
@@ -1332,7 +1337,7 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
 
               // Status
               DropdownButtonFormField<String>(
-                value: _status,
+                initialValue: _status,
                 decoration: const InputDecoration(labelText: 'Status'),
                 items: _statuses
                     .map(
@@ -1528,8 +1533,9 @@ class _OverrideDialogState extends State<_OverrideDialog> {
       context: context,
       initialTime: isIn ? _inTime : _outTime,
     );
-    if (picked != null)
+    if (picked != null) {
       setState(() => isIn ? _inTime = picked : _outTime = picked);
+    }
   }
 
   String _fmtTime(TimeOfDay t) => AppTime.hm2(t.hour, t.minute);
@@ -1571,7 +1577,7 @@ class _OverrideDialogState extends State<_OverrideDialog> {
               ],
 
               DropdownButtonFormField<String>(
-                value: _status,
+                initialValue: _status,
                 decoration: const InputDecoration(labelText: 'Status'),
                 items: _statuses
                     .map(
@@ -2237,8 +2243,9 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
       context: context,
       initialTime: isIn ? _inTime : _outTime,
     );
-    if (picked != null)
+    if (picked != null) {
       setState(() => isIn ? _inTime = picked : _outTime = picked);
+    }
   }
 
   String _fmtTime(TimeOfDay t) => AppTime.hm2(t.hour, t.minute);
@@ -2321,7 +2328,7 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
                     ],
 
                     DropdownButtonFormField<String>(
-                      value: _selectedEmployeeId,
+                      initialValue: _selectedEmployeeId,
                       decoration: const InputDecoration(
                         labelText: 'Employee *',
                       ),
@@ -2352,7 +2359,7 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
                     const SizedBox(height: 8),
 
                     DropdownButtonFormField<String>(
-                      value: _status,
+                      initialValue: _status,
                       decoration: const InputDecoration(labelText: 'Status'),
                       items: _statuses
                           .map(

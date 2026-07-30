@@ -2,13 +2,13 @@
 // Monitors WiFi connectivity and auto-checks employees in/out when they
 // connect to / disconnect from the configured company WiFi network.
 
+import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../repositories/app_settings_repository.dart';
 import '../repositories/attendance_repository.dart';
-import 'local_notification_service.dart';
 
 // Local cache keys — mirror the central DB values so detection still works
 // briefly offline. The DB (app_settings) is always the source of truth.
@@ -23,6 +23,7 @@ class WifiAttendanceService {
   final _network = NetworkInfo();
   String? _employeeId;
   bool _initialized = false;
+  StreamSubscription<List<ConnectivityResult>>? _subscription;
 
   // ── Settings helpers ───────────────────────────────────────────────────────
   // Source of truth is the central app_settings table (admin-controlled).
@@ -82,13 +83,16 @@ class WifiAttendanceService {
     _initialized = true;
 
     // Listen for connectivity changes while the app is in the foreground.
-    Connectivity().onConnectivityChanged.listen(_onConnectivity);
+    await _subscription?.cancel();
+    _subscription = Connectivity().onConnectivityChanged.listen(_onConnectivity);
 
     // Also do an immediate check on startup.
     await checkNow();
   }
 
   void dispose() {
+    _subscription?.cancel();
+    _subscription = null;
     _initialized = false;
     _employeeId = null;
   }

@@ -142,7 +142,7 @@ class ProfileRepository {
         'full_name': fullName.trim(),
         'role': role,
         'status': 'active',
-        if (teamId != null) 'team_id': teamId,
+        'team_id': ?teamId,
       });
 
       return null;
@@ -257,8 +257,8 @@ class ProfileRepository {
         'full_name': fullName,
         'phone': phone?.isEmpty == true ? null : phone,
         'updated_at': DateTime.now().toIso8601String(),
-        if (role != null) 'role': role,
-        if (status != null) 'status': status,
+        'role': ?role,
+        'status': ?status,
       };
       await SupabaseService.adminClient
           .from('profiles')
@@ -317,6 +317,17 @@ class ProfileRepository {
       return ProfileModel.fromMap(list.first as Map<String, dynamic>);
     } catch (_) {
       return null;
+    }
+  }
+
+  static Future<void> updateFcmToken(String userId, String? token) async {
+    try {
+      await _client.from('profiles').update({
+        'fcm_token': token,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
+    } catch (_) {
+      /* silently catch if column or table not available yet */
     }
   }
 }

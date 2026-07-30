@@ -32,7 +32,7 @@ class AppSettingsRepository {
       'key': key,
       'value': value,
       'updated_at': DateTime.now().toIso8601String(),
-      if (updatedBy != null) 'updated_by': updatedBy,
+      'updated_by': ?updatedBy,
     }, onConflict: 'key');
   }
 

@@ -209,7 +209,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 width: 120,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.surfaceContainerLowest,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: AppColors.outlineVariant.withValues(alpha: 0.5),
@@ -411,7 +411,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
-                            color: Colors.white,
+                            color: AppColors.onPrimary,
                             strokeWidth: 2,
                           ),
                         ),

@@ -175,7 +175,7 @@ class _FinanceTab extends StatelessWidget {
             children: [
               Text(
                 'TOTAL REVENUE',
-                style: AppTextStyles.labelCaps.copyWith(color: Colors.white54),
+                style: AppTextStyles.labelCaps.copyWith(color: AppColors.onPrimary.withValues(alpha: 0.7)),
               ),
               const SizedBox(height: 6),
               Text(
@@ -186,7 +186,7 @@ class _FinanceTab extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const Divider(color: Colors.white24, height: 24),
+              Divider(color: AppColors.onPrimary.withValues(alpha: 0.3), height: 24),
               Row(
                 children: [
                   Expanded(
@@ -356,7 +356,7 @@ class _SummaryItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const color = Colors.white70;
+    final color = AppColors.onPrimary.withValues(alpha: 0.85);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -367,7 +367,7 @@ class _SummaryItem extends StatelessWidget {
         Text(
           label,
           style: AppTextStyles.bodySm.copyWith(
-            color: Colors.white38,
+            color: AppColors.onPrimary.withValues(alpha: 0.6),
             fontSize: 10,
           ),
         ),

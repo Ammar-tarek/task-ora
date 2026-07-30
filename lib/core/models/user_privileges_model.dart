@@ -60,7 +60,7 @@ class UserPrivilegesModel {
     'can_manage_clients': canManageClients,
     'can_create_employees': canCreateEmployees,
     'can_view_finance': canViewFinance,
-    if (updatedBy != null) 'updated_by': updatedBy,
+    'updated_by': ?updatedBy,
     'updated_at': DateTime.now().toIso8601String(),
   };
 

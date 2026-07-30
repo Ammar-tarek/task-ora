@@ -22,6 +22,7 @@ import '../../features/calendar/calendar_screen.dart';
 import '../../features/finance/finance_dashboard_screen.dart';
 import '../../features/finance/finance_analytics_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/super_admin/archived_tasks_screen.dart';
 import '../../features/analytics/advanced_analytics_screen.dart';
 import '../../features/attendance/attendance_screen.dart';
 import '../../features/penalties/penalty_management_screen.dart';
@@ -60,8 +61,9 @@ GoRouter makeRouter(AuthNotifier auth) {
 
       // ② Not logged in — must see login screen
       if (status == AuthStatus.unauthenticated) {
-        if (loc == '/login' || loc == '/forgot-password' || loc == '/signup')
+        if (loc == '/login' || loc == '/forgot-password' || loc == '/signup') {
           return null;
+        }
         return '/login';
       }
 
@@ -152,16 +154,16 @@ GoRouter makeRouter(AuthNotifier auth) {
 
     routes: [
       // ── Auth ──────────────────────────────────────────────────────────────
-      GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/signup', builder: (_, __) => const SignUpScreen()),
+      GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/signup', builder: (_, _) => const SignUpScreen()),
       GoRoute(
         path: '/pending',
-        builder: (_, __) => const PendingApprovalScreen(),
+        builder: (_, _) => const PendingApprovalScreen(),
       ),
       GoRoute(
         path: '/forgot-password',
-        builder: (_, __) => const ForgotPasswordScreen(),
+        builder: (_, _) => const ForgotPasswordScreen(),
       ),
 
       // ── Shell (bottom nav) ───────────────────────────────────────────────
@@ -173,7 +175,7 @@ GoRouter makeRouter(AuthNotifier auth) {
             routes: [
               GoRoute(
                 path: '/dashboard',
-                builder: (_, __) => const AdminDashboardScreen(),
+                builder: (_, _) => const AdminDashboardScreen(),
               ),
             ],
           ),
@@ -191,7 +193,7 @@ GoRouter makeRouter(AuthNotifier auth) {
                 routes: [
                   GoRoute(
                     path: 'table',
-                    builder: (_, __) => const TaskTableScreen(),
+                    builder: (_, _) => const TaskTableScreen(),
                   ),
                   GoRoute(
                     path: 'detail/:id',
@@ -208,11 +210,11 @@ GoRouter makeRouter(AuthNotifier auth) {
             routes: [
               GoRoute(
                 path: '/calendar',
-                builder: (_, __) => const CalendarScreen(),
+                builder: (_, _) => const CalendarScreen(),
                 routes: [
                   GoRoute(
                     path: 'enhanced',
-                    builder: (_, __) => const CalendarScreen(),
+                    builder: (_, _) => const CalendarScreen(),
                   ),
                 ],
               ),
@@ -223,11 +225,11 @@ GoRouter makeRouter(AuthNotifier auth) {
             routes: [
               GoRoute(
                 path: '/finance',
-                builder: (_, __) => const _FinanceRouter(),
+                builder: (_, _) => const _FinanceRouter(),
                 routes: [
                   GoRoute(
                     path: 'analytics',
-                    builder: (_, __) => const FinanceAnalyticsScreen(),
+                    builder: (_, _) => const FinanceAnalyticsScreen(),
                   ),
                 ],
               ),
@@ -238,7 +240,7 @@ GoRouter makeRouter(AuthNotifier auth) {
             routes: [
               GoRoute(
                 path: '/settings',
-                builder: (_, __) => const SettingsScreen(),
+                builder: (_, _) => const SettingsScreen(),
               ),
             ],
           ),
@@ -248,21 +250,25 @@ GoRouter makeRouter(AuthNotifier auth) {
       // ── Full-page routes (no bottom nav) ──────────────────────────────────
       GoRoute(
         path: '/analytics',
-        builder: (_, __) => const AdvancedAnalyticsScreen(),
+        builder: (_, _) => const AdvancedAnalyticsScreen(),
       ),
       GoRoute(
         path: '/super-admin/report',
-        builder: (_, __) => const SuperAdminReportScreen(),
+        builder: (_, _) => const SuperAdminReportScreen(),
+      ),
+      GoRoute(
+        path: '/super-admin/archived-tasks',
+        builder: (_, _) => const ArchivedTasksScreen(),
       ),
       GoRoute(
         path: '/attendance',
-        builder: (_, __) => const AttendanceScreen(),
+        builder: (_, _) => const AttendanceScreen(),
       ),
       GoRoute(
         path: '/penalties',
-        builder: (_, __) => const PenaltyManagementScreen(),
+        builder: (_, _) => const PenaltyManagementScreen(),
       ),
-      GoRoute(path: '/users', builder: (_, __) => const UserManagementScreen()),
+      GoRoute(path: '/users', builder: (_, _) => const UserManagementScreen()),
       GoRoute(
         path: '/users/:id/privileges',
         builder: (_, state) {
@@ -274,16 +280,16 @@ GoRouter makeRouter(AuthNotifier auth) {
           );
         },
       ),
-      GoRoute(path: '/roles', builder: (_, __) => const RolesEditorScreen()),
+      GoRoute(path: '/roles', builder: (_, _) => const RolesEditorScreen()),
       GoRoute(
         path: '/notifications',
-        builder: (_, __) => const NotificationsScreen(),
+        builder: (_, _) => const NotificationsScreen(),
       ),
       GoRoute(
         path: '/expenses',
-        builder: (_, __) => const DailyExpensesScreen(),
+        builder: (_, _) => const DailyExpensesScreen(),
       ),
-      GoRoute(path: '/teams', builder: (_, __) => const TeamManagementScreen()),
+      GoRoute(path: '/teams', builder: (_, _) => const TeamManagementScreen()),
       GoRoute(
         path: '/teams/:id/members',
         builder: (_, state) => TeamMembersScreen(
@@ -308,7 +314,7 @@ GoRouter makeRouter(AuthNotifier auth) {
           );
         },
       ),
-      GoRoute(path: '/clients', builder: (_, __) => const ClientsScreen()),
+      GoRoute(path: '/clients', builder: (_, _) => const ClientsScreen()),
       GoRoute(
         path: '/clients/:id/finance',
         builder: (_, state) =>

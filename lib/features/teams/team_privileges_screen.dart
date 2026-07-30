@@ -39,17 +39,19 @@ class _TeamPrivilegesScreenState extends State<TeamPrivilegesScreen> {
     });
     try {
       final p = await TeamPrivilegesRepository.fetchForTeam(widget.teamId);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _privileges = p;
           _loading = false;
         });
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _setupRequired = true;
         });
+      }
     }
   }
 

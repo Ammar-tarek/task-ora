@@ -43,8 +43,17 @@ class NotionTable extends StatefulWidget {
   final VoidCallback? onAddColumn;
   final void Function(String rowId)? onRowTap;
 
-  /// Called with the row ID when the user swipes a row to delete.
+  /// Called with the row ID when the user swipes a row left to delete.
   final void Function(String rowId)? onRowDelete;
+
+  /// Called with the row ID when the user swipes a row right to archive.
+  final void Function(String rowId)? onRowArchive;
+
+  /// Multi-selection parameters
+  final bool isSelectionMode;
+  final Set<String>? selectedRowIds;
+  final void Function(String rowId, bool selected)? onRowSelect;
+  final void Function(bool selectAll)? onSelectAll;
 
   /// Called with the new ordered list of row IDs after a drag-to-reorder.
   final void Function(List<String> orderedIds)? onRowReorder;
@@ -59,6 +68,11 @@ class NotionTable extends StatefulWidget {
     this.onAddColumn,
     this.onRowTap,
     this.onRowDelete,
+    this.onRowArchive,
+    this.isSelectionMode = false,
+    this.selectedRowIds,
+    this.onRowSelect,
+    this.onSelectAll,
     this.onRowReorder,
     this.emptyMessage = 'No data yet',
     this.emptyIcon = Icons.inbox_outlined,
@@ -152,6 +166,7 @@ class _NotionTableState extends State<NotionTable>
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _orderedRows.length,
+              // ignore: deprecated_member_use
               onReorder: _onReorder,
               proxyDecorator: (child, index, animation) => Material(
                 elevation: 6,
@@ -221,7 +236,18 @@ class _NotionTableState extends State<NotionTable>
 
   // ── Row builders ──────────────────────────────────────────────────────────
 
-  /// Row used when reordering is enabled — includes drag handle + swipe-delete.
+  DismissDirection _getDismissDirection() {
+    if (widget.onRowDelete != null && widget.onRowArchive != null) {
+      return DismissDirection.horizontal;
+    } else if (widget.onRowArchive != null) {
+      return DismissDirection.startToEnd;
+    } else if (widget.onRowDelete != null) {
+      return DismissDirection.endToStart;
+    }
+    return DismissDirection.none;
+  }
+
+  /// Row used when reordering is enabled — includes drag handle + swipe actions.
   Widget _buildDraggableRow({
     required Key key,
     required int index,
@@ -233,20 +259,31 @@ class _NotionTableState extends State<NotionTable>
       row,
       cols,
       showHandle: true,
-      key: widget.onRowDelete == null ? key : null,
+      key: (widget.onRowDelete == null && widget.onRowArchive == null) ? key : null,
     );
 
-    if (widget.onRowDelete != null) {
+    final dir = _getDismissDirection();
+    if (dir != DismissDirection.none) {
       rowContent = Dismissible(
         key: key,
-        direction: DismissDirection.endToStart,
-        background: _buildDismissBackground(),
-        confirmDismiss: (_) async {
-          return await _confirmDelete(row.id);
+        direction: dir,
+        background: _buildArchiveBackground(),
+        secondaryBackground: _buildDismissBackground(),
+        confirmDismiss: (direction) async {
+          if (direction == DismissDirection.startToEnd) {
+            return await _confirmArchive(row.id);
+          } else if (direction == DismissDirection.endToStart) {
+            return await _confirmDelete(row.id);
+          }
+          return false;
         },
-        onDismissed: (_) {
+        onDismissed: (direction) {
           setState(() => _orderedRows.removeWhere((r) => r.id == row.id));
-          widget.onRowDelete!(row.id);
+          if (direction == DismissDirection.startToEnd) {
+            widget.onRowArchive?.call(row.id);
+          } else if (direction == DismissDirection.endToStart) {
+            widget.onRowDelete?.call(row.id);
+          }
         },
         child: rowContent,
       );
@@ -255,7 +292,7 @@ class _NotionTableState extends State<NotionTable>
     return rowContent;
   }
 
-  /// Plain animated row (no reorder, optional swipe-delete).
+  /// Plain animated row (no reorder, optional swipe-delete/archive).
   Widget _buildRow(int index, NotionRow row, List<NotionColumn> cols) {
     Widget rowContent = TweenAnimationBuilder<double>(
       key: ValueKey(row.id),
@@ -272,15 +309,28 @@ class _NotionTableState extends State<NotionTable>
       child: _buildRowContent(index, row, cols, showHandle: false),
     );
 
-    if (widget.onRowDelete != null) {
+    final dir = _getDismissDirection();
+    if (dir != DismissDirection.none) {
       rowContent = Dismissible(
         key: ValueKey(row.id),
-        direction: DismissDirection.endToStart,
-        background: _buildDismissBackground(),
-        confirmDismiss: (_) async => await _confirmDelete(row.id),
-        onDismissed: (_) {
+        direction: dir,
+        background: _buildArchiveBackground(),
+        secondaryBackground: _buildDismissBackground(),
+        confirmDismiss: (direction) async {
+          if (direction == DismissDirection.startToEnd) {
+            return await _confirmArchive(row.id);
+          } else if (direction == DismissDirection.endToStart) {
+            return await _confirmDelete(row.id);
+          }
+          return false;
+        },
+        onDismissed: (direction) {
           setState(() => _orderedRows.removeWhere((r) => r.id == row.id));
-          widget.onRowDelete!(row.id);
+          if (direction == DismissDirection.startToEnd) {
+            widget.onRowArchive?.call(row.id);
+          } else if (direction == DismissDirection.endToStart) {
+            widget.onRowDelete?.call(row.id);
+          }
         },
         child: rowContent,
       );
@@ -299,16 +349,21 @@ class _NotionTableState extends State<NotionTable>
     final isMobile = MediaQuery.of(context).size.width < 600;
     final paddingH = isMobile ? 8.0 : 12.0;
     final paddingV = isMobile ? 8.0 : 10.0;
+    final isSelected = widget.selectedRowIds?.contains(row.id) ?? false;
 
     return InkWell(
       key: key,
-      onTap: widget.onRowTap != null ? () => widget.onRowTap!(row.id) : null,
+      onTap: widget.isSelectionMode
+          ? () => widget.onRowSelect?.call(row.id, !isSelected)
+          : (widget.onRowTap != null ? () => widget.onRowTap!(row.id) : null),
       child: Container(
         clipBehavior: Clip.hardEdge,
         decoration: BoxDecoration(
-          color: index.isEven
-              ? AppColors.surfaceContainerLowest
-              : AppColors.background,
+          color: isSelected
+              ? AppColors.gold.withValues(alpha: 0.1)
+              : (index.isEven
+                  ? AppColors.surfaceContainerLowest
+                  : AppColors.background),
           border: Border(
             bottom: BorderSide(color: AppColors.outlineVariant, width: 0.5),
           ),
@@ -316,8 +371,24 @@ class _NotionTableState extends State<NotionTable>
         padding: EdgeInsets.symmetric(horizontal: paddingH, vertical: paddingV),
         child: Row(
           children: [
+            // Checkbox in selection mode
+            if (widget.isSelectionMode) ...[
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: isSelected,
+                  activeColor: AppColors.gold,
+                  checkColor: Colors.black,
+                  onChanged: (v) {
+                    widget.onRowSelect?.call(row.id, v ?? false);
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             // Drag handle shown only in reorder mode
-            if (showHandle) ...[
+            if (showHandle && !widget.isSelectionMode) ...[
               ReorderableDragStartListener(
                 index: _orderedRows.indexWhere((r) => r.id == row.id),
                 child: Padding(
@@ -349,6 +420,25 @@ class _NotionTableState extends State<NotionTable>
 
   // ── Dismiss helpers ───────────────────────────────────────────────────────
 
+  Widget _buildArchiveBackground() {
+    return Container(
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.only(left: 20),
+      color: AppColors.gold.withValues(alpha: 0.2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          const Icon(Icons.archive_outlined, color: AppColors.gold, size: 20),
+          const SizedBox(width: 6),
+          Text(
+            'Archive',
+            style: AppTextStyles.labelMd.copyWith(color: AppColors.gold, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDismissBackground() {
     return Container(
       alignment: Alignment.centerRight,
@@ -366,6 +456,31 @@ class _NotionTableState extends State<NotionTable>
         ],
       ),
     );
+  }
+
+  Future<bool> _confirmArchive(String rowId) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Archive Task'),
+        content: const Text('Are you sure you want to archive this task?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   Future<bool> _confirmDelete(String rowId) async {
@@ -397,6 +512,9 @@ class _NotionTableState extends State<NotionTable>
   Widget _buildHeader(List<NotionColumn> cols) {
     final canReorder = widget.onRowReorder != null && _orderedRows.isNotEmpty;
     final isMobile = MediaQuery.of(context).size.width < 600;
+    final isAllSelected = _orderedRows.isNotEmpty &&
+        widget.selectedRowIds?.length == _orderedRows.length;
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLow,
@@ -410,8 +528,23 @@ class _NotionTableState extends State<NotionTable>
       ),
       child: Row(
         children: [
+          if (widget.isSelectionMode) ...[
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: isAllSelected,
+                activeColor: AppColors.gold,
+                checkColor: Colors.black,
+                onChanged: (v) {
+                  widget.onSelectAll?.call(v ?? false);
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           // Spacer matching drag handle width in reorder mode
-          if (canReorder) SizedBox(width: isMobile ? 18 : 24),
+          if (canReorder && !widget.isSelectionMode) SizedBox(width: isMobile ? 18 : 24),
           ...cols.map(
             (col) => Expanded(
               flex: col.flex,

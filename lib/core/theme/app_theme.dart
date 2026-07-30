@@ -1,5 +1,7 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../l10n/app_strings.dart';
 
 // ── Colors ────────────────────────────────────────────────────────────────────
 // Brand + status colours are compile-time constants (same in light & dark).
@@ -21,10 +23,10 @@ class AppColors {
   static const Color error = Color(0xFFBA1A1A);
   static const Color onError = Color(0xFFFFFFFF);
 
-  static const Color secondary = Color(0xFF755B00);
-  static const Color onSecondary = Color(0xFFFFFFFF);
-  static const Color secondaryContainer = Color(0xFFFED977);
-  static const Color onSecondaryContainer = Color(0xFF785D00);
+  static const Color secondary = Color(0xFFC9A84C);
+  static const Color onSecondary = Color(0xFF000000);
+  static const Color secondaryContainer = Color(0xFF262010);
+  static const Color onSecondaryContainer = Color(0xFFFED977);
 
   // Status colours
   static const Color statusDone = Color(0xFF2E7D32);
@@ -36,50 +38,50 @@ class AppColors {
   static const Color statusHigh = Color(0xFFBA1A1A);
 
   // ── Mutable theme-sensitive colours (swapped by [setDarkMode]) ─────────────
-  static Color primary = const Color(0xFF000000);
-  static Color primaryContainer = const Color(0xFF1C1B1B);
+  static Color primary = const Color(0xFF121212);
+  static Color primaryContainer = const Color(0xFFF6F2E7);
 
-  static Color background = const Color(0xFFFDF8F8);
-  static Color surface = const Color(0xFFF1EDEC);
-  static Color surfaceHigh = const Color(0xFFEBE7E6);
-  static Color surfaceContainerLow = const Color(0xFFF7F3F2);
+  static Color background = const Color(0xFFF8F9FA);
+  static Color surface = const Color(0xFFFFFFFF);
+  static Color surfaceHigh = const Color(0xFFEEEEEE);
+  static Color surfaceContainerLow = const Color(0xFFF3F3F3);
   static Color surfaceContainerLowest = const Color(0xFFFFFFFF);
 
   static Color onSurface = const Color(0xFF1C1B1B);
-  static Color onSurfaceVariant = const Color(0xFF444748);
-  static Color outline = const Color(0xFF747878);
-  static Color outlineVariant = const Color(0xFFC4C7C7);
+  static Color onSurfaceVariant = const Color(0xFF555555);
+  static Color outline = const Color(0xFFCCCCCC);
+  static Color outlineVariant = const Color(0xFFE0E0E0);
 
   static Color errorContainer = const Color(0xFFFFDAD6);
 
-  /// Swap the mutable palette between light and dark.
+  /// Swap the mutable palette between light and dark (Black & Gold theme).
   static void setDarkMode(bool dark) {
     _dark = dark;
     if (dark) {
-      primary = const Color(0xFFC9A84C);
-      primaryContainer = const Color(0xFF1E293B);
-      background = const Color(0xFF0F172A);
-      surface = const Color(0xFF1E293B);
-      surfaceHigh = const Color(0xFF334155);
-      surfaceContainerLow = const Color(0xFF0F172A);
-      surfaceContainerLowest = const Color(0xFF1E293B);
-      onSurface = const Color(0xFFF8FAFC);
-      onSurfaceVariant = const Color(0xFF94A3B8);
-      outline = const Color(0xFF475569);
-      outlineVariant = const Color(0xFF334155);
-      errorContainer = const Color(0xFF7F1D1D);
+      primary = const Color(0xFFD4AF37); // Premium Gold
+      primaryContainer = const Color(0xFF262010);
+      background = const Color(0xFF0C0C0C); // Pitch / Near Black
+      surface = const Color(0xFF161616); // Dark Gray
+      surfaceHigh = const Color(0xFF242424); // Dark Charcoal
+      surfaceContainerLow = const Color(0xFF121212);
+      surfaceContainerLowest = const Color(0xFF1E1E1E); // Input / Card container fill
+      onSurface = const Color(0xFFF5F5F5); // Crisp White
+      onSurfaceVariant = const Color(0xFFA0A0A0); // Light Gray
+      outline = const Color(0xFF3E3E3E);
+      outlineVariant = const Color(0xFF2A2A2A);
+      errorContainer = const Color(0xFF3C1418);
     } else {
-      primary = const Color(0xFF000000);
-      primaryContainer = const Color(0xFF1C1B1B);
-      background = const Color(0xFFFDF8F8);
-      surface = const Color(0xFFF1EDEC);
-      surfaceHigh = const Color(0xFFEBE7E6);
-      surfaceContainerLow = const Color(0xFFF7F3F2);
+      primary = const Color(0xFF121212); // Deep Black
+      primaryContainer = const Color(0xFFF6F2E7);
+      background = const Color(0xFFF8F9FA);
+      surface = const Color(0xFFFFFFFF);
+      surfaceHigh = const Color(0xFFEEEEEE);
+      surfaceContainerLow = const Color(0xFFF3F3F3);
       surfaceContainerLowest = const Color(0xFFFFFFFF);
       onSurface = const Color(0xFF1C1B1B);
-      onSurfaceVariant = const Color(0xFF444748);
-      outline = const Color(0xFF747878);
-      outlineVariant = const Color(0xFFC4C7C7);
+      onSurfaceVariant = const Color(0xFF555555);
+      outline = const Color(0xFFCCCCCC);
+      outlineVariant = const Color(0xFFE0E0E0);
       errorContainer = const Color(0xFFFFDAD6);
     }
   }
@@ -89,7 +91,7 @@ class AppColors {
 class AppTextStyles {
   AppTextStyles._();
 
-  // Getters (not fields) so the baked-in colour follows the active theme mode.
+  // Getters so the baked-in colour follows the active theme mode dynamically.
   static TextStyle get displayLg => GoogleFonts.playfairDisplay(
     fontSize: 42,
     fontWeight: FontWeight.w700,
@@ -188,8 +190,22 @@ class AppTheme {
       useMaterial3: true,
       brightness: dark ? Brightness.dark : Brightness.light,
     );
-    // Nav highlight: primary reads well on white, gold reads well on dark.
     final navSelected = dark ? AppColors.gold : AppColors.primary;
+
+    final textTheme = TextTheme(
+      displayLarge: AppTextStyles.displayLg,
+      displayMedium: AppTextStyles.displayMd,
+      headlineLarge: AppTextStyles.headlineLg,
+      headlineMedium: AppTextStyles.headlineMd,
+      headlineSmall: AppTextStyles.headlineSm,
+      bodyLarge: AppTextStyles.bodyLg,
+      bodyMedium: AppTextStyles.bodyMd,
+      bodySmall: AppTextStyles.bodySm,
+      labelLarge: AppTextStyles.labelMd,
+      labelMedium: AppTextStyles.labelMd,
+      labelSmall: AppTextStyles.labelCaps,
+    );
+
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.background,
       colorScheme: (dark ? const ColorScheme.dark() : const ColorScheme.light())
@@ -198,6 +214,7 @@ class AppTheme {
             primary: AppColors.primary,
             onPrimary: AppColors.onPrimary,
             primaryContainer: AppColors.primaryContainer,
+            onPrimaryContainer: dark ? const Color(0xFFFED977) : AppColors.onSecondaryContainer,
             secondary: AppColors.secondary,
             onSecondary: AppColors.onSecondary,
             secondaryContainer: AppColors.secondaryContainer,
@@ -205,19 +222,28 @@ class AppTheme {
             surface: AppColors.surface,
             onSurface: AppColors.onSurface,
             onSurfaceVariant: AppColors.onSurfaceVariant,
+            surfaceContainerLow: AppColors.surfaceContainerLow,
+            surfaceContainerLowest: AppColors.surfaceContainerLowest,
+            surfaceContainerHigh: AppColors.surfaceHigh,
             outline: AppColors.outline,
             outlineVariant: AppColors.outlineVariant,
             error: AppColors.error,
             onError: AppColors.onError,
             errorContainer: AppColors.errorContainer,
           ),
+      textTheme: textTheme,
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: AppColors.gold,
+        selectionColor: AppColors.gold.withValues(alpha: 0.3),
+        selectionHandleColor: AppColors.gold,
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surfaceContainerLowest,
         elevation: 0,
         scrolledUnderElevation: 1,
         shadowColor: AppColors.outline.withValues(alpha: 0.1),
         iconTheme: IconThemeData(color: AppColors.onSurface),
-        titleTextStyle: AppTextStyles.headlineSm.copyWith(fontSize: 19),
+        titleTextStyle: AppTextStyles.headlineSm.copyWith(fontSize: 19, color: AppColors.onSurface),
         centerTitle: false,
       ),
       cardTheme: CardThemeData(
@@ -229,45 +255,137 @@ class AppTheme {
         ),
         margin: EdgeInsets.zero,
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: AppColors.outlineVariant),
+        ),
+        titleTextStyle: AppTextStyles.headlineSm.copyWith(color: AppColors.onSurface),
+        contentTextStyle: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurface),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        modalBackgroundColor: AppColors.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+      ),
+      drawerTheme: DrawerThemeData(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        elevation: 4,
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: AppColors.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: AppColors.outlineVariant),
+        ),
+        textStyle: AppTextStyles.bodyMd,
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: AppColors.gold,
+        unselectedLabelColor: AppColors.onSurfaceVariant,
+        indicatorColor: AppColors.gold,
+        indicatorSize: TabBarIndicatorSize.tab,
+        labelStyle: AppTextStyles.labelMd.copyWith(fontWeight: FontWeight.w600),
+        unselectedLabelStyle: AppTextStyles.bodySm,
+      ),
+      iconTheme: IconThemeData(
+        color: AppColors.onSurface,
+      ),
+      listTileTheme: ListTileThemeData(
+        tileColor: Colors.transparent,
+        iconColor: AppColors.onSurfaceVariant,
+        textColor: AppColors.onSurface,
+        selectedColor: AppColors.gold,
+        selectedTileColor: AppColors.gold.withValues(alpha: 0.1),
+      ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: dark ? const Color(0xFF000000) : AppColors.onPrimary,
-          textStyle: AppTextStyles.labelMd.copyWith(fontSize: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          foregroundColor: AppColors.onPrimary,
+          textStyle: AppTextStyles.labelMd.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           elevation: 0,
         ),
       ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.onPrimary,
+          textStyle: AppTextStyles.labelMd.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        ),
+      ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          foregroundColor: AppColors.gold,
           side: const BorderSide(color: AppColors.gold),
           textStyle: AppTextStyles.labelMd.copyWith(
             fontSize: 14,
             color: AppColors.gold,
+            fontWeight: FontWeight.w600,
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.gold,
+          textStyle: AppTextStyles.labelMd.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: AppColors.gold,
+        foregroundColor: const Color(0xFF000000),
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceContainerLowest,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(6),
           borderSide: BorderSide(color: AppColors.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(6),
           borderSide: BorderSide(color: AppColors.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(6),
           borderSide: const BorderSide(color: AppColors.gold, width: 1.5),
         ),
-        labelStyle: AppTextStyles.labelCaps,
-        hintStyle: AppTextStyles.bodySm,
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: AppColors.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: AppColors.error, width: 1.5),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: AppColors.outlineVariant.withValues(alpha: 0.4)),
+        ),
+        labelStyle: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+        floatingLabelStyle: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
+        hintStyle: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+        helperStyle: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+        errorStyle: AppTextStyles.bodySm.copyWith(color: AppColors.error),
+        prefixIconColor: AppColors.onSurfaceVariant,
+        suffixIconColor: AppColors.onSurfaceVariant,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
@@ -276,6 +394,7 @@ class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surface,
         labelStyle: AppTextStyles.bodySm,
+        secondaryLabelStyle: AppTextStyles.bodySm.copyWith(color: AppColors.gold),
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       ),
@@ -283,6 +402,37 @@ class AppTheme {
         color: AppColors.outlineVariant,
         thickness: 1,
         space: 0,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: dark ? const Color(0xFF242424) : AppColors.primary,
+        contentTextStyle: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+        actionTextColor: AppColors.gold,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        behavior: SnackBarBehavior.floating,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.gold;
+          return AppColors.onSurfaceVariant;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.primary.withValues(alpha: 0.5);
+          return AppColors.surface;
+        }),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.gold;
+          return Colors.transparent;
+        }),
+        checkColor: WidgetStateProperty.all(const Color(0xFF000000)),
+        side: BorderSide(color: AppColors.outline),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.gold;
+          return AppColors.outline;
+        }),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.surfaceContainerLowest,
@@ -334,7 +484,7 @@ class TStatusChip extends StatelessWidget {
           ),
           SizedBox(width: isMobile ? 3 : 5),
           Text(
-            label,
+            S.t(label),
             style: AppTextStyles.bodySm.copyWith(
               color: c,
               fontWeight: FontWeight.w600,
@@ -355,8 +505,13 @@ class TPriorityBadge extends StatelessWidget {
     switch (priority.toLowerCase()) {
       case 'high':
       case 'critical':
+      case 'urgent':
+      case 'عالية':
+      case 'عاجلة':
+      case 'حرجة':
         return AppColors.statusHigh;
       case 'medium':
+      case 'متوسطة':
         return AppColors.statusMedium;
       default:
         return AppColors.statusLow;
@@ -372,9 +527,14 @@ class TPriorityBadge extends StatelessWidget {
     switch (priority.toLowerCase()) {
       case 'high':
       case 'critical':
+      case 'urgent':
+      case 'عالية':
+      case 'عاجلة':
+      case 'حرجة':
         flagIcon = Icons.flag_rounded;
         break;
       case 'medium':
+      case 'متوسطة':
         flagIcon = Icons.flag_outlined;
         break;
       default:
@@ -398,7 +558,7 @@ class TPriorityBadge extends StatelessWidget {
           Icon(flagIcon, size: isMobile ? 10 : 12, color: c),
           SizedBox(width: isMobile ? 3 : 4),
           Text(
-            priority,
+            S.t(priority),
             style: AppTextStyles.bodySm.copyWith(
               color: c,
               fontWeight: FontWeight.w600,
@@ -430,6 +590,27 @@ class TStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppColors.isDark;
+    // In dark mode, accent card background is AppColors.primary (Gold 0xFFD4AF37).
+    // All text, numbers, and icons inside a Gold container must be crisp Deep Black.
+    final isGoldBackground = accent && isDark;
+
+    final iconColor = accent
+        ? (isGoldBackground ? const Color(0xFF000000) : AppColors.gold)
+        : AppColors.gold;
+
+    final subColor = accent
+        ? (isGoldBackground ? const Color(0x99000000) : Colors.white54)
+        : null;
+
+    final valueColor = accent
+        ? (isGoldBackground ? const Color(0xFF000000) : AppColors.gold)
+        : AppColors.onSurface;
+
+    final titleColor = accent
+        ? (isGoldBackground ? const Color(0xCC000000) : Colors.white60)
+        : AppColors.onSurfaceVariant;
+
     return GestureDetector(
       onTap: onTap,
       child: MouseRegion(
@@ -453,15 +634,16 @@ class TStatCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(icon, size: 16, color: AppColors.gold),
+                  Icon(icon, size: 16, color: iconColor),
                   const Spacer(),
                   if (sub != null)
                     Flexible(
                       child: Text(
-                        sub!,
+                        S.t(sub!),
                         style: AppTextStyles.bodySm.copyWith(
-                          color: accent ? Colors.white54 : null,
+                          color: subColor,
                           fontSize: 11,
+                          fontWeight: isGoldBackground ? FontWeight.w600 : null,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -476,16 +658,18 @@ class TStatCard extends StatelessWidget {
                   value,
                   style: AppTextStyles.dataLg.copyWith(
                     fontSize: 22,
-                    color: accent ? AppColors.gold : AppColors.onSurface,
+                    color: valueColor,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
               const SizedBox(height: 2),
               Text(
-                title,
+                S.t(title),
                 style: AppTextStyles.labelCaps.copyWith(
                   fontSize: 9,
-                  color: accent ? Colors.white60 : AppColors.onSurfaceVariant,
+                  color: titleColor,
+                  fontWeight: isGoldBackground ? FontWeight.w800 : null,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -512,13 +696,13 @@ class TSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(title, style: AppTextStyles.headlineSm),
+        Text(S.t(title), style: AppTextStyles.headlineSm),
         const Spacer(),
         if (action != null)
           TextButton(
             onPressed: onAction,
             child: Text(
-              action!,
+              S.t(action!),
               style: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
             ),
           ),
@@ -568,3 +752,18 @@ class TAvatar extends StatelessWidget {
     );
   }
 }
+
+/// Custom scroll behavior enabling drag-scrolling across all devices (mouse, trackpad, touch, stylus).
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.unknown,
+      };
+}
+

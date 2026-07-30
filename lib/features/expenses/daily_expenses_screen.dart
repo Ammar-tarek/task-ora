@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/providers/team_filter_notifier.dart';
 import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/repositories/expense_repository.dart';
@@ -142,6 +144,7 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     final profile = context.watch<AuthNotifier>().profile;
     final privs = context.watch<TeamPrivilegesNotifier>();
     // "Manager view" = admin, a manager with the privilege, or a granted employee.
@@ -151,7 +154,7 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Daily Expenses'),
+        title: Text(S.t('expenses')),
         actions: [
           if (isManager)
             IconButton(
@@ -189,7 +192,7 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
                             Text(
                               'TOTAL EXPENSES',
                               style: AppTextStyles.labelCaps.copyWith(
-                                color: Colors.white54,
+                                color: AppColors.onPrimary.withValues(alpha: 0.7),
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -203,7 +206,7 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
                             Text(
                               '${_filtered.length} record${_filtered.length == 1 ? '' : 's'}',
                               style: AppTextStyles.bodySm.copyWith(
-                                color: Colors.white54,
+                                color: AppColors.onPrimary.withValues(alpha: 0.7),
                               ),
                             ),
                           ],
@@ -232,7 +235,7 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
                                       selectedColor: AppColors.primary,
                                       labelStyle: AppTextStyles.bodySm.copyWith(
                                         color: _cat == c
-                                            ? Colors.white
+                                            ? AppColors.onPrimary
                                             : AppColors.onSurface,
                                       ),
                                     ),
@@ -852,8 +855,9 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    if (double.tryParse(v) == null)
+                    if (double.tryParse(v) == null) {
                       return 'Enter a valid number';
+                    }
                     return null;
                   },
                 ),

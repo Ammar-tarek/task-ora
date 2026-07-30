@@ -1,5 +1,8 @@
 // lib/features/finance/finance_analytics_screen.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/l10n/app_strings.dart';
+import '../../core/providers/locale_controller.dart';
 import '../../core/repositories/finance_repository.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -60,10 +63,11 @@ class _FinanceAnalyticsScreenState extends State<FinanceAnalyticsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocaleController>();
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Finance Analytics'),
+        title: Text(S.t('financial_analytics')),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
           const SizedBox(width: 8),

@@ -162,11 +162,12 @@ class _TaskTableScreenState extends State<TaskTableScreen>
   // ── Load ─────────────────────────────────────────────────────────────────
 
   Future<void> _load({bool animate = true}) async {
-    if (animate)
+    if (animate) {
       setState(() {
         _loading = true;
         _error = null;
       });
+    }
     try {
       final profile = context.read<AuthNotifier>().profile;
       _perms = profile != null ? TaskPermissions(profile) : null;

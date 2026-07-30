@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "140024409514",
+    "project_id": "taskora-ab918",
+    "storage_bucket": "taskora-ab918.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:140024409514:android:fcf60a381852c8929c4fd3",
+        "android_client_info": {
+          "package_name": "com.example.task_ora"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZCsd-frVD0GTSHYpMLR3cnhTM7M-t1Ic"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
