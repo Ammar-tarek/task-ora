@@ -123,6 +123,7 @@ class _NotionTableState extends State<NotionTable>
   void _showColumnOptions(NotionColumn col) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -665,46 +666,50 @@ class _ColumnOptionsSheet extends StatefulWidget {
 class _ColumnOptionsSheetState extends State<_ColumnOptionsSheet> {
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text('Manage Columns', style: AppTextStyles.headlineSm),
-          const SizedBox(height: 4),
-          Text('Toggle which columns are visible', style: AppTextStyles.bodySm),
-          const SizedBox(height: 12),
-          const Divider(),
-          ...widget.columns.map(
-            (col) => SwitchListTile(
-              value: col.visible,
-              onChanged: (v) {
-                setState(() => col.visible = v);
-                widget.onChanged();
-              },
-              title: Row(
-                children: [
-                  Icon(col.icon, size: 16, color: AppColors.gold),
-                  const SizedBox(width: 8),
-                  Text(col.label, style: AppTextStyles.bodyMd),
-                ],
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-              activeThumbColor: AppColors.gold,
-              activeTrackColor: AppColors.primary,
-              contentPadding: EdgeInsets.zero,
-            ),
+              const SizedBox(height: 16),
+              Text('Manage Columns', style: AppTextStyles.headlineSm),
+              const SizedBox(height: 4),
+              Text('Toggle which columns are visible', style: AppTextStyles.bodySm),
+              const SizedBox(height: 12),
+              const Divider(),
+              ...widget.columns.map(
+                (col) => SwitchListTile(
+                  value: col.visible,
+                  onChanged: (v) {
+                    setState(() => col.visible = v);
+                    widget.onChanged();
+                  },
+                  title: Row(
+                    children: [
+                      Icon(col.icon, size: 16, color: AppColors.gold),
+                      const SizedBox(width: 8),
+                      Text(col.label, style: AppTextStyles.bodyMd),
+                    ],
+                  ),
+                  activeThumbColor: AppColors.gold,
+                  activeTrackColor: AppColors.primary,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
           ),
-          const SizedBox(height: 8),
-        ],
+        ),
       ),
     );
   }

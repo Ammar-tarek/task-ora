@@ -2,7 +2,9 @@
 // Fetches all data needed for the admin dashboard in one shot.
 
 import '../models/profile_model.dart';
+import '../models/task_model.dart';
 import '../services/supabase_service.dart';
+import 'task_repository.dart';
 
 class DashboardStats {
   final int totalTasks;
@@ -36,7 +38,6 @@ class DashboardRepository {
 
   /// Fetch dashboard stats, tailored for Admin or Manager profiles.
   static Future<DashboardStats> fetchStats(ProfileModel profile) async {
-    final client = SupabaseService.client;
     final admin = SupabaseService.adminClient;
     final today = DateTime.now().toIso8601String().substring(0, 10);
 
@@ -62,24 +63,6 @@ class DashboardRepository {
 
       final memberIds = teamMembers.map((m) => m['id'] as String).toList();
 
-      Future<List<dynamic>> tasksQuery;
-      if (teamId != null) {
-        tasksQuery = _safeQuery(
-          client
-              .from('tasks')
-              .select('id, status, is_archived')
-              .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId')
-              .or('is_archived.is.null,is_archived.eq.false'),
-        );
-      } else {
-        tasksQuery = _safeQuery(
-          client
-              .from('tasks')
-              .select('id, status, is_archived')
-              .or('is_archived.is.null,is_archived.eq.false'),
-        );
-      }
-
       Future<List<dynamic>> attendanceQuery;
       if (memberIds.isNotEmpty) {
         attendanceQuery = _safeQuery(
@@ -95,7 +78,7 @@ class DashboardRepository {
       }
 
       final results = await Future.wait([
-        tasksQuery,
+        TaskRepository.fetchTasksForProfile(profile),
         attendanceQuery,
         _safeQuery(
           admin
@@ -106,17 +89,17 @@ class DashboardRepository {
         ),
       ]);
 
-      final tasks = results[0];
+      final managerTasks = results[0] as List<TaskModel>;
       final present = results[1];
       final notifs = results[2];
 
-      final done = tasks.where((t) => t['status'] == 'completed').length;
-      final inProgress = tasks
-          .where((t) => t['status'] == 'in_progress')
+      final done = managerTasks.where((t) => t.status == 'completed').length;
+      final inProgress = managerTasks
+          .where((t) => t.status == 'in_progress')
           .length;
 
       return DashboardStats(
-        totalTasks: tasks.length,
+        totalTasks: managerTasks.length,
         doneTasks: done,
         inProgressTasks: inProgress,
         totalEmployees: teamMembers.length,

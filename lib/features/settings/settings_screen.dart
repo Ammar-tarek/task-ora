@@ -821,32 +821,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               onTap: () => showModalBottomSheet(
                 context: context,
-                builder: (_) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 16),
-                    Text(S.t('select_language'), style: AppTextStyles.headlineSm),
-                    const Divider(),
-                    ...[('en', S.t('english')), ('ar', S.t('arabic'))].map(
-                      (l) => ListTile(
-                        title: Text(l.$2, style: AppTextStyles.bodyMd),
-                        trailing:
-                            context
-                                    .read<LocaleController>()
-                                    .locale
-                                    .languageCode ==
-                                l.$1
-                            ? const Icon(Icons.check, color: AppColors.gold)
-                            : null,
-                        onTap: () {
-                          final userId = context.read<AuthNotifier>().profile?.id;
-                          context.read<LocaleController>().setLanguage(l.$1, userId: userId);
-                          Navigator.pop(context);
-                        },
-                      ),
+                isScrollControlled: true,
+                backgroundColor: AppColors.surfaceContainerLowest,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (_) => SafeArea(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 12),
+                        Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.outlineVariant,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(S.t('select_language'), style: AppTextStyles.headlineSm),
+                        const Divider(),
+                        ...[('en', S.t('english')), ('ar', S.t('arabic'))].map(
+                          (l) => ListTile(
+                            title: Text(l.$2, style: AppTextStyles.bodyMd),
+                            trailing:
+                                context
+                                        .read<LocaleController>()
+                                        .locale
+                                        .languageCode ==
+                                    l.$1
+                                ? const Icon(Icons.check, color: AppColors.gold)
+                                : null,
+                            onTap: () {
+                              final userId = context.read<AuthNotifier>().profile?.id;
+                              context.read<LocaleController>().setLanguage(l.$1, userId: userId);
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                  ],
+                  ),
                 ),
               ),
             ),

@@ -25,6 +25,10 @@ class SupabaseService {
     _url,
     _serviceRoleKey,
     authOptions: const AuthClientOptions(autoRefreshToken: false),
+    headers: {
+      'apikey': _serviceRoleKey,
+      'Authorization': 'Bearer $_serviceRoleKey',
+    },
   );
 
   static GoTrueClient get auth => client.auth;

@@ -104,7 +104,6 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   void didUpdateWidget(TaskBoardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.initialFilter != null &&
-        widget.initialFilter != oldWidget.initialFilter &&
         _statusFilters.contains(widget.initialFilter)) {
       setState(() {
         _filter = widget.initialFilter!;
@@ -478,60 +477,62 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('Sort tasks', style: AppTextStyles.headlineSm),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Sort tasks', style: AppTextStyles.headlineSm),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            ..._Sort.values.map((s) {
-              final labels = {
-                _Sort.newest: 'Newest first',
-                _Sort.oldest: 'Oldest first',
-                _Sort.dueDate: 'Due date (soonest)',
-                _Sort.priorityHigh: 'Priority (high → low)',
-                _Sort.clientAZ: 'Client (A – Z)',
-                _Sort.titleAZ: 'Title (A – Z)',
-                _Sort.moved: 'Moved tasks',
-              };
-              final icons = {
-                _Sort.newest: Icons.arrow_downward,
-                _Sort.oldest: Icons.arrow_upward,
-                _Sort.dueDate: Icons.calendar_today_outlined,
-                _Sort.priorityHigh: Icons.flag_outlined,
-                _Sort.clientAZ: Icons.business_outlined,
-                _Sort.titleAZ: Icons.sort_by_alpha,
-                _Sort.moved: Icons.swap_horiz,
-              };
-              return ListTile(
-                leading: Icon(icons[s], size: 20, color: AppColors.gold),
-                title: Text(labels[s]!, style: AppTextStyles.bodyMd),
-                trailing: _sort == s
-                    ? const Icon(Icons.check, color: AppColors.gold, size: 18)
-                    : null,
-                onTap: () {
-                  setState(() => _sort = s);
-                  Navigator.pop(context);
-                },
-              );
-            }),
-            const SizedBox(height: 8),
-          ],
+              const SizedBox(height: 8),
+              ..._Sort.values.map((s) {
+                final labels = {
+                  _Sort.newest: 'Newest first',
+                  _Sort.oldest: 'Oldest first',
+                  _Sort.dueDate: 'Due date (soonest)',
+                  _Sort.priorityHigh: 'Priority (high → low)',
+                  _Sort.clientAZ: 'Client (A – Z)',
+                  _Sort.titleAZ: 'Title (A – Z)',
+                  _Sort.moved: 'Moved tasks',
+                };
+                final icons = {
+                  _Sort.newest: Icons.arrow_downward,
+                  _Sort.oldest: Icons.arrow_upward,
+                  _Sort.dueDate: Icons.calendar_today_outlined,
+                  _Sort.priorityHigh: Icons.flag_outlined,
+                  _Sort.clientAZ: Icons.business_outlined,
+                  _Sort.titleAZ: Icons.sort_by_alpha,
+                  _Sort.moved: Icons.swap_horiz,
+                };
+                return ListTile(
+                  leading: Icon(icons[s], size: 20, color: AppColors.gold),
+                  title: Text(labels[s]!, style: AppTextStyles.bodyMd),
+                  trailing: _sort == s
+                      ? const Icon(Icons.check, color: AppColors.gold, size: 18)
+                      : null,
+                  onTap: () {
+                    setState(() => _sort = s);
+                    Navigator.pop(context);
+                  },
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -541,83 +542,86 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     final opts = _clientOptions;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Filter by client',
-                  style: AppTextStyles.headlineSm,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(
-                Icons.people_outline,
-                size: 20,
-                color: AppColors.gold,
-              ),
-              title: Text('All clients', style: AppTextStyles.bodyMd),
-              trailing: _clientId == null
-                  ? const Icon(Icons.check, color: AppColors.gold, size: 18)
-                  : null,
-              onTap: () {
-                setState(() => _clientId = null);
-                Navigator.pop(context);
-              },
-            ),
-            if (opts.isEmpty)
+              const SizedBox(height: 16),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 8,
-                ),
-                child: Text(
-                  'No client-linked tasks loaded.',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.onSurfaceVariant,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Filter by client',
+                    style: AppTextStyles.headlineSm,
                   ),
-                ),
-              )
-            else
-              ...opts.entries.map(
-                (e) => ListTile(
-                  leading: Icon(
-                    Icons.business_outlined,
-                    size: 20,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                  title: Text(e.value, style: AppTextStyles.bodyMd),
-                  trailing: _clientId == e.key
-                      ? const Icon(Icons.check, color: AppColors.gold, size: 18)
-                      : null,
-                  onTap: () {
-                    setState(() => _clientId = e.key);
-                    Navigator.pop(context);
-                  },
                 ),
               ),
-            const SizedBox(height: 8),
-          ],
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(
+                  Icons.people_outline,
+                  size: 20,
+                  color: AppColors.gold,
+                ),
+                title: Text('All clients', style: AppTextStyles.bodyMd),
+                trailing: _clientId == null
+                    ? const Icon(Icons.check, color: AppColors.gold, size: 18)
+                    : null,
+                onTap: () {
+                  setState(() => _clientId = null);
+                  Navigator.pop(context);
+                },
+              ),
+              if (opts.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    'No client-linked tasks loaded.',
+                    style: AppTextStyles.bodySm.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else
+                ...opts.entries.map(
+                  (e) => ListTile(
+                    leading: Icon(
+                      Icons.business_outlined,
+                      size: 20,
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                    title: Text(e.value, style: AppTextStyles.bodyMd),
+                    trailing: _clientId == e.key
+                        ? const Icon(Icons.check, color: AppColors.gold, size: 18)
+                        : null,
+                    onTap: () {
+                      setState(() => _clientId = e.key);
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -627,79 +631,82 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     final opts = _assigneeOptions;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Filter by assignee',
-                  style: AppTextStyles.headlineSm,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(
-                Icons.group_outlined,
-                size: 20,
-                color: AppColors.gold,
-              ),
-              title: Text('All assignees', style: AppTextStyles.bodyMd),
-              trailing: _assigneeId == null
-                  ? const Icon(Icons.check, color: AppColors.gold, size: 18)
-                  : null,
-              onTap: () {
-                setState(() => _assigneeId = null);
-                Navigator.pop(context);
-              },
-            ),
-            if (opts.isEmpty)
+              const SizedBox(height: 16),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 8,
-                ),
-                child: Text(
-                  'No assigned tasks loaded.',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.onSurfaceVariant,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Filter by assignee',
+                    style: AppTextStyles.headlineSm,
                   ),
                 ),
-              )
-            else
-              ...opts.entries.map(
-                (e) => ListTile(
-                  leading: TAvatar(name: e.value, size: 24),
-                  title: Text(e.value, style: AppTextStyles.bodyMd),
-                  trailing: _assigneeId == e.key
-                      ? const Icon(Icons.check, color: AppColors.gold, size: 18)
-                      : null,
-                  onTap: () {
-                    setState(() => _assigneeId = e.key);
-                    Navigator.pop(context);
-                  },
-                ),
               ),
-            const SizedBox(height: 8),
-          ],
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(
+                  Icons.group_outlined,
+                  size: 20,
+                  color: AppColors.gold,
+                ),
+                title: Text('All assignees', style: AppTextStyles.bodyMd),
+                trailing: _assigneeId == null
+                    ? const Icon(Icons.check, color: AppColors.gold, size: 18)
+                    : null,
+                onTap: () {
+                  setState(() => _assigneeId = null);
+                  Navigator.pop(context);
+                },
+              ),
+              if (opts.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    'No assigned tasks loaded.',
+                    style: AppTextStyles.bodySm.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else
+                ...opts.entries.map(
+                  (e) => ListTile(
+                    leading: TAvatar(name: e.value, size: 24),
+                    title: Text(e.value, style: AppTextStyles.bodyMd),
+                    trailing: _assigneeId == e.key
+                        ? const Icon(Icons.check, color: AppColors.gold, size: 18)
+                        : null,
+                    onTap: () {
+                      setState(() => _assigneeId = e.key);
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -785,6 +792,241 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     }
   }
 
+  Future<void> _changeSelectedTasksStatus() async {
+    final profile = _profile;
+    if (profile == null || _selectedTaskIds.isEmpty) return;
+
+    final count = _selectedTaskIds.length;
+
+    final chosenStatusKey = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'Change status for $count task(s)',
+                  style: AppTextStyles.headlineSm,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.circle_outlined, color: Colors.blue),
+                title: const Text('To Do'),
+                onTap: () => Navigator.pop(context, 'not_started'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.loop, color: AppColors.gold),
+                title: const Text('In Progress'),
+                onTap: () => Navigator.pop(context, 'in_progress'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.assignment_turned_in, color: Colors.orange),
+                title: const Text('Employee Done'),
+                onTap: () => Navigator.pop(context, 'employee_done'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.verified, color: Colors.teal),
+                title: const Text('Client Approved'),
+                onTap: () => Navigator.pop(context, 'client_approved'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.cancel_outlined, color: Colors.red),
+                title: const Text('Client Rejected'),
+                onTap: () => Navigator.pop(context, 'client_rejected'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.check_circle_outline, color: AppColors.statusDone),
+                title: const Text('Completed'),
+                onTap: () => Navigator.pop(context, 'completed'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.pause_circle_outline, color: Colors.purple),
+                title: const Text('On Hold'),
+                onTap: () => Navigator.pop(context, 'on_hold'),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (chosenStatusKey == null) return;
+
+    final idsToUpdate = _selectedTaskIds.toList();
+    final errorMsg = await TaskRepository.updateMultipleTasksStatus(
+      idsToUpdate,
+      chosenStatusKey,
+      profileId: profile.id,
+    );
+
+    if (errorMsg == null) {
+      setState(() {
+        _selectedTaskIds.clear();
+        _isSelectionMode = false;
+      });
+      await _load(animate: false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$count task(s) status updated!'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update status: $errorMsg'),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        _load();
+      }
+    }
+  }
+
+  Future<void> _moveSelectedTasksToDepartment() async {
+    final profile = _profile;
+    if (profile == null || _selectedTaskIds.isEmpty) return;
+
+    final selectedTasks = _tasks
+        .where((t) => _selectedTaskIds.contains(t.id))
+        .toList();
+    if (selectedTasks.isEmpty) return;
+
+    final count = selectedTasks.length;
+
+    // Fetch all active departments/teams across the organization
+    List<TeamModel> allTeams = [];
+    try {
+      allTeams = await TeamRepository.fetchAllAdmin(activeOnly: true);
+    } catch (_) {}
+    if (allTeams.isEmpty) {
+      allTeams = _teams;
+    }
+    if (!mounted) return;
+    final targets = allTeams.toList();
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No other department to hand off to.')),
+      );
+      return;
+    }
+
+    final picked = await showModalBottomSheet<TeamModel>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'Move $count task(s) to department',
+                  style: AppTextStyles.headlineSm,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...targets.map(
+                (t) => ListTile(
+                  leading: const Icon(
+                    Icons.apartment_outlined,
+                    color: AppColors.gold,
+                  ),
+                  title: Text(
+                    t.department ?? t.name,
+                    style: AppTextStyles.labelMd,
+                  ),
+                  subtitle: Text('Team: ${t.name}', style: AppTextStyles.bodySm),
+                  onTap: () => Navigator.pop(context, t),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (picked == null) return;
+
+    final errorMsg = await TaskRepository.handoffMultipleTasks(
+      selectedTasks,
+      toTeamId: picked.id,
+      byProfileId: profile.id,
+      defaultFromTeamId: profile.teamId,
+    );
+
+    if (errorMsg == null) {
+      setState(() {
+        _selectedTaskIds.clear();
+        _isSelectionMode = false;
+      });
+      await _load(animate: false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '$count task(s) sent to ${picked.department ?? picked.name} — waiting for their manager.',
+            ),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to move selected tasks: $errorMsg'),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        _load();
+      }
+    }
+  }
+
   void _clearFilters() {
     setState(() {
       _filter = 'All';
@@ -828,7 +1070,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         ),
       ),
       actions: [
-        if (_profile?.isAdmin == true || _profile?.isSuperAdmin == true)
+        if (_profile?.isAdmin == true ||
+            _profile?.isSuperAdmin == true ||
+            _profile?.isManager == true)
           IconButton(
             icon: Icon(
               _isSelectionMode
@@ -949,6 +1193,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   Widget _buildSelectionBanner() {
     final count = _selectedTaskIds.length;
+    final isAdmin = _profile?.isAdmin == true || _profile?.isSuperAdmin == true;
+
     return Container(
       width: double.infinity,
       color: AppColors.gold.withValues(alpha: 0.15),
@@ -956,54 +1202,108 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       child: Row(
         children: [
           const Icon(Icons.check_box_outlined, color: AppColors.gold, size: 20),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Text(
             '$count selected',
-            style: AppTextStyles.labelMd.copyWith(color: AppColors.gold, fontWeight: FontWeight.bold),
-          ),
-          const Spacer(),
-          TextButton.icon(
-            onPressed: () {
-              setState(() {
-                if (_selectedTaskIds.length == _filtered.length) {
-                  _selectedTaskIds.clear();
-                } else {
-                  _selectedTaskIds = _filtered.map((t) => t.id).toSet();
-                }
-              });
-            },
-            icon: Icon(
-              _selectedTaskIds.length == _filtered.length
-                  ? Icons.deselect
-                  : Icons.select_all,
-              size: 16,
+            style: AppTextStyles.labelMd.copyWith(
               color: AppColors.gold,
-            ),
-            label: Text(
-              _selectedTaskIds.length == _filtered.length ? 'Deselect All' : 'Select All',
-              style: const TextStyle(color: AppColors.gold),
+              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: count > 0 ? _archiveSelectedTasks : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.gold,
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        if (_selectedTaskIds.length == _filtered.length) {
+                          _selectedTaskIds.clear();
+                        } else {
+                          _selectedTaskIds =
+                              _filtered.map((t) => t.id).toSet();
+                        }
+                      });
+                    },
+                    icon: Icon(
+                      _selectedTaskIds.length == _filtered.length
+                          ? Icons.deselect
+                          : Icons.select_all,
+                      size: 16,
+                      color: AppColors.gold,
+                    ),
+                    label: Text(
+                      _selectedTaskIds.length == _filtered.length
+                          ? 'Deselect All'
+                          : 'Select All',
+                      style: const TextStyle(color: AppColors.gold),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: count > 0 ? _changeSelectedTasksStatus : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                    ),
+                    icon: const Icon(Icons.tune, size: 18),
+                    label: Text('Change Status ($count)'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed:
+                        count > 0 ? _moveSelectedTasksToDepartment : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.gold,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                    ),
+                    icon: const Icon(Icons.apartment_outlined, size: 18),
+                    label: Text('Move Dept ($count)'),
+                  ),
+                  if (isAdmin) ...[
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: count > 0 ? _archiveSelectedTasks : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey.shade800,
+                        foregroundColor: AppColors.gold,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      icon: const Icon(Icons.archive_outlined, size: 18),
+                      label: Text('Archive ($count)'),
+                    ),
+                  ],
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: Icon(
+                      Icons.close,
+                      size: 20,
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _isSelectionMode = false;
+                        _selectedTaskIds.clear();
+                      });
+                    },
+                  ),
+                ],
+              ),
             ),
-            icon: const Icon(Icons.archive_outlined, size: 18),
-            label: Text('Archive ($count)'),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: Icon(Icons.close, size: 20, color: AppColors.onSurfaceVariant),
-            onPressed: () {
-              setState(() {
-                _isSelectionMode = false;
-                _selectedTaskIds.clear();
-              });
-            },
           ),
         ],
       ),
@@ -1049,19 +1349,15 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   Future<void> _moveToDepartment(TaskModel task) async {
     final sourceTeam = task.teamId ?? _profile?.teamId;
-    String? myDept;
-    for (final t in _teams) {
-      if (t.id == sourceTeam) {
-        myDept = t.department;
-        break;
-      }
+    List<TeamModel> allTeams = [];
+    try {
+      allTeams = await TeamRepository.fetchAllAdmin(activeOnly: true);
+    } catch (_) {}
+    if (allTeams.isEmpty) {
+      allTeams = _teams;
     }
-    final targets = _teams
-        .where(
-          (t) =>
-              t.id != sourceTeam && (myDept == null || t.department != myDept),
-        )
-        .toList();
+    if (!mounted) return;
+    final targets = allTeams.where((t) => t.id != sourceTeam).toList();
     if (targets.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No other department to hand off to.')),
@@ -1070,30 +1366,52 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     }
     final picked = await showModalBottomSheet<TeamModel>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Text('Move to department', style: AppTextStyles.headlineSm),
-            const SizedBox(height: 8),
-            ...targets.map(
-              (t) => ListTile(
-                leading: const Icon(
-                  Icons.apartment_outlined,
-                  color: AppColors.gold,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                title: Text(
-                  t.department ?? t.name,
-                  style: AppTextStyles.labelMd,
-                ),
-                subtitle: Text('Team: ${t.name}', style: AppTextStyles.bodySm),
-                onTap: () => Navigator.pop(context, t),
               ),
-            ),
-            const SizedBox(height: 12),
-          ],
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'Move to department',
+                  style: AppTextStyles.headlineSm,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...targets.map(
+                (t) => ListTile(
+                  leading: const Icon(
+                    Icons.apartment_outlined,
+                    color: AppColors.gold,
+                  ),
+                  title: Text(
+                    t.department ?? t.name,
+                    style: AppTextStyles.labelMd,
+                  ),
+                  subtitle: Text('Team: ${t.name}', style: AppTextStyles.bodySm),
+                  onTap: () => Navigator.pop(context, t),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
     );
@@ -1196,7 +1514,10 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             onRowDelete: _perms?.canDeleteTask == true
                 ? (id) => _deleteTaskRow(id)
                 : null,
-            onRowArchive: (_perms?.canEditFull == true || _profile?.isSuperAdmin == true)
+            onRowArchive: (_perms?.canEditFull == true ||
+                    _profile?.isSuperAdmin == true ||
+                    _profile?.isAdmin == true ||
+                    _profile?.isManager == true)
                 ? (id) => _archiveTaskRow(id)
                 : null,
             isSelectionMode: _isSelectionMode,
@@ -1357,7 +1678,10 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                     onTaskDelete: _perms?.canDeleteTask == true
                         ? (id) => _deleteTaskRow(id)
                         : null,
-                    onTaskArchive: (_perms?.canEditFull == true || _profile?.isSuperAdmin == true)
+                    onTaskArchive: (_perms?.canEditFull == true ||
+                            _profile?.isSuperAdmin == true ||
+                            _profile?.isAdmin == true ||
+                            _profile?.isManager == true)
                         ? (id) => _archiveTaskRow(id)
                         : null,
                   ),
@@ -1433,10 +1757,10 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     final task = matches.isEmpty ? null : matches.first;
     final canMove =
         task != null &&
-        task.teamId != null &&
         task.handoffToTeamId == null &&
         (_profile?.isAdmin == true ||
-            (_profile?.isManager == true && task.teamId == _profile?.teamId));
+            _profile?.isSuperAdmin == true ||
+            _profile?.isManager == true);
 
     showModalBottomSheet(
       context: context,

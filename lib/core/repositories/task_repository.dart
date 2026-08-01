@@ -2,6 +2,7 @@
 // All Supabase queries related to tasks, boards, columns, assignees,
 // comments, and edit history.
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/task_model.dart';
 import '../models/profile_model.dart';
@@ -172,6 +173,73 @@ class TaskRepository {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Batch mark multiple tasks as completed (status = 'completed', completion_percentage = 100).
+  /// Returns `null` on success, or an error message string on failure.
+  static Future<String?> completeMultipleTasks(
+    List<String> taskIds, {
+    required String profileId,
+  }) async {
+    if (taskIds.isEmpty) return null;
+    final now = DateTime.now().toIso8601String();
+    try {
+      for (var i = 0; i < taskIds.length; i += 500) {
+        final chunk = taskIds.sublist(
+          i,
+          (i + 500 > taskIds.length) ? taskIds.length : i + 500,
+        );
+        await _adminClient
+            .from('tasks')
+            .update({
+              'status': 'completed',
+              'completion_percentage': 100,
+              'updated_at': now,
+            })
+            .inFilter('id', chunk);
+      }
+      return null;
+    } catch (e, stack) {
+      debugPrint('Error completing multiple tasks: $e\n$stack');
+      return e.toString();
+    }
+  }
+
+  /// Batch update status and completion percentage for multiple tasks.
+  /// Returns `null` on success, or an error message string on failure.
+  static Future<String?> updateMultipleTasksStatus(
+    List<String> taskIds,
+    String newStatus, {
+    required String profileId,
+  }) async {
+    if (taskIds.isEmpty) return null;
+    final now = DateTime.now().toIso8601String();
+    final updatePayload = <String, dynamic>{
+      'status': newStatus,
+      'updated_at': now,
+    };
+    if (newStatus == 'completed') {
+      updatePayload['completion_percentage'] = 100;
+    } else if (newStatus == 'not_started') {
+      updatePayload['completion_percentage'] = 0;
+    }
+
+    try {
+      for (var i = 0; i < taskIds.length; i += 500) {
+        final chunk = taskIds.sublist(
+          i,
+          (i + 500 > taskIds.length) ? taskIds.length : i + 500,
+        );
+        await _adminClient
+            .from('tasks')
+            .update(updatePayload)
+            .inFilter('id', chunk);
+      }
+      return null;
+    } catch (e, stack) {
+      debugPrint('Error updating multiple tasks status: $e\n$stack');
+      return e.toString();
     }
   }
 
@@ -424,6 +492,100 @@ class TaskRepository {
         );
       }
     } catch (_) {}
+  }
+
+  /// Batch handoff multiple tasks to another department.
+  /// Returns `null` on success, or an error message string on failure.
+  static Future<String?> handoffMultipleTasks(
+    List<TaskModel> tasks, {
+    required String toTeamId,
+    required String byProfileId,
+    String? defaultFromTeamId,
+    String? note,
+  }) async {
+    if (tasks.isEmpty) return null;
+    try {
+      final now = DateTime.now().toIso8601String();
+      final taskIds = tasks.map((t) => t.id).toList();
+
+      for (final task in tasks) {
+        final sourceTeam = task.teamId ?? defaultFromTeamId;
+        final updatePayload = <String, dynamic>{
+          'team_id': null,
+          'handoff_to_team_id': toTeamId,
+          'handoff_by': byProfileId,
+          'handoff_note': note,
+          'updated_at': now,
+        };
+        if (sourceTeam != null && sourceTeam.isNotEmpty) {
+          updatePayload['handoff_from_team_id'] = sourceTeam;
+        }
+
+        await _adminClient
+            .from('tasks')
+            .update(updatePayload)
+            .eq('id', task.id);
+      }
+
+      // Remove old assignees for all moved tasks
+      for (var i = 0; i < taskIds.length; i += 500) {
+        final chunk = taskIds.sublist(
+          i,
+          (i + 500 > taskIds.length) ? taskIds.length : i + 500,
+        );
+        await _adminClient
+            .from('task_assignees')
+            .delete()
+            .inFilter('task_id', chunk);
+      }
+
+      // Send notifications (best effort)
+      try {
+        final toTeam = await TeamRepository.fetchById(toTeamId);
+        final recipients = <String>{};
+
+        if (toTeam?.teamLeadId != null) {
+          recipients.add(toTeam!.teamLeadId!);
+        }
+
+        final targetManagers = await _adminClient
+            .from('profiles')
+            .select('id')
+            .eq('team_id', toTeamId)
+            .eq('role', 'manager');
+        for (final row in (targetManagers as List)) {
+          recipients.add(row['id'] as String);
+        }
+
+        final adminRows = await _adminClient
+            .from('profiles')
+            .select('id')
+            .eq('role', 'admin');
+        for (final row in (adminRows as List)) {
+          recipients.add(row['id'] as String);
+        }
+
+        final count = tasks.length;
+        for (final recipientId in recipients) {
+          await NotificationRepository.createNotification(
+            recipientId: recipientId,
+            type: 'task_handoff',
+            title: 'Department Task Switch',
+            body:
+                '$count task(s) have been moved to ${toTeam?.name ?? "another department"}.',
+            referenceType: 'task',
+            referenceId: taskIds.first,
+          );
+        }
+      } catch (err) {
+        debugPrint('Notification error in handoffMultipleTasks: $err');
+      }
+
+      return null;
+    } catch (e, stack) {
+      debugPrint('Error moving multiple tasks to department: $e\n$stack');
+      return e.toString();
+    }
   }
 
   /// Target manager accepts a handoff into their department. The task becomes a

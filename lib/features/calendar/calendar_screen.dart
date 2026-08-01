@@ -345,6 +345,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final profile = context.read<AuthNotifier>().profile;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -1389,111 +1390,113 @@ class _EventDetailSheet extends StatelessWidget {
         profile != null &&
         (profile!.isAdmin || profile!.isManager || profile!.isClient);
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Container(
-                  width: 14,
-                  height: 14,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: event.color,
-                    shape: BoxShape.circle,
+                    color: AppColors.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(event.title, style: AppTextStyles.headlineSm),
-                ),
-                if (event.assigneeInitials != null)
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: 14,
+                    height: 14,
                     decoration: BoxDecoration(
-                      color: event.color.withValues(alpha: 0.15),
+                      color: event.color,
                       shape: BoxShape.circle,
                     ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      event.assigneeInitials!,
-                      style: AppTextStyles.labelMd.copyWith(color: event.color),
-                    ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _DetailRow(icon: Icons.access_time_outlined, text: _timeLabel()),
-            if (event.roomName != null)
-              _DetailRow(
-                icon: Icons.meeting_room_outlined,
-                text: 'Room: ${event.roomName}',
-              ),
-            if (event.clientName != null)
-              _DetailRow(
-                icon: Icons.business_outlined,
-                text: event.clientName!,
-              ),
-            if (event.cost != null && event.cost! > 0)
-              _DetailRow(
-                icon: Icons.attach_money_outlined,
-                text: 'Cost: \$${event.cost!.toStringAsFixed(2)}',
-              ),
-            if (event.attendeeNames.isNotEmpty)
-              _DetailRow(
-                icon: Icons.group_outlined,
-                text: event.attendeeNames.join(', '),
-              ),
-            if (event.assigneeInitials != null && event.attendeeNames.isEmpty)
-              _DetailRow(
-                icon: Icons.person_outline,
-                text: 'Assigned to ${event.assigneeInitials}',
-              ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                if (canEdit) ...[
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        onEdit?.call();
-                      },
-                      icon: const Icon(Icons.edit_outlined, size: 16),
-                      label: const Text('Edit'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.onSurface,
+                    child: Text(event.title, style: AppTextStyles.headlineSm),
+                  ),
+                  if (event.assigneeInitials != null)
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: event.color.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        event.assigneeInitials!,
+                        style: AppTextStyles.labelMd.copyWith(color: event.color),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _DetailRow(icon: Icons.access_time_outlined, text: _timeLabel()),
+              if (event.roomName != null)
+                _DetailRow(
+                  icon: Icons.meeting_room_outlined,
+                  text: 'Room: ${event.roomName}',
+                ),
+              if (event.clientName != null)
+                _DetailRow(
+                  icon: Icons.business_outlined,
+                  text: event.clientName!,
+                ),
+              if (event.cost != null && event.cost! > 0)
+                _DetailRow(
+                  icon: Icons.attach_money_outlined,
+                  text: 'Cost: \$${event.cost!.toStringAsFixed(2)}',
+                ),
+              if (event.attendeeNames.isNotEmpty)
+                _DetailRow(
+                  icon: Icons.group_outlined,
+                  text: event.attendeeNames.join(', '),
+                ),
+              if (event.assigneeInitials != null && event.attendeeNames.isEmpty)
+                _DetailRow(
+                  icon: Icons.person_outline,
+                  text: 'Assigned to ${event.assigneeInitials}',
+                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (canEdit) ...[
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          onEdit?.call();
+                        },
+                        icon: const Icon(Icons.edit_outlined, size: 16),
+                        label: const Text('Edit'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.onSurface,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close, size: 16),
+                      label: const Text('Close'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
                 ],
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, size: 16),
-                    label: const Text('Close'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
