@@ -367,22 +367,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   context.go('/tasks?filter=In Progress'),
                             ),
                             TStatCard(
-                              title: 'team_size',
-                              value: '${_stats?.totalEmployees ?? 0}',
-                              icon: Icons.people_outline,
-                              sub: S.isArabic
-                                  ? '${_stats?.presentToday ?? 0} حاضر'
-                                  : '${_stats?.presentToday ?? 0} present',
+                              title: (isAdmin || profile?.isManager == true) ? 'team_size' : 'my_attendance',
+                              value: (isAdmin || profile?.isManager == true)
+                                  ? '${_stats?.totalEmployees ?? 0}'
+                                  : ((_stats?.presentToday ?? 0) > 0 ? (S.isArabic ? 'حاضر' : 'Present') : (S.isArabic ? 'لم يسجل' : 'Not Checked In')),
+                              icon: (isAdmin || profile?.isManager == true) ? Icons.people_outline : Icons.how_to_reg_outlined,
+                              sub: (isAdmin || profile?.isManager == true)
+                                  ? (S.isArabic
+                                      ? '${_stats?.presentToday ?? 0} حاضر'
+                                      : '${_stats?.presentToday ?? 0} present')
+                                  : (S.isArabic ? 'حالة اليوم' : 'Today Status'),
                               onTap: () {
                                 if (isAdmin) {
                                   context.push('/users');
-                                } else if (profile?.teamId != null) {
+                                } else if (profile?.isManager == true && profile?.teamId != null) {
                                   context.push(
                                     '/teams/${profile!.teamId}/members',
                                     extra: 'My Team',
                                   );
                                 } else {
-                                  context.push('/users');
+                                  context.push('/attendance');
                                 }
                               },
                             ),
@@ -452,12 +456,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           _OverviewCard(
                             icon: Icons.how_to_reg_outlined,
                             iconColor: AppColors.statusInProgress,
-                            title: 'attendance_today',
-                            value: (_stats?.presentToday ?? 0) > 0
-                                ? (S.isArabic
-                                    ? '${_stats!.presentToday} حاضر'
-                                    : '${_stats!.presentToday} present')
-                                : S.t('no_data'),
+                            title: (isAdmin || profile?.isManager == true) ? 'attendance_today' : 'my_attendance',
+                            value: (isAdmin || profile?.isManager == true)
+                                ? ((_stats?.presentToday ?? 0) > 0
+                                    ? (S.isArabic
+                                        ? '${_stats!.presentToday} حاضر'
+                                        : '${_stats!.presentToday} present')
+                                    : S.t('no_data'))
+                                : ((_stats?.presentToday ?? 0) > 0
+                                    ? (S.isArabic ? 'حاضر' : 'Present')
+                                    : (S.isArabic ? 'لم يسجل' : 'Not Checked In')),
                             onTap: () => context.push('/attendance'),
                           ),
                         ];

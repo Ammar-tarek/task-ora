@@ -45,11 +45,13 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
     final profile = context.read<AuthNotifier>().profile;
     await context.read<TeamPrivilegesNotifier>().reload();
     if (!mounted) return;
+
+    final isAdminOrManager = profile?.isAdminOrManager == true;
     final canManage =
-        profile?.isAdmin == true ||
+        isAdminOrManager ||
         context.read<TeamPrivilegesNotifier>().canManagePenalties;
-    // Admin sees everyone; a manager (or granted staff) sees only their team.
-    final scopeTeamId = profile?.isAdmin == true ? null : profile?.teamId;
+    // Admin & Super Admin see everyone; manager sees only their team.
+    final scopeTeamId = (profile?.isAdmin == true || profile?.isSuperAdmin == true) ? null : profile?.teamId;
     List<PenaltyItem> data;
     if (canManage) {
       data = await PenaltyRepository.fetchAll(teamId: scopeTeamId);
@@ -68,23 +70,31 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
   Widget build(BuildContext context) {
     context.select<LocaleController, Locale>((l) => l.locale);
     final profile = context.select<AuthNotifier, dynamic>((a) => a.profile);
-    final canManagePenalties = (profile?.isAdmin == true) || context.select<TeamPrivilegesNotifier, bool>((p) => p.canManagePenalties);
+    final isAdmin = profile?.isAdmin == true;
+    final isAdminOrManager = profile?.isAdminOrManager == true;
+    final canManagePenalties = isAdminOrManager || context.select<TeamPrivilegesNotifier, bool>((p) => p.canManagePenalties);
     final isManager = canManagePenalties;
-    final applied = _penalties.where((p) => p.isApplied).length;
-    final pending = _penalties.length - applied;
+    final approvedCount = _penalties.where((p) => p.isApplied || p.status == 'approved').length;
+    final pendingCount = _penalties.where((p) => !p.isApplied && p.status == 'pending').length;
+    final rejectedCount = _penalties.where((p) => p.status == 'rejected').length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.maybePop(context),
+          tooltip: 'Back',
+        ),
         title: Text(isManager ? S.t('penalty_management') : S.t('penalties')),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
-      floatingActionButton: (isManager && canManagePenalties)
+      floatingActionButton: isManager
           ? FloatingActionButton(
               backgroundColor: AppColors.primary,
-              onPressed: () => _showAddDialog(profile!.id),
+              onPressed: () => _showAddDialog(profile?.id ?? ''),
               child: const Icon(Icons.add, color: AppColors.gold),
             )
           : null,
@@ -100,17 +110,23 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
                   value: '${_penalties.length}',
                   color: AppColors.gold,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _SummaryTile(
                   label: 'Pending',
-                  value: '$pending',
+                  value: '$pendingCount',
                   color: AppColors.statusInProgress,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _SummaryTile(
-                  label: 'Applied',
-                  value: '$applied',
+                  label: 'Approved',
+                  value: '$approvedCount',
                   color: AppColors.statusDone,
+                ),
+                const SizedBox(width: 8),
+                _SummaryTile(
+                  label: 'Rejected',
+                  value: '$rejectedCount',
+                  color: AppColors.error,
                 ),
               ],
             ),
@@ -181,15 +197,25 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
                         penalty: _penalties[i],
                         isManager: isManager,
                         currentUserId: profile?.id ?? '',
-                        onApply: isManager
+                        onApprove: isAdmin
                             ? () async {
-                                await PenaltyRepository.applyPenalty(
+                                await PenaltyRepository.approvePenalty(
                                   _penalties[i].id,
+                                  actorId: profile?.id,
                                 );
                                 _load();
                               }
                             : null,
-                        onDelete: isManager
+                        onReject: isAdmin
+                            ? () async {
+                                await PenaltyRepository.rejectPenalty(
+                                  _penalties[i].id,
+                                  actorId: profile?.id,
+                                );
+                                _load();
+                              }
+                            : null,
+                        onDelete: isAdmin
                             ? () async {
                                 final ok = await _confirmDelete(context);
                                 if (ok) {
@@ -233,37 +259,43 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
   }
 
   Future<void> _showAddDialog(String approvedBy) async {
-    List<Map<String, dynamic>> types = [];
-    List<Map<String, dynamic>> employees = [];
-
-    // Manager: restrict the employee picker to their own team. Admin: everyone.
     final profile = context.read<AuthNotifier>().profile;
-    final scopeTeamId = profile?.isAdmin == true ? null : profile?.teamId;
+    final scopeTeamId = (profile?.isAdmin == true || profile?.isSuperAdmin == true) ? null : profile?.teamId;
 
     // Load data before opening dialog
     final results = await Future.wait([
       PenaltyRepository.fetchTypes(),
       PenaltyRepository.fetchEmployees(teamId: scopeTeamId),
     ]);
-    types = results[0];
-    employees = results[1];
+    var types = results[0];
+    var employees = results[1];
+
+    if (types.isEmpty) {
+      types = [
+        {'id': 'late_arrival', 'name': 'Late Arrival'},
+        {'id': 'absence', 'name': 'Unexcused Absence'},
+        {'id': 'policy_violation', 'name': 'Policy Violation'},
+        {'id': 'other', 'name': 'Other / General'},
+      ];
+    }
+
+    if (employees.isEmpty) {
+      employees = await PenaltyRepository.fetchEmployees(teamId: null);
+    }
+    if (employees.isEmpty && profile != null) {
+      employees = [
+        {'id': profile.id, 'full_name': profile.fullName}
+      ];
+    }
 
     if (!mounted) return;
-    if (types.isEmpty || employees.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not load penalty types or employees'),
-        ),
-      );
-      return;
-    }
 
     await showDialog(
       context: context,
       builder: (_) => _AddPenaltyDialog(
         types: types,
         employees: employees,
-        approvedBy: approvedBy,
+        approvedBy: approvedBy.isNotEmpty ? approvedBy : (profile?.id ?? ''),
         onSaved: _load,
       ),
     );
@@ -321,7 +353,7 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
     if (_selectedEmployee == null || _selectedType == null) return;
 
     setState(() => _saving = true);
-    await PenaltyRepository.createPenalty(
+    final ok = await PenaltyRepository.createPenalty(
       employeeId: _selectedEmployee!,
       penaltyTypeId: _selectedType!,
       reason: _reasonCtrl.text.trim(),
@@ -329,9 +361,17 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
       approvedBy: widget.approvedBy,
       date: _date.toIso8601String().substring(0, 10),
     );
-    if (mounted) {
+    if (!mounted) return;
+    if (ok) {
       Navigator.pop(context);
       widget.onSaved();
+    } else {
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to save penalty. Please try again.'),
+        ),
+      );
     }
   }
 
@@ -496,18 +536,35 @@ class _PenaltyCard extends StatelessWidget {
     required this.penalty,
     required this.isManager,
     required this.currentUserId,
-    this.onApply,
+    this.onApprove,
+    this.onReject,
     this.onDelete,
   });
   final PenaltyItem penalty;
   final bool isManager;
   final String currentUserId;
-  final VoidCallback? onApply;
+  final VoidCallback? onApprove;
+  final VoidCallback? onReject;
   final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final isOwnPenalty = penalty.employeeId == currentUserId;
+    final isApproved = penalty.isApplied || penalty.status == 'approved';
+    final isRejected = penalty.status == 'rejected';
+    final isPending = !isApproved && !isRejected;
+
+    String statusLabel = 'Pending Review';
+    Color statusColor = AppColors.statusInProgress;
+
+    if (isApproved) {
+      statusLabel = 'Approved & Applied';
+      statusColor = AppColors.statusDone;
+    } else if (isRejected) {
+      statusLabel = 'Rejected';
+      statusColor = AppColors.error;
+    }
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -552,7 +609,7 @@ class _PenaltyCard extends StatelessWidget {
                     color: AppColors.onSurfaceVariant,
                   ),
                   onPressed: onDelete,
-                  tooltip: 'Delete',
+                  tooltip: 'Delete Penalty',
                 ),
               ],
             ],
@@ -562,7 +619,7 @@ class _PenaltyCard extends StatelessWidget {
           if (penalty.approvedByName.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              'Approved by: ${penalty.approvedByName}',
+              'Logged by: ${penalty.approvedByName}',
               style: AppTextStyles.bodySm.copyWith(
                 color: AppColors.onSurfaceVariant,
                 fontSize: 11,
@@ -573,10 +630,8 @@ class _PenaltyCard extends StatelessWidget {
           Row(
             children: [
               TStatusChip(
-                label: penalty.isApplied ? 'Applied' : 'Pending',
-                color: penalty.isApplied
-                    ? AppColors.statusDone
-                    : AppColors.statusInProgress,
+                label: statusLabel,
+                color: statusColor,
               ),
               const SizedBox(width: 8),
               Text(
@@ -584,19 +639,30 @@ class _PenaltyCard extends StatelessWidget {
                 style: AppTextStyles.bodySm.copyWith(fontSize: 11),
               ),
               const Spacer(),
-              if (isManager &&
-                  !penalty.isApplied &&
-                  onApply != null &&
-                  !isOwnPenalty)
-                TextButton(
-                  onPressed: onApply,
-                  child: Text(
-                    'Apply Deduction',
-                    style: AppTextStyles.labelMd.copyWith(
-                      color: AppColors.gold,
+              if (isManager && !isOwnPenalty && isPending) ...[
+                if (onReject != null)
+                  TextButton(
+                    onPressed: onReject,
+                    child: Text(
+                      'Reject',
+                      style: AppTextStyles.labelMd.copyWith(
+                        color: AppColors.error,
+                      ),
                     ),
                   ),
-                ),
+                if (onApprove != null) ...[
+                  const SizedBox(width: 4),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    ),
+                    onPressed: onApprove,
+                    child: const Text('Approve & Apply'),
+                  ),
+                ],
+              ],
             ],
           ),
         ],

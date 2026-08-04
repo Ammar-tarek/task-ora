@@ -36,12 +36,66 @@ class DashboardRepository {
     }
   }
 
-  /// Fetch dashboard stats, tailored for Admin or Manager profiles.
+  /// Fetch dashboard stats, tailored for Admin, Manager, or Employee profiles.
   static Future<DashboardStats> fetchStats(ProfileModel profile) async {
     final admin = SupabaseService.adminClient;
     final today = DateTime.now().toIso8601String().substring(0, 10);
 
-    if (profile.isManager) {
+    if (profile.isAdmin) {
+      // Admin / Super Admin — company-wide statistics
+      final results = await Future.wait([
+        TaskRepository.fetchTasksForProfile(profile),
+        _safeQuery(
+          admin
+              .from('profiles')
+              .select('id')
+              .neq('role', 'client')
+              .eq('status', 'active'),
+        ),
+        _safeQuery(
+          admin
+              .from('attendance')
+              .select('id')
+              .eq('attendance_date', today)
+              .eq('status', 'present'),
+        ),
+        _safeQuery(
+          admin.from('crm_entries').select('paid_amount').eq('status', 'paid'),
+        ),
+        _safeQuery(
+          admin
+              .from('notifications')
+              .select('id')
+              .eq('recipient_id', profile.id)
+              .eq('is_read', false),
+        ),
+      ]);
+
+      final adminTasks = results[0] as List<TaskModel>;
+      final employees = results[1];
+      final present = results[2];
+      final crmEntries = results[3];
+      final notifs = results[4];
+
+      final done = adminTasks.where((t) => t.status == 'completed').length;
+      final inProgress = adminTasks
+          .where((t) => t.status == 'in_progress')
+          .length;
+      final revenue = crmEntries.fold<double>(
+        0,
+        (sum, e) => sum + ((e['paid_amount'] as num?)?.toDouble() ?? 0),
+      );
+
+      return DashboardStats(
+        totalTasks: adminTasks.length,
+        doneTasks: done,
+        inProgressTasks: inProgress,
+        totalEmployees: employees.length,
+        presentToday: present.length,
+        totalRevenue: revenue,
+        unreadNotifications: notifs.length,
+      );
+    } else if (profile.isManager) {
       final teamId = profile.teamId;
       List<dynamic> teamMembers = [];
       if (teamId != null) {
@@ -108,25 +162,23 @@ class DashboardRepository {
         unreadNotifications: notifs.length,
       );
     } else {
-      // Admin / Default
+      // Regular Employee / Client — strictly assigned tasks & personal stats
+      List<dynamic> teamMembers = [];
+      if (profile.teamId != null) {
+        teamMembers = await _safeQuery(
+          admin.from('profiles').select('id').eq('team_id', profile.teamId!),
+        );
+      }
+
       final results = await Future.wait([
-        _safeQuery(admin.from('tasks').select('id, status')),
-        _safeQuery(
-          admin
-              .from('profiles')
-              .select('id')
-              .neq('role', 'client')
-              .eq('status', 'active'),
-        ),
+        TaskRepository.fetchTasksForProfile(profile),
         _safeQuery(
           admin
               .from('attendance')
               .select('id')
+              .eq('employee_id', profile.id)
               .eq('attendance_date', today)
               .eq('status', 'present'),
-        ),
-        _safeQuery(
-          admin.from('crm_entries').select('paid_amount').eq('status', 'paid'),
         ),
         _safeQuery(
           admin
@@ -137,29 +189,23 @@ class DashboardRepository {
         ),
       ]);
 
-      final tasks = results[0];
-      final employees = results[1];
-      final present = results[2];
-      final crmEntries = results[3];
-      final notifs = results[4];
+      final empTasks = results[0] as List<TaskModel>;
+      final isPresent = results[1].isNotEmpty;
+      final notifsCount = results[2].length;
 
-      final done = tasks.where((t) => t['status'] == 'completed').length;
-      final inProgress = tasks
-          .where((t) => t['status'] == 'in_progress')
+      final done = empTasks.where((t) => t.status == 'completed').length;
+      final inProgress = empTasks
+          .where((t) => t.status == 'in_progress')
           .length;
-      final revenue = crmEntries.fold<double>(
-        0,
-        (sum, e) => sum + ((e['paid_amount'] as num?)?.toDouble() ?? 0),
-      );
 
       return DashboardStats(
-        totalTasks: tasks.length,
+        totalTasks: empTasks.length,
         doneTasks: done,
         inProgressTasks: inProgress,
-        totalEmployees: employees.length,
-        presentToday: present.length,
-        totalRevenue: revenue,
-        unreadNotifications: notifs.length,
+        totalEmployees: teamMembers.isNotEmpty ? teamMembers.length : 1,
+        presentToday: isPresent ? 1 : 0,
+        totalRevenue: 0,
+        unreadNotifications: notifsCount,
       );
     }
   }
