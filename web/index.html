@@ -1,28 +1,17 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
-  <base href="$FLUTTER_BASE_HREF">
-
+  <base href="/">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="CashBack Task Management">
+  <meta name="theme-color" content="#0F172A">
 
-  <!-- iOS meta tags & icons -->
+  <!-- PWA & Mobile Web App Meta Tags -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="CashBack">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
@@ -31,16 +20,136 @@
 
   <title>CashBack</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body {
+      background-color: #0F172A;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      touch-action: manipulation;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+    
+    flt-glass-pane, flutter-view, canvas, flt-scene-host {
+      touch-action: manipulation !important;
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
+      -webkit-tap-highlight-color: transparent !important;
+      overscroll-behavior: none !important;
+    }
+
+    input, textarea, select, [contenteditable="true"] {
+      -webkit-user-select: text !important;
+      user-select: text !important;
+      touch-action: auto !important;
+    }
+
+    .loading-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 9999;
+      pointer-events: none;
+      background-color: #0F172A;
+      transition: opacity 0.4s ease;
+    }
+    .app-logo {
+      width: 96px;
+      height: 96px;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+      animation: pulse 2s infinite ease-in-out;
+    }
+    .loading-spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(212, 175, 55, 0.2);
+      border-top-color: #D4AF37;
+      border-radius: 50%;
+      animation: spin 1s infinite linear;
+    }
+    .loading-text {
+      color: #E2E8F0;
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <div id="loading" class="loading-container">
+    <div style="position: absolute; top: 0; left: 0; right: 0; background: linear-gradient(90deg, #0F172A 0%, #1E293B 100%); border-bottom: 1px solid rgba(212,175,55,0.4); color: white; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; z-index: 10000; font-family: system-ui, -apple-system, sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,0.3); pointer-events: auto;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="background: rgba(212,175,55,0.2); border: 1px solid rgba(212,175,55,0.5); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#D4AF37"><path d="M6 18c0 .55.45 1 1 1h1v3c0 .55.45 1 1 1s1-.45 1-1v-3h4v3c0 .55.45 1 1 1s1-.45 1-1v-3h1c.55 0 1-.45 1-1V8H6v10zM3.5 5c-.28 0-.5.22-.5.5v7c0 .28.22.5.5.5s.5-.22.5-.5v-7c0-.28-.22-.5-.5-.5zm17 0c-.28 0-.5.22-.5.5v7c0 .28.22.5.5.5s.5-.22.5-.5v-7c0-.28-.22-.5-.5-.5zM15.53 2.16l1.3-1.3c.2-.2.2-.51 0-.71-.2-.2-.51-.2-.71 0l-1.48 1.48C13.85 1.23 12.95 1 12 1c-.96 0-1.86.23-2.66.63L7.86.15c-.2-.2-.51-.2-.71 0-.2.2-.2.51 0 .71l1.31 1.31C6.73 3.36 5.5 5.5 5.5 8h13c0-2.5-1.23-4.64-2.97-5.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z"/></svg>
+        </div>
+        <div>
+          <div style="font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+            <span>Download Android APK</span>
+            <span style="background: #D4AF37; color: black; font-size: 10px; font-weight: 900; padding: 1px 5px; border-radius: 4px;">v1.0.5</span>
+          </div>
+          <div style="font-size: 11px; opacity: 0.8;">Get the official CashBack Android app</div>
+        </div>
+      </div>
+      <a href="https://github.com/Ammar-tarek/task-ora/releases/download/1.0.5/app-release.apk" target="_blank" style="background: #D4AF37; color: black; font-weight: bold; font-size: 12px; text-decoration: none; padding: 6px 14px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); flex-shrink: 0;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Download APK</span>
+      </a>
+    </div>
+    <img class="app-logo" src="icons/Icon-192.png" alt="CashBack Logo">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Loading CashBack...</div>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <script>
+    window.addEventListener('webglcontextlost', function(e) {
+      e.preventDefault();
+      console.warn('WebGL context lost. Restoring context...');
+    }, false);
+
+    window.addEventListener('load', function() {
+      var loading = document.getElementById('loading');
+      if (loading) {
+        setTimeout(function() {
+          loading.style.opacity = '0';
+          setTimeout(function() {
+            if (loading.parentNode) {
+              loading.parentNode.removeChild(loading);
+            }
+          }, 400);
+        }, 800);
+      }
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

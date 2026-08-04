@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:background_downloader/background_downloader.dart';
@@ -23,6 +26,7 @@ class ApkUpdateService {
     bool showNoUpdateToast = false, // Backwards compatibility: treated as isManual
     bool forceDialog = false,
   }) async {
+    if (kIsWeb) return;
     final manual = isManual || showNoUpdateToast;
     if (_checking) return;
     _checking = true;
@@ -69,10 +73,12 @@ class ApkUpdateService {
           final assets = (ghData['assets'] as List?) ?? [];
 
           String downloadUrl = '';
+          int fileSize = 0;
           for (final asset in assets) {
             final name = (asset['name'] as String? ?? '').toLowerCase();
             if (name.endsWith('.apk')) {
               downloadUrl = asset['browser_download_url'] as String? ?? '';
+              fileSize = (asset['size'] as num? ?? 0).toInt();
               break;
             }
           }
@@ -82,6 +88,7 @@ class ApkUpdateService {
               'latest_version': tagName,
               'min_required_version': '1.0.0',
               'download_url': downloadUrl,
+              'file_size': fileSize,
               'release_notes': body,
               'is_mandatory': false,
             };
@@ -129,6 +136,7 @@ class ApkUpdateService {
       final minRequiredVersion =
           data['min_required_version'] as String? ?? '1.0.0';
       final downloadUrl = data['download_url'] as String? ?? '';
+      final fileSize = (data['file_size'] as num? ?? 0).toInt();
       final releaseNotes = data['release_notes'] as String? ??
           'Performance improvements and bug fixes.';
       final isMandatory = (data['is_mandatory'] as bool? ?? false) ||
@@ -145,6 +153,7 @@ class ApkUpdateService {
             currentVersion: currentVersion,
             latestVersion: latestVersion,
             downloadUrl: downloadUrl,
+            expectedFileSize: fileSize,
             notes: releaseNotes,
             isMandatory: isMandatory,
           );
@@ -444,6 +453,7 @@ class ApkUpdateService {
     required String currentVersion,
     required String latestVersion,
     required String downloadUrl,
+    int expectedFileSize = 0,
     required String notes,
     required bool isMandatory,
   }) {
@@ -468,8 +478,10 @@ class ApkUpdateService {
                   downloaded = false;
                   downloadFailed = false;
                   statusText = 'Downloading version $latestVersion';
-                  progress = 0.01;
+                  progress = 0.0;
                 });
+
+                bool success = false;
 
                 try {
                   final task = DownloadTask(
@@ -489,50 +501,36 @@ class ApkUpdateService {
                         'Update Failed', 'Could not download the update.'),
                   );
 
-                  FileDownloader().registerCallbacks(
-                    taskProgressCallback: (taskProgress) {
-                      if (context.mounted) {
+                  final updateSubscription = FileDownloader().updates.listen((update) {
+                    if (update is TaskProgressUpdate && update.task.taskId == task.taskId) {
+                      if (context.mounted && downloading) {
                         setState(() {
-                          progress = taskProgress.progress;
-                          statusText = 'Downloading version $latestVersion';
+                          if (update.progress >= 0) {
+                            progress = update.progress;
+                          }
                         });
                       }
-                    },
-                    taskStatusCallback: (taskStatusUpdate) async {
-                      if (taskStatusUpdate.status == TaskStatus.complete) {
-                        final path = await task.filePath();
-                        downloadedPath = path;
-                        if (context.mounted) {
-                          setState(() {
-                            downloading = false;
-                            downloaded = true;
-                            progress = 1.0;
-                            statusText =
-                                'Version $latestVersion has been downloaded successfully.';
-                          });
-                        }
-                        if (path.isNotEmpty) {
-                          await OpenFilex.open(path);
-                        }
-                      } else if (taskStatusUpdate.status == TaskStatus.failed ||
-                          taskStatusUpdate.status == TaskStatus.canceled) {
-                        if (context.mounted) {
-                          setState(() {
-                            downloading = false;
-                            downloadFailed = true;
-                            statusText =
-                                'Download failed. Please check your internet and try again.';
-                          });
-                        }
+                    }
+                  });
+
+                  final result = await FileDownloader().download(
+                    task,
+                    onProgress: (p) {
+                      if (context.mounted && downloading && p >= 0) {
+                        setState(() {
+                          progress = p;
+                        });
                       }
                     },
                   );
 
-                  final result = await FileDownloader().download(task);
+                  await updateSubscription.cancel();
+
                   if (result.status == TaskStatus.complete) {
                     final path = await task.filePath();
                     downloadedPath = path;
-                    if (context.mounted && !downloaded) {
+                    success = true;
+                    if (context.mounted) {
                       setState(() {
                         downloading = false;
                         downloaded = true;
@@ -544,15 +542,90 @@ class ApkUpdateService {
                     if (path.isNotEmpty) {
                       await OpenFilex.open(path);
                     }
+                    return;
                   }
-                } catch (e) {
-                  if (context.mounted) {
-                    setState(() {
-                      downloading = false;
-                      downloadFailed = true;
-                      statusText = 'Error: Unable to download update.';
-                    });
-                  }
+                } catch (_) {}
+
+                // HTTP Stream Fallback if FileDownloader didn't complete
+                if (!success) {
+                  try {
+                    final task = DownloadTask(
+                      url: downloadUrl,
+                      filename: 'task_ora_v$latestVersion.apk',
+                      directory: 'updates',
+                      baseDirectory: BaseDirectory.applicationSupport,
+                    );
+                    final filePath = await task.filePath();
+
+                    final client = http.Client();
+                    final request = http.Request('GET', Uri.parse(downloadUrl));
+                    final response = await client.send(request);
+
+                    if (response.statusCode == 200) {
+                      int total = response.contentLength ?? 0;
+                      if (total <= 0) {
+                        final headerLen = response.headers['content-length'];
+                        if (headerLen != null) {
+                          total = int.tryParse(headerLen) ?? 0;
+                        }
+                      }
+                      if (total <= 0 && expectedFileSize > 0) {
+                        total = expectedFileSize;
+                      }
+
+                      int received = 0;
+
+                      final file = File(filePath);
+                      await file.parent.create(recursive: true);
+                      final sink = file.openWrite();
+
+                      await response.stream.listen(
+                        (chunk) {
+                          received += chunk.length;
+                          sink.add(chunk);
+                          if (context.mounted && downloading) {
+                            setState(() {
+                              if (total > 0) {
+                                progress = (received / total).clamp(0.01, 1.0);
+                              } else {
+                                progress = (progress + 0.02).clamp(0.01, 0.95);
+                              }
+                            });
+                          }
+                        },
+                        cancelOnError: true,
+                      ).asFuture();
+
+                      await sink.flush();
+                      await sink.close();
+                      client.close();
+
+                      if (await file.exists() && (await file.length()) > 0) {
+                        downloadedPath = filePath;
+                        success = true;
+                        if (context.mounted) {
+                          setState(() {
+                            downloading = false;
+                            downloaded = true;
+                            progress = 1.0;
+                            statusText =
+                                'Version $latestVersion has been downloaded successfully.';
+                          });
+                        }
+                        await OpenFilex.open(filePath);
+                        return;
+                      }
+                    }
+                  } catch (_) {}
+                }
+
+                if (context.mounted && !success) {
+                  setState(() {
+                    downloading = false;
+                    downloadFailed = true;
+                    statusText =
+                        'Download failed. Please check your internet and try again.';
+                  });
                 }
               }
 

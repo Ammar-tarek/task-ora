@@ -292,6 +292,9 @@ class S {
       'full_name': 'Full Name',
       'phone': 'Phone Number',
       'role': 'Role',
+      'download_apk_title': 'Download Android App',
+      'download_apk_sub': 'Get the official APK for the best mobile experience',
+      'download': 'Download',
     },
     'ar': {
       // Navigation & Sections
@@ -566,6 +569,9 @@ class S {
       'full_name': 'الاسم الكامل',
       'phone': 'رقم الهاتف',
       'role': 'الدور',
+      'download_apk_title': 'تنزيل تطبيق الأندرويد',
+      'download_apk_sub': 'حمل ملف الـ APK لموبايلك للحصول على أفضل تجربة',
+      'download': 'تنزيل',
     },
   };
 }

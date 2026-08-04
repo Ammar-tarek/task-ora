@@ -149,6 +149,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } catch (_) {}
   }
 
+  Future<void> _rejectHandoff(String taskId) async {
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile == null) return;
+
+    try {
+      await TaskRepository.rejectHandoff(taskId: taskId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Task handoff rejected and returned to department.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      _load();
+    } catch (_) {}
+  }
+
   /// Mark the notification as read, then navigate to its referenced page.
   void _onNotificationTap(AppNotification n) {
     if (!n.isRead) _markRead(n.id);
@@ -285,6 +303,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           (n.type == 'task_handoff' && n.referenceId != null)
                           ? () => _acceptHandoff(n.referenceId!)
                           : null,
+                      onRejectHandoff:
+                          (n.type == 'task_handoff' && n.referenceId != null)
+                          ? () => _rejectHandoff(n.referenceId!)
+                          : null,
                     ),
                   );
                 },
@@ -299,11 +321,13 @@ class _NotifCard extends StatelessWidget {
     required this.notif,
     required this.onTap,
     this.onAcceptHandoff,
+    this.onRejectHandoff,
   });
 
   final AppNotification notif;
   final VoidCallback onTap;
   final VoidCallback? onAcceptHandoff;
+  final VoidCallback? onRejectHandoff;
 
   IconData get _icon {
     switch (notif.type) {
@@ -445,26 +469,48 @@ class _NotifCard extends StatelessWidget {
                   ),
               ],
             ),
-            if (onAcceptHandoff != null) ...[
+            if (onAcceptHandoff != null || onRejectHandoff != null) ...[
               const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton.icon(
-                  onPressed: onAcceptHandoff,
-                  icon: const Icon(Icons.check_circle_outline, size: 16),
-                  label: const Text('Accept Task Handoff'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.statusDone,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (onAcceptHandoff != null)
+                    ElevatedButton.icon(
+                      onPressed: onAcceptHandoff,
+                      icon: const Icon(Icons.check_circle_outline, size: 16),
+                      label: const Text('Accept'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.statusDone,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        textStyle: AppTextStyles.labelMd.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    textStyle: AppTextStyles.labelMd.copyWith(
-                      fontWeight: FontWeight.bold,
+                  if (onAcceptHandoff != null && onRejectHandoff != null)
+                    const SizedBox(width: 8),
+                  if (onRejectHandoff != null)
+                    ElevatedButton.icon(
+                      onPressed: onRejectHandoff,
+                      icon: const Icon(Icons.cancel_outlined, size: 16),
+                      label: const Text('Reject'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        textStyle: AppTextStyles.labelMd.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                ],
               ),
             ],
           ],

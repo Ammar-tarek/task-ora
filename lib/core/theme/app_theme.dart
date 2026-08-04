@@ -14,8 +14,6 @@ class AppColors {
   static bool get isDark => _dark;
 
   // ── Constant brand / status colours (identical in both modes) ──────────────
-  static const Color onPrimary = Color(0xFFFFFFFF);
-
   static const Color gold = Color(0xFFC9A84C);
   static const Color goldLight = Color(0xFFFED977);
   static const Color goldDark = Color(0xFF755B00);
@@ -39,6 +37,7 @@ class AppColors {
 
   // ── Mutable theme-sensitive colours (swapped by [setDarkMode]) ─────────────
   static Color primary = const Color(0xFF121212);
+  static Color onPrimary = const Color(0xFFFFFFFF);
   static Color primaryContainer = const Color(0xFFF6F2E7);
 
   static Color background = const Color(0xFFF8F9FA);
@@ -59,6 +58,7 @@ class AppColors {
     _dark = dark;
     if (dark) {
       primary = const Color(0xFFD4AF37); // Premium Gold
+      onPrimary = const Color(0xFF000000); // Black text/icons on Gold primary
       primaryContainer = const Color(0xFF262010);
       background = const Color(0xFF0C0C0C); // Pitch / Near Black
       surface = const Color(0xFF161616); // Dark Gray
@@ -72,6 +72,7 @@ class AppColors {
       errorContainer = const Color(0xFF3C1418);
     } else {
       primary = const Color(0xFF121212); // Deep Black
+      onPrimary = const Color(0xFFFFFFFF); // White text/icons on Black primary
       primaryContainer = const Color(0xFFF6F2E7);
       background = const Color(0xFFF8F9FA);
       surface = const Color(0xFFFFFFFF);
@@ -765,5 +766,10 @@ class AppScrollBehavior extends MaterialScrollBehavior {
         PointerDeviceKind.stylus,
         PointerDeviceKind.unknown,
       };
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+  }
 }
 

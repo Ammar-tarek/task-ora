@@ -2,6 +2,7 @@
 // Handles Firebase Cloud Messaging (FCM) initialization, background handlers,
 // FCM token registration with Supabase profiles table, and local push triggers.
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/profile_model.dart';
@@ -27,11 +28,13 @@ class PushNotificationService {
 
     try {
       await Firebase.initializeApp();
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      if (!kIsWeb) {
+        FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      }
 
       final messaging = FirebaseMessaging.instance;
 
-      // Request alert / sound permissions for FCM push on iOS & Android 13+
+      // Request alert / sound permissions for FCM push on iOS & Android 13+ & Web
       await messaging.requestPermission(
         alert: true,
         badge: true,
@@ -39,12 +42,14 @@ class PushNotificationService {
         provisional: false,
       );
 
-      // Set foreground notification options (show alert even when app is open)
-      await messaging.setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+      if (!kIsWeb) {
+        // Set foreground notification options (show alert even when app is open)
+        await messaging.setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
 
       // ── Foreground Message Listener ──────────────────────────────────────
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {

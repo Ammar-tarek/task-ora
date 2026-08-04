@@ -14,11 +14,13 @@ dependencies:
     sdk: flutter
 
   # UI
+  cupertino_icons: ^1.0.8
   google_fonts: ^6.3.3
   fl_chart: ^0.68.0
   intl: ^0.20.2
   flutter_local_notifications: ^22.2.0
   url_launcher: ^6.3.1
+  device_preview: ^1.2.0
 
   # Printing & PDF Export
   pdf: ^3.11.1

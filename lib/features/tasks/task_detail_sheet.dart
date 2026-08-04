@@ -36,12 +36,17 @@ class TaskDetailSheet extends StatefulWidget {
   /// task still in the Waiting List).
   final VoidCallback? onAcceptHandoff;
 
+  /// When set, shows a "Reject handoff" action (target manager/admin,
+  /// returns task to original department).
+  final VoidCallback? onRejectHandoff;
+
   const TaskDetailSheet({
     super.key,
     required this.taskId,
     this.onUpdated,
     this.onMoveDepartment,
     this.onAcceptHandoff,
+    this.onRejectHandoff,
   });
 
   @override
@@ -653,7 +658,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
+          maxHeight: MediaQuery.of(context).size.height * 0.72,
         ),
         decoration: BoxDecoration(
           color: AppColors.surfaceContainerLowest,
@@ -1477,25 +1482,52 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       child: Column(
         children: [
-          if (widget.onAcceptHandoff != null) ...[
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: busy
-                    ? null
-                    : () {
-                        Navigator.pop(context);
-                        widget.onAcceptHandoff!();
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.statusDone,
-                ),
-                icon: const Icon(Icons.check, size: 18, color: Colors.white),
-                label: const Text(
-                  'Accept into my department',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
+          if (widget.onAcceptHandoff != null || widget.onRejectHandoff != null) ...[
+            Row(
+              children: [
+                if (widget.onAcceptHandoff != null)
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: busy
+                          ? null
+                          : () {
+                              Navigator.pop(context);
+                              widget.onAcceptHandoff!();
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.statusDone,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.check, size: 18, color: Colors.white),
+                      label: const Text(
+                        'Accept Handoff',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                if (widget.onAcceptHandoff != null && widget.onRejectHandoff != null)
+                  const SizedBox(width: 10),
+                if (widget.onRejectHandoff != null)
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: busy
+                          ? null
+                          : () {
+                              Navigator.pop(context);
+                              widget.onRejectHandoff!();
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.close, size: 18, color: Colors.white),
+                      label: const Text(
+                        'Reject Handoff',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
           ],

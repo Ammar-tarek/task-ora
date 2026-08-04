@@ -346,6 +346,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -367,6 +368,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -386,6 +388,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -399,6 +402,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -1389,8 +1393,12 @@ class _EventDetailSheet extends StatelessWidget {
     final canEdit =
         profile != null &&
         (profile!.isAdmin || profile!.isManager || profile!.isClient);
-    return SafeArea(
-      child: SingleChildScrollView(
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
           child: Column(
@@ -1499,7 +1507,8 @@ class _EventDetailSheet extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -1705,267 +1714,280 @@ class _AddEventSheetState extends State<_AddEventSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text('New Meeting / Event', style: AppTextStyles.headlineSm),
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: _titleCtrl,
-              decoration: InputDecoration(
-                labelText: 'Event title *',
-                prefixIcon: const Icon(Icons.title, size: 20),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            Row(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+        ),
+        child: Scrollbar(
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickTime(true),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Start time',
-                        prefixIcon: const Icon(Icons.access_time, size: 18),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                      ),
-                      child: Text(
-                        _fmt(_startTime),
-                        style: AppTextStyles.bodyMd,
-                      ),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text('New Meeting / Event', style: AppTextStyles.headlineSm),
+                const SizedBox(height: 16),
+
+                TextField(
+                  controller: _titleCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Event title *',
+                    prefixIcon: const Icon(Icons.title, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickTime(false),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'End time',
-                        prefixIcon: const Icon(
-                          Icons.access_time_filled,
-                          size: 18,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _pickTime(true),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Start time',
+                            prefixIcon: const Icon(Icons.access_time, size: 18),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: Text(
+                            _fmt(_startTime),
+                            style: AppTextStyles.bodyMd,
+                          ),
                         ),
                       ),
-                      child: Text(_fmt(_endTime), style: AppTextStyles.bodyMd),
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _pickTime(false),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'End time',
+                            prefixIcon: const Icon(
+                              Icons.access_time_filled,
+                              size: 18,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: Text(_fmt(_endTime), style: AppTextStyles.bodyMd),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                if (_loadingClients)
+                  const LinearProgressIndicator()
+                else if (_clients.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.outlineVariant),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 18,
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'No clients — an admin must create clients first.',
+                          style: AppTextStyles.bodySm.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  DropdownButtonFormField<ClientModel>(
+                    initialValue: _selectedClient,
+                    dropdownColor: AppColors.surfaceContainerLowest,
+                    decoration: InputDecoration(
+                      labelText: 'Client (optional)',
+                      prefixIcon: const Icon(Icons.business_outlined, size: 20),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: null,
+                        child: Text('— No client —', style: AppTextStyles.bodyMd),
+                      ),
+                      ..._clients.map(
+                        (c) => DropdownMenuItem(
+                          value: c,
+                          child: Text(c.companyName, style: AppTextStyles.bodyMd),
+                        ),
+                      ),
+                    ],
+                    onChanged: (v) => setState(() => _selectedClient = v),
+                  ),
+                const SizedBox(height: 12),
+
+                if (_loadingRooms)
+                  const LinearProgressIndicator()
+                else if (_rooms.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.outlineVariant),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.meeting_room_outlined,
+                          size: 18,
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'No rooms available — ask an admin to add rooms.',
+                            style: AppTextStyles.bodySm.copyWith(
+                              color: AppColors.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedRoom,
+                    dropdownColor: AppColors.surfaceContainerLowest,
+                    decoration: InputDecoration(
+                      labelText: 'Meeting room (optional)',
+                      prefixIcon: const Icon(Icons.meeting_room_outlined, size: 20),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: null,
+                        child: Text('— No room —', style: AppTextStyles.bodyMd),
+                      ),
+                      ..._rooms.map(
+                        (r) => DropdownMenuItem(
+                          value: r,
+                          child: Text(r, style: AppTextStyles.bodyMd),
+                        ),
+                      ),
+                    ],
+                    onChanged: (v) => setState(() => _selectedRoom = v),
+                  ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _costCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Meeting cost (optional)',
+                    prefixIcon: const Icon(Icons.attach_money_outlined, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                if (_employees.isNotEmpty) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Attendees', style: AppTextStyles.labelMd),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: _employees.map((e) {
+                      final selected = _selectedEmployeeIds.contains(e['id']);
+                      return FilterChip(
+                        label: Text(e['name']!, style: AppTextStyles.bodySm),
+                        selected: selected,
+                        onSelected: (v) => setState(() {
+                          if (v) {
+                            _selectedEmployeeIds.add(e['id']!);
+                          } else {
+                            _selectedEmployeeIds.remove(e['id']!);
+                          }
+                        }),
+                        selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                        checkmarkColor: AppColors.primary,
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.onPrimary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: _saving
+                        ? CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.onPrimary,
+                          )
+                        : Text(
+                            'Create event',
+                            style: TextStyle(
+                              color: AppColors.onPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-
-            if (_loadingClients)
-              const LinearProgressIndicator()
-            else if (_clients.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.outlineVariant),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 18,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'No clients — an admin must create clients first.',
-                      style: AppTextStyles.bodySm.copyWith(
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              DropdownButtonFormField<ClientModel>(
-                initialValue: _selectedClient,
-                decoration: InputDecoration(
-                  labelText: 'Client (optional)',
-                  prefixIcon: const Icon(Icons.business_outlined, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('— No client —'),
-                  ),
-                  ..._clients.map(
-                    (c) =>
-                        DropdownMenuItem(value: c, child: Text(c.companyName)),
-                  ),
-                ],
-                onChanged: (v) => setState(() => _selectedClient = v),
-              ),
-            const SizedBox(height: 12),
-
-            if (_loadingRooms)
-              const LinearProgressIndicator()
-            else if (_rooms.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.outlineVariant),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.meeting_room_outlined,
-                      size: 18,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'No rooms available — ask an admin to add rooms.',
-                        style: AppTextStyles.bodySm.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              DropdownButtonFormField<String>(
-                initialValue: _selectedRoom,
-                decoration: InputDecoration(
-                  labelText: 'Meeting room (optional)',
-                  prefixIcon: const Icon(Icons.meeting_room_outlined, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('— No room —'),
-                  ),
-                  ..._rooms.map(
-                    (r) => DropdownMenuItem(value: r, child: Text(r)),
-                  ),
-                ],
-                onChanged: (v) => setState(() => _selectedRoom = v),
-              ),
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: _costCtrl,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Meeting cost (optional)',
-                prefixIcon: const Icon(Icons.attach_money_outlined, size: 20),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            if (_employees.isNotEmpty) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text('Attendees', style: AppTextStyles.labelMd),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: _employees.map((e) {
-                  final selected = _selectedEmployeeIds.contains(e['id']);
-                  return FilterChip(
-                    label: Text(e['name']!, style: AppTextStyles.bodySm),
-                    selected: selected,
-                    onSelected: (v) => setState(() {
-                      if (v) {
-                        _selectedEmployeeIds.add(e['id']!);
-                      } else {
-                        _selectedEmployeeIds.remove(e['id']!);
-                      }
-                    }),
-                    selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                    checkmarkColor: AppColors.primary,
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.gold,
-                        ),
-                      )
-                    : const Text(
-                        'Create event',
-                        style: TextStyle(
-                          color: AppColors.gold,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -2170,242 +2192,255 @@ class _EditEventSheetState extends State<_EditEventSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text('Edit Meeting / Event', style: AppTextStyles.headlineSm),
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: _titleCtrl,
-              decoration: InputDecoration(
-                labelText: 'Event title *',
-                prefixIcon: const Icon(Icons.title, size: 20),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            Row(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+        ),
+        child: Scrollbar(
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickTime(true),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Start time',
-                        prefixIcon: const Icon(Icons.access_time, size: 18),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                      ),
-                      child: Text(
-                        _fmt(_startTime),
-                        style: AppTextStyles.bodyMd,
-                      ),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text('Edit Meeting / Event', style: AppTextStyles.headlineSm),
+                const SizedBox(height: 16),
+
+                TextField(
+                  controller: _titleCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Event title *',
+                    prefixIcon: const Icon(Icons.title, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickTime(false),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'End time',
-                        prefixIcon: const Icon(
-                          Icons.access_time_filled,
-                          size: 18,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                      ),
-                      child: Text(_fmt(_endTime), style: AppTextStyles.bodyMd),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-            if (_loadingClients)
-              const LinearProgressIndicator()
-            else if (_clients.isNotEmpty)
-              DropdownButtonFormField<ClientModel>(
-                initialValue: _selectedClient,
-                decoration: InputDecoration(
-                  labelText: 'Client (optional)',
-                  prefixIcon: const Icon(Icons.business_outlined, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('— No client —'),
-                  ),
-                  ..._clients.map(
-                    (c) =>
-                        DropdownMenuItem(value: c, child: Text(c.companyName)),
-                  ),
-                ],
-                onChanged: (v) => setState(() => _selectedClient = v),
-              ),
-            const SizedBox(height: 12),
-
-            if (_loadingRooms)
-              const LinearProgressIndicator()
-            else if (_rooms.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.outlineVariant),
-                ),
-                child: Row(
+                Row(
                   children: [
-                    Icon(
-                      Icons.meeting_room_outlined,
-                      size: 18,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        'No rooms available — ask an admin to add rooms.',
-                        style: AppTextStyles.bodySm.copyWith(
-                          color: AppColors.onSurfaceVariant,
+                      child: InkWell(
+                        onTap: () => _pickTime(true),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Start time',
+                            prefixIcon: const Icon(Icons.access_time, size: 18),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: Text(
+                            _fmt(_startTime),
+                            style: AppTextStyles.bodyMd,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _pickTime(false),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'End time',
+                            prefixIcon: const Icon(
+                              Icons.access_time_filled,
+                              size: 18,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: Text(_fmt(_endTime), style: AppTextStyles.bodyMd),
                         ),
                       ),
                     ),
                   ],
                 ),
-              )
-            else
-              DropdownButtonFormField<String>(
-                initialValue: _selectedRoom,
-                decoration: InputDecoration(
-                  labelText: 'Meeting room (optional)',
-                  prefixIcon: const Icon(Icons.meeting_room_outlined, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('— No room —'),
-                  ),
-                  ..._rooms.map(
-                    (r) => DropdownMenuItem(value: r, child: Text(r)),
-                  ),
-                ],
-                onChanged: (v) => setState(() => _selectedRoom = v),
-              ),
-            const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-            TextField(
-              controller: _costCtrl,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Meeting cost (optional)',
-                prefixIcon: const Icon(Icons.attach_money_outlined, size: 20),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            if (_employees.isNotEmpty) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text('Attendees', style: AppTextStyles.labelMd),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: _employees.map((e) {
-                  final selected = _selectedEmployeeIds.contains(e['id']);
-                  return FilterChip(
-                    label: Text(e['name']!, style: AppTextStyles.bodySm),
-                    selected: selected,
-                    onSelected: (v) => setState(() {
-                      if (v) {
-                        _selectedEmployeeIds.add(e['id']!);
-                      } else {
-                        _selectedEmployeeIds.remove(e['id']!);
-                      }
-                    }),
-                    selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                    checkmarkColor: AppColors.primary,
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.gold,
-                        ),
-                      )
-                    : const Text(
-                        'Save changes',
-                        style: TextStyle(
-                          color: AppColors.gold,
-                          fontWeight: FontWeight.w600,
+                if (_loadingClients)
+                  const LinearProgressIndicator()
+                else if (_clients.isNotEmpty)
+                  DropdownButtonFormField<ClientModel>(
+                    initialValue: _selectedClient,
+                    dropdownColor: AppColors.surfaceContainerLowest,
+                    decoration: InputDecoration(
+                      labelText: 'Client (optional)',
+                      prefixIcon: const Icon(Icons.business_outlined, size: 20),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: null,
+                        child: Text('— No client —', style: AppTextStyles.bodyMd),
+                      ),
+                      ..._clients.map(
+                        (c) => DropdownMenuItem(
+                          value: c,
+                          child: Text(c.companyName, style: AppTextStyles.bodyMd),
                         ),
                       ),
-              ),
+                    ],
+                    onChanged: (v) => setState(() => _selectedClient = v),
+                  ),
+                const SizedBox(height: 12),
+
+                if (_loadingRooms)
+                  const LinearProgressIndicator()
+                else if (_rooms.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.outlineVariant),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.meeting_room_outlined,
+                          size: 18,
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'No rooms available — ask an admin to add rooms.',
+                            style: AppTextStyles.bodySm.copyWith(
+                              color: AppColors.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedRoom,
+                    dropdownColor: AppColors.surfaceContainerLowest,
+                    decoration: InputDecoration(
+                      labelText: 'Meeting room (optional)',
+                      prefixIcon: const Icon(Icons.meeting_room_outlined, size: 20),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: null,
+                        child: Text('— No room —', style: AppTextStyles.bodyMd),
+                      ),
+                      ..._rooms.map(
+                        (r) => DropdownMenuItem(
+                          value: r,
+                          child: Text(r, style: AppTextStyles.bodyMd),
+                        ),
+                      ),
+                    ],
+                    onChanged: (v) => setState(() => _selectedRoom = v),
+                  ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _costCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Meeting cost (optional)',
+                    prefixIcon: const Icon(Icons.attach_money_outlined, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                if (_employees.isNotEmpty) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Attendees', style: AppTextStyles.labelMd),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: _employees.map((e) {
+                      final selected = _selectedEmployeeIds.contains(e['id']);
+                      return FilterChip(
+                        label: Text(e['name']!, style: AppTextStyles.bodySm),
+                        selected: selected,
+                        onSelected: (v) => setState(() {
+                          if (v) {
+                            _selectedEmployeeIds.add(e['id']!);
+                          } else {
+                            _selectedEmployeeIds.remove(e['id']!);
+                          }
+                        }),
+                        selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                        checkmarkColor: AppColors.primary,
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.onPrimary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: _saving
+                        ? CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.onPrimary,
+                          )
+                        : Text(
+                            'Save changes',
+                            style: TextStyle(
+                              color: AppColors.onPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -2513,7 +2548,11 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
+      ),
+      child: Padding(
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
@@ -2666,6 +2705,7 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
             ),
         ],
       ),
-    );
+    ),
+  );
   }
 }

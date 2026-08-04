@@ -856,6 +856,7 @@ class _UserCardState extends State<_UserCard> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) => _TeamPickerSheet(
         teams: widget.teams,
         currentTeamId: widget.user.teamId,
@@ -977,6 +978,7 @@ class _UserCardState extends State<_UserCard> {
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
+                  useSafeArea: true,
                   backgroundColor: Colors.transparent,
                   builder: (_) => _EditEmployeeSheet(
                     user: widget.user,
@@ -1147,6 +1149,9 @@ class _TeamPickerSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
+      ),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -1378,6 +1383,9 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
     final isAdminRole = widget.user.isAdmin;
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
+      ),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),

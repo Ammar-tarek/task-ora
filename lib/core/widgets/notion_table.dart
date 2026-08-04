@@ -124,6 +124,7 @@ class _NotionTableState extends State<NotionTable>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -666,8 +667,12 @@ class _ColumnOptionsSheet extends StatefulWidget {
 class _ColumnOptionsSheetState extends State<_ColumnOptionsSheet> {
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           child: Column(
@@ -711,6 +716,7 @@ class _ColumnOptionsSheetState extends State<_ColumnOptionsSheet> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

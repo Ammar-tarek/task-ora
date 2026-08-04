@@ -1,4 +1,5 @@
 // lib/main.dart
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -101,7 +102,7 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
       NotificationTriggerService.instance.start(profile);
       PushNotificationService.instance.start(profile);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) ApkUpdateService.checkForUpdates(context);
+        if (mounted && !kIsWeb) ApkUpdateService.checkForUpdates(context);
       });
     } else {
       NotificationTriggerService.instance.stop();
@@ -116,7 +117,7 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
       final profile = context.read<AuthNotifier>().profile;
       if (profile != null) {
         WifiAttendanceService.instance.checkNow();
-        ApkUpdateService.checkForUpdates(context);
+        if (!kIsWeb) ApkUpdateService.checkForUpdates(context);
       }
       // Refresh privileges so admin/manager edits take effect on next foreground.
       context.read<TeamPrivilegesNotifier>().reload();
@@ -132,13 +133,12 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
     return MaterialApp.router(
       title: 'CashBack',
       debugShowCheckedModeBanner: false,
+      locale: localeCtrl.locale,
       theme: AppTheme.build(),
       darkTheme: AppTheme.build(),
       themeMode: themeCtrl.isDark ? ThemeMode.dark : ThemeMode.light,
       routerConfig: widget.router,
       scrollBehavior: const AppScrollBehavior(),
-      // App language (en/ar) — Arabic gets RTL automatically.
-      locale: localeCtrl.locale,
       supportedLocales: const [Locale('en'), Locale('ar')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

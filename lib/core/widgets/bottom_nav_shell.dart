@@ -17,27 +17,27 @@ class BottomNavShell extends StatelessWidget {
   static List<BottomNavigationBarItem> get _allItems => [
     BottomNavigationBarItem(
       icon: const Icon(Icons.dashboard_outlined),
-      activeIcon: const Icon(Icons.dashboard),
+      activeIcon: const Icon(Icons.dashboard_rounded),
       label: S.t('dashboard'),
     ),
     BottomNavigationBarItem(
       icon: const Icon(Icons.check_box_outlined),
-      activeIcon: const Icon(Icons.check_box),
+      activeIcon: const Icon(Icons.check_box_rounded),
       label: S.t('tasks'),
     ),
     BottomNavigationBarItem(
       icon: const Icon(Icons.calendar_month_outlined),
-      activeIcon: const Icon(Icons.calendar_month),
+      activeIcon: const Icon(Icons.calendar_month_rounded),
       label: S.t('calendar'),
     ),
     BottomNavigationBarItem(
       icon: const Icon(Icons.account_balance_wallet_outlined),
-      activeIcon: const Icon(Icons.account_balance_wallet),
+      activeIcon: const Icon(Icons.account_balance_wallet_rounded),
       label: S.t('finance'),
     ),
     BottomNavigationBarItem(
       icon: const Icon(Icons.settings_outlined),
-      activeIcon: const Icon(Icons.settings),
+      activeIcon: const Icon(Icons.settings_rounded),
       label: S.t('settings'),
     ),
   ];
@@ -53,6 +53,7 @@ class BottomNavShell extends StatelessWidget {
     final profile = context.watch<AuthNotifier>().profile;
     final isEmployee = profile?.isEmployee ?? false;
     final isClient = profile?.isClient ?? false;
+    final isDark = AppColors.isDark;
 
     // Build the visible item list and a mapping: visible-index → branch-index.
     final List<BottomNavigationBarItem> visibleItems;
@@ -74,26 +75,70 @@ class BottomNavShell extends StatelessWidget {
     int currentVisibleIndex = branchIndices.indexOf(currentBranchIndex);
     if (currentVisibleIndex == -1) currentVisibleIndex = 0;
 
+    final activeColor = isDark ? AppColors.gold : AppColors.primary;
+    final inactiveColor = AppColors.onSurfaceVariant.withValues(alpha: 0.7);
+
     return Scaffold(
       body: shell,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: AppColors.outlineVariant, width: 1),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.surface : AppColors.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark 
+                  ? AppColors.gold.withValues(alpha: 0.25)
+                  : AppColors.outlineVariant,
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: currentVisibleIndex,
-          onTap: (visibleIndex) {
-            final branchIndex = branchIndices[visibleIndex];
-            shell.goBranch(
-              branchIndex,
-              initialLocation: branchIndex == shell.currentIndex,
-            );
-          },
-          items: visibleItems,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+              ),
+              child: BottomNavigationBar(
+                currentIndex: currentVisibleIndex,
+                elevation: 0,
+                backgroundColor: Colors.transparent,
+                type: BottomNavigationBarType.fixed,
+                selectedItemColor: activeColor,
+                unselectedItemColor: inactiveColor,
+                selectedFontSize: 12,
+                unselectedFontSize: 11,
+                selectedLabelStyle: AppTextStyles.labelMd.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: activeColor,
+                ),
+                unselectedLabelStyle: AppTextStyles.bodySm.copyWith(
+                  fontSize: 11,
+                  color: inactiveColor,
+                ),
+                onTap: (visibleIndex) {
+                  final branchIndex = branchIndices[visibleIndex];
+                  shell.goBranch(
+                    branchIndex,
+                    initialLocation: branchIndex == shell.currentIndex,
+                  );
+                },
+                items: visibleItems,
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
+

@@ -385,24 +385,19 @@ class ClientRepository {
                   .map((pid) => {'event_id': eventId, 'profile_id': pid})
                   .toList(),
             );
-
-        // Notify assigned employees / managers about the calendar event!
-        final dateStr = '${start.day}/${start.month}/${start.year}';
-        final timeStr = '${AppTime.hm(start)} - ${AppTime.hm(end)}';
-        for (final recipientId in attendeeIds) {
-          if (recipientId != createdBy) {
-            await NotificationRepository.createNotification(
-              recipientId: recipientId,
-              type: 'calendar_event',
-              title: 'Calendar Event Assigned',
-              body:
-                  'You have been assigned to event "$title" on $dateStr ($timeStr).',
-              referenceType: 'calendar',
-              referenceId: eventId,
-            );
-          }
-        }
       }
+
+      // Notify Admin, SuperAdmin, and Assigned Attendees about the new calendar event
+      final dateStr = '${start.day}/${start.month}/${start.year}';
+      final timeStr = '${AppTime.hm(start)} - ${AppTime.hm(end)}';
+      await NotificationRepository.notifyAction(
+        title: 'New Event / Meeting Created',
+        body: 'Event "$title" scheduled for $dateStr ($timeStr).',
+        type: 'calendar_event',
+        referenceType: 'calendar',
+        referenceId: eventId,
+        targetUserIds: attendeeIds,
+      );
 
       // Auto-create CRM invoice so the cost appears on the client's finance page
       if (clientId != null && cost != null && cost > 0) {

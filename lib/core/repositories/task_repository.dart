@@ -663,6 +663,86 @@ class TaskRepository {
     } catch (_) {}
   }
 
+  /// Target manager or admin rejects a handoff. The task turns back to the original department.
+  static Future<void> rejectHandoff({
+    required String taskId,
+  }) async {
+    // 1. Fetch task details BEFORE clearing handoff fields
+    final taskData = await fetchTaskDetail(taskId);
+    final title = taskData?['title'] as String? ?? 'Task';
+    final fromTeamId = taskData?['handoff_from_team_id'] as String?;
+    final toTeamId = taskData?['handoff_to_team_id'] as String?;
+
+    final updatePayload = <String, dynamic>{
+      'handoff_to_team_id': null,
+      'handoff_from_team_id': null,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    if (fromTeamId != null) {
+      updatePayload['team_id'] = fromTeamId;
+    }
+
+    await _adminClient
+        .from('tasks')
+        .update(updatePayload)
+        .eq('id', taskId);
+
+    // 2. Notify source & target managers, leads, and admins that handoff was rejected
+    try {
+      final fromTeam = fromTeamId != null ? await TeamRepository.fetchById(fromTeamId) : null;
+      final recipients = <String>{};
+
+      if (fromTeamId != null) {
+        if (fromTeam?.teamLeadId != null) {
+          recipients.add(fromTeam!.teamLeadId!);
+        }
+        final sourceManagers = await _adminClient
+            .from('profiles')
+            .select('id')
+            .eq('team_id', fromTeamId)
+            .eq('role', 'manager');
+        for (final row in (sourceManagers as List)) {
+          recipients.add(row['id'] as String);
+        }
+      }
+
+      if (toTeamId != null) {
+        final toTeam = await TeamRepository.fetchById(toTeamId);
+        if (toTeam?.teamLeadId != null) {
+          recipients.add(toTeam!.teamLeadId!);
+        }
+        final targetManagers = await _adminClient
+            .from('profiles')
+            .select('id')
+            .eq('team_id', toTeamId)
+            .eq('role', 'manager');
+        for (final row in (targetManagers as List)) {
+          recipients.add(row['id'] as String);
+        }
+      }
+
+      final adminRows = await _adminClient
+          .from('profiles')
+          .select('id')
+          .eq('role', 'admin');
+      for (final row in (adminRows as List)) {
+        recipients.add(row['id'] as String);
+      }
+
+      for (final recipientId in recipients) {
+        await NotificationRepository.createNotification(
+          recipientId: recipientId,
+          type: 'handoff_rejected',
+          title: 'Department Switch Rejected',
+          body:
+              'Task "$title" handoff was rejected and returned to ${fromTeam?.name ?? "original"} department.',
+          referenceType: 'task',
+          referenceId: taskId,
+        );
+      }
+    } catch (_) {}
+  }
+
   static Future<List<TaskModel>> _fetchEmployeeTasks(
     ProfileModel profile,
   ) async {

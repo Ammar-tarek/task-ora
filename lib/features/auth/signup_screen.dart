@@ -404,7 +404,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             child: ElevatedButton(
               onPressed: _loading ? null : _register,
               child: _loading
-                  ? const Row(
+                  ? Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         SizedBox(
@@ -415,8 +415,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             strokeWidth: 2,
                           ),
                         ),
-                        SizedBox(width: 12),
-                        Text('Creating account…'),
+                        const SizedBox(width: 12),
+                        const Text('Creating account…'),
                       ],
                     )
                   : const Text('Create Account'),

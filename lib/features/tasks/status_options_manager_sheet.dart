@@ -280,7 +280,7 @@ class _StatusOptionsManagerSheetState extends State<StatusOptionsManagerSheet> {
   Widget build(BuildContext context) {
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.78,
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
       ),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,

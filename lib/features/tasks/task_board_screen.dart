@@ -1136,6 +1136,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             tasks: waiting,
             teamName: _teamName,
             onAccept: _acceptHandoff,
+            onReject: _rejectHandoff,
             onView: _openWaitingDetail,
           ),
         Expanded(
@@ -1328,6 +1329,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         taskId: task.id,
         onUpdated: () => _load(animate: false),
         onAcceptHandoff: () => _acceptHandoff(task),
+        onRejectHandoff: () => _rejectHandoff(task),
       ),
     );
   }
@@ -1342,6 +1344,19 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         const SnackBar(
           content: Text('Task accepted. Open it to assign your team.'),
           backgroundColor: AppColors.statusDone,
+        ),
+      );
+    }
+  }
+
+  Future<void> _rejectHandoff(TaskModel task) async {
+    await TaskRepository.rejectHandoff(taskId: task.id);
+    await _load(animate: false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Task handoff rejected and returned to original department.'),
+          backgroundColor: AppColors.error,
         ),
       );
     }
@@ -1739,6 +1754,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -1765,6 +1781,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -2407,12 +2424,16 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottom),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Container(
               width: 36,
               height: 4,
@@ -2613,8 +2634,9 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildPriorityChip(String key, String label, Color color) {
     final sel = _priority == key;
@@ -2662,11 +2684,13 @@ class _WaitingList extends StatelessWidget {
     required this.tasks,
     required this.teamName,
     required this.onAccept,
+    required this.onReject,
     required this.onView,
   });
   final List<TaskModel> tasks;
   final String Function(String?) teamName;
   final Future<void> Function(TaskModel) onAccept;
+  final Future<void> Function(TaskModel) onReject;
   final void Function(TaskModel) onView;
 
   @override
@@ -2707,7 +2731,7 @@ class _WaitingList extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Tasks handed to your department. Accept to assign your team.',
+            'Tasks handed to your department. Accept to assign your team or reject to return.',
             style: AppTextStyles.bodySm.copyWith(
               color: AppColors.onSurfaceVariant,
             ),
@@ -2759,13 +2783,13 @@ class _WaitingList extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     ElevatedButton.icon(
                       onPressed: () => onAccept(t),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.statusDone,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
+                          horizontal: 10,
                           vertical: 8,
                         ),
                       ),
@@ -2776,6 +2800,26 @@ class _WaitingList extends StatelessWidget {
                       ),
                       label: const Text(
                         'Accept',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    ElevatedButton.icon(
+                      onPressed: () => onReject(t),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                      ),
+                      icon: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        'Reject',
                         style: TextStyle(color: Colors.white),
                       ),
                     ),

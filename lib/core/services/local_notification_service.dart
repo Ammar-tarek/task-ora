@@ -7,6 +7,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
+import 'web_notification/web_notification.dart';
 
 class LocalNotificationService {
   LocalNotificationService._();
@@ -33,8 +34,8 @@ class LocalNotificationService {
   /// Call once in main() before runApp().
   static Future<void> init() async {
     if (_initialized) return;
-    // Local notifications are mobile-only — skip entirely on web/desktop.
     if (kIsWeb) {
+      requestWebNotificationPermission();
       _initialized = true;
       return;
     }
@@ -114,7 +115,11 @@ class LocalNotificationService {
     int? id,
     String? payload,
   }) async {
-    if (!_initialized || kIsWeb) return;
+    if (!_initialized) return;
+    if (kIsWeb) {
+      showWebNotification(title: title, body: body);
+      return;
+    }
 
     final channelId = type == typeHr ? _channelHrId : _channelTaskId;
     final channelName = type == typeHr ? _channelHrName : _channelTaskName;

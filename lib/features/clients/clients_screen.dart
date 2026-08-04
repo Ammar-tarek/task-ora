@@ -118,6 +118,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -133,6 +134,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -420,7 +422,11 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
+      ),
+      child: Padding(
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
@@ -554,21 +560,18 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
                 onPressed: _saving ? null : _save,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.gold,
-                        ),
+                    ? CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.onPrimary,
                       )
-                    : const Text(
+                    : Text(
                         'Create Client Account',
                         style: TextStyle(
-                          color: AppColors.gold,
+                          color: AppColors.onPrimary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -577,7 +580,8 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -717,7 +721,11 @@ class _EditClientSheetState extends State<_EditClientSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
+      ),
+      child: Padding(
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
@@ -842,21 +850,18 @@ class _EditClientSheetState extends State<_EditClientSheet> {
                 onPressed: _saving ? null : _save,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.gold,
-                        ),
+                    ? CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.onPrimary,
                       )
-                    : const Text(
+                    : Text(
                         'Save Changes',
                         style: TextStyle(
-                          color: AppColors.gold,
+                          color: AppColors.onPrimary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -865,7 +870,8 @@ class _EditClientSheetState extends State<_EditClientSheet> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
