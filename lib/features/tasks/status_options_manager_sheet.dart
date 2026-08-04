@@ -150,11 +150,11 @@ class _StatusOptionsManagerSheetState extends State<StatusOptionsManagerSheet> {
     String initialLabel = '',
     String initialColor = '#888888',
     bool labelReadOnly = false,
-  }) {
+  }) async {
     final labelCtrl = TextEditingController(text: initialLabel);
     String selectedColor = initialColor;
 
-    return showDialog<Map<String, String>>(
+    final res = await showDialog<Map<String, String>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
@@ -252,6 +252,8 @@ class _StatusOptionsManagerSheetState extends State<StatusOptionsManagerSheet> {
         ),
       ),
     );
+    labelCtrl.dispose();
+    return res;
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────

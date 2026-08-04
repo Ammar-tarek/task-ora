@@ -208,8 +208,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<LocaleController>();
-    final profile = context.watch<AuthNotifier>().profile;
+    context.select<LocaleController, Locale>((l) => l.locale);
+    final profile = context.select<AuthNotifier, ProfileModel?>((a) => a.profile);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -2676,7 +2676,9 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 280),
               child: ListView.separated(
-                shrinkWrap: true,
+                // ignore: deprecated_member_use
+                cacheExtent: 200.0,
+                addRepaintBoundaries: true,
                 itemCount: _rooms.length,
                 separatorBuilder: (_, _) =>
                     Divider(height: 1, color: AppColors.outlineVariant),

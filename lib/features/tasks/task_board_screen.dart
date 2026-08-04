@@ -1040,8 +1040,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   @override
   Widget build(BuildContext context) {
-    context.watch<ThemeController>();
-    context.watch<LocaleController>();
+    context.select<ThemeController, bool>((t) => t.isDark);
+    context.select<LocaleController, Locale>((l) => l.locale);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: _buildAppBar(),
@@ -1664,11 +1664,16 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             controller: _boardHorizontalController,
             thumbVisibility: true,
             trackVisibility: true,
-            child: ListView(
+            child: ListView.builder(
               controller: _boardHorizontalController,
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.all(16),
-              children: columnDefs.map((col) {
+              // ignore: deprecated_member_use
+              cacheExtent: 600.0,
+              addRepaintBoundaries: true,
+              itemCount: columnDefs.length,
+              itemBuilder: (context, index) {
+                final col = columnDefs[index];
                 final tasks = kanban[col.key] ?? [];
                 return Padding(
                   padding: const EdgeInsets.only(right: 12),
@@ -1701,7 +1706,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                         : null,
                   ),
                 );
-              }).toList(),
+              },
             ),
           ),
         ),
@@ -1709,9 +1714,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     );
   }
 
-  void _showAddColumnDialog() {
+  Future<void> _showAddColumnDialog() async {
     final ctrl = TextEditingController();
-    showDialog(
+    await showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Add Column'),
@@ -1748,6 +1753,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         ],
       ),
     );
+    ctrl.dispose();
   }
 
   void _showCreateSheet(BuildContext context) {
@@ -2069,6 +2075,10 @@ class _KanbanColumn extends StatelessWidget {
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.only(bottom: 16),
+                    // ignore: deprecated_member_use
+                    cacheExtent: 400.0,
+                    addRepaintBoundaries: true,
+                    addAutomaticKeepAlives: true,
                     itemCount: tasks.length,
                     itemBuilder: (context, index) {
                       final task = tasks[index];
@@ -2192,9 +2202,10 @@ class _KanbanCard extends StatelessWidget {
             ? DismissDirection.startToEnd
             : (onDelete != null ? DismissDirection.endToStart : DismissDirection.none));
 
-    Widget cardContent = GestureDetector(
-      onTap: isSelectionMode ? onSelectToggle : onTap,
-      child: Container(
+    Widget cardContent = RepaintBoundary(
+      child: GestureDetector(
+        onTap: isSelectionMode ? onSelectToggle : onTap,
+        child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -2291,7 +2302,8 @@ class _KanbanCard extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ),
+  );
 
     if (dir != DismissDirection.none) {
       cardContent = Dismissible(

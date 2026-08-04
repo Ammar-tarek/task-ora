@@ -66,12 +66,10 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<LocaleController>();
-    final profile = context.watch<AuthNotifier>().profile;
-    final privs = context.watch<TeamPrivilegesNotifier>();
-    // "Manager view" = admin, a manager with the privilege, or a granted employee.
-    final isManager = profile?.isAdmin == true || privs.canManagePenalties;
-    final canManagePenalties = isManager;
+    context.select<LocaleController, Locale>((l) => l.locale);
+    final profile = context.select<AuthNotifier, dynamic>((a) => a.profile);
+    final canManagePenalties = (profile?.isAdmin == true) || context.select<TeamPrivilegesNotifier, bool>((p) => p.canManagePenalties);
+    final isManager = canManagePenalties;
     final applied = _penalties.where((p) => p.isApplied).length;
     final pending = _penalties.length - applied;
 

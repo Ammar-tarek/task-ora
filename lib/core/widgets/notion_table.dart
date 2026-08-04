@@ -167,6 +167,8 @@ class _NotionTableState extends State<NotionTable>
             tableBody = ReorderableListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
+              // ignore: deprecated_member_use
+              cacheExtent: 300.0,
               itemCount: _orderedRows.length,
               // ignore: deprecated_member_use
               onReorder: _onReorder,

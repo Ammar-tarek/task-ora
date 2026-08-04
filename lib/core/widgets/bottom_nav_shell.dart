@@ -48,9 +48,9 @@ class BottomNavShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<ThemeController>();
-    context.watch<LocaleController>();
-    final profile = context.watch<AuthNotifier>().profile;
+    context.select<ThemeController, bool>((t) => t.isDark);
+    context.select<LocaleController, Locale>((l) => l.locale);
+    final profile = context.select<AuthNotifier, dynamic>((a) => a.profile);
     final isEmployee = profile?.isEmployee ?? false;
     final isClient = profile?.isClient ?? false;
     final isDark = AppColors.isDark;
@@ -82,7 +82,8 @@ class BottomNavShell extends StatelessWidget {
       body: shell,
       bottomNavigationBar: SafeArea(
         top: false,
-        child: Container(
+        child: RepaintBoundary(
+          child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: isDark ? AppColors.surface : AppColors.surfaceContainerLowest,
@@ -138,7 +139,8 @@ class BottomNavShell extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

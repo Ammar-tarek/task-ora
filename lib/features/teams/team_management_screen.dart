@@ -187,6 +187,10 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
       ),
     );
 
+    nameCtrl.dispose();
+    descCtrl.dispose();
+    deptCtrl.dispose();
+
     if (createdTeam != null) {
       // Refresh team list first, then take admin to the members screen
       await _load();

@@ -441,13 +441,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<LocaleController>();
-    final profile = context.watch<AuthNotifier>().profile;
-    final privs = context.watch<TeamPrivilegesNotifier>();
-    // "Manager view" = anyone who can manage attendance: admin, a manager with
-    // the privilege, or an employee explicitly granted it.
-    final isManager = profile?.isAdmin == true || privs.canManageAttendance;
-    final canManageAttendance = isManager;
+    context.select<LocaleController, Locale>((l) => l.locale);
+    final profile = context.select<AuthNotifier, dynamic>((a) => a.profile);
+    final canManageAttendance = profile?.isAdmin == true || context.select<TeamPrivilegesNotifier, bool>((p) => p.canManageAttendance);
+    final isManager = canManageAttendance;
     final dateDisp = DateFormat(
       'd MMMM y',
     ).format(DateTime.tryParse(_selectedDate) ?? DateTime.now());
@@ -2092,6 +2089,10 @@ class __EmployeeMonthlyAttendanceDialogState
               )
             : ListView.builder(
                 padding: const EdgeInsets.only(top: 8, bottom: 16),
+                // ignore: deprecated_member_use
+                cacheExtent: 350.0,
+                addRepaintBoundaries: true,
+                addAutomaticKeepAlives: true,
                 itemCount: _records.length,
                 itemBuilder: (context, i) {
                   final r = _records[i];

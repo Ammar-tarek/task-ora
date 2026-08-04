@@ -131,9 +131,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themeCtrl = context.watch<ThemeController>();
-    context.watch<LocaleController>();
-    final profile = context.watch<AuthNotifier>().profile;
+    final isDark = context.select<ThemeController, bool>((t) => t.isDark);
+    context.select<LocaleController, Locale>((l) => l.locale);
+    final profile = context.select<AuthNotifier, ProfileModel?>((a) => a.profile);
     final isAdmin = profile?.isAdmin ?? false;
     final now = DateTime.now();
     final greeting = now.hour < 12
@@ -184,16 +184,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               actions: [
                 IconButton(
-                  tooltip: themeCtrl.isDark
+                  tooltip: isDark
                       ? 'Switch to Light Mode'
                       : 'Switch to Dark Mode',
                   icon: Icon(
-                    themeCtrl.isDark
+                    isDark
                         ? Icons.light_mode_outlined
                         : Icons.dark_mode_outlined,
                     color: AppColors.gold,
                   ),
-                  onPressed: () => themeCtrl.setDark(!themeCtrl.isDark),
+                  onPressed: () => context.read<ThemeController>().setDark(!isDark),
                 ),
                 IconButton(
                   icon: Stack(
@@ -336,6 +336,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           crossAxisCount: crossAxisCount,
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
+                          addRepaintBoundaries: true,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                           childAspectRatio: ratio,
@@ -632,7 +633,8 @@ class _TaskDistributionBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Bar
-          ClipRRect(
+          RepaintBoundary(
+            child: ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: SizedBox(
               height: 10,
@@ -652,6 +654,7 @@ class _TaskDistributionBar extends StatelessWidget {
                     ),
             ),
           ),
+        ),
           const SizedBox(height: 14),
           // Legend — wraps responsively
           Wrap(

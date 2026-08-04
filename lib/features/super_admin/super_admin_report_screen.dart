@@ -195,6 +195,7 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
                 width: 320,
                 child: GridView.builder(
                   shrinkWrap: true,
+                  addRepaintBoundaries: true,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     childAspectRatio: 2.2,
@@ -640,6 +641,7 @@ class _SuperAdminReportScreenState extends State<SuperAdminReportScreen>
                 crossAxisCount: crossCount,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
+                addRepaintBoundaries: true,
                 crossAxisSpacing: 14,
                 mainAxisSpacing: 14,
                 childAspectRatio: 2.2,

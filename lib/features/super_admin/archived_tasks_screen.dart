@@ -289,6 +289,10 @@ class _ArchivedTasksScreenState extends State<ArchivedTasksScreen> {
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),
+                        // ignore: deprecated_member_use
+                        cacheExtent: 350.0,
+                        addRepaintBoundaries: true,
+                        addAutomaticKeepAlives: true,
                         itemCount: filtered.length,
                         itemBuilder: (context, index) {
                           final task = filtered[index];

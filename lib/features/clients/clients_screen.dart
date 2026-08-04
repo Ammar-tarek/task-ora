@@ -50,12 +50,10 @@ class _ClientsScreenState extends State<ClientsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<LocaleController>();
-    final profile = context.watch<AuthNotifier>().profile;
-    final privs = context.watch<TeamPrivilegesNotifier>();
+    context.select<LocaleController, Locale>((l) => l.locale);
+    final profile = context.select<AuthNotifier, dynamic>((a) => a.profile);
     final isAdmin = profile?.isAdmin ?? false;
-    // Admin, a manager with the privilege, or an employee explicitly granted it.
-    final canCreate = isAdmin || privs.canManageClients;
+    final canCreate = isAdmin || context.select<TeamPrivilegesNotifier, bool>((p) => p.canManageClients);
 
     return Scaffold(
       backgroundColor: AppColors.background,

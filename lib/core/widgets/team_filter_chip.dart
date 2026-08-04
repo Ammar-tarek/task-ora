@@ -15,9 +15,9 @@ class TeamFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<LocaleController>();
-    final profile = context.watch<AuthNotifier>().profile;
-    if (profile?.isAdmin != true) return const SizedBox.shrink();
+    context.select<LocaleController, Locale>((l) => l.locale);
+    final isAdmin = context.select<AuthNotifier, bool>((a) => a.profile?.isAdmin == true);
+    if (!isAdmin) return const SizedBox.shrink();
 
     final filter = context.watch<TeamFilterNotifier>();
     final teams = filter.teams;

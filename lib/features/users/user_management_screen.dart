@@ -450,12 +450,10 @@ class _UserManagementScreenState extends State<UserManagementScreen>
 
   @override
   Widget build(BuildContext context) {
-    context.watch<LocaleController>();
-    final profile = context.watch<AuthNotifier>().profile;
-    final privs = context.watch<TeamPrivilegesNotifier>();
+    context.select<LocaleController, Locale>((l) => l.locale);
+    final profile = context.select<AuthNotifier, ProfileModel?>((a) => a.profile);
     final isAdmin = profile?.isAdmin == true;
-    // Admin, a manager with the privilege, or an employee explicitly granted it.
-    final canCreateUser = isAdmin || privs.canCreateEmployees;
+    final canCreateUser = isAdmin || context.select<TeamPrivilegesNotifier, bool>((p) => p.canCreateEmployees);
 
     // Title & leading button depend on current view
     final String appBarTitle = _pickingTeam
@@ -1199,75 +1197,75 @@ class _TeamPickerSheet extends StatelessWidget {
               child: Text('No active teams found', style: AppTextStyles.bodySm),
             )
           else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+            Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-              itemCount: teams.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 6),
-              itemBuilder: (_, i) {
-                final t = teams[i];
-                final isCurrent = t.id == currentTeamId;
-                return InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () => onSelected(t),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isCurrent
-                          ? AppColors.gold.withValues(alpha: 0.08)
-                          : AppColors.surface,
+              child: Column(
+                children: teams.map((t) {
+                  final isCurrent = t.id == currentTeamId;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: InkWell(
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isCurrent
-                            ? AppColors.gold.withValues(alpha: 0.5)
-                            : AppColors.outlineVariant,
+                      onTap: () => onSelected(t),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? AppColors.gold.withValues(alpha: 0.08)
+                              : AppColors.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isCurrent
+                                ? AppColors.gold.withValues(alpha: 0.5)
+                                : AppColors.outlineVariant,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: AppColors.gold.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.group_outlined,
+                                size: 18,
+                                color: AppColors.gold,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(t.name, style: AppTextStyles.labelMd),
+                                  if (t.department != null &&
+                                      t.department!.isNotEmpty)
+                                    Text(
+                                      t.department!,
+                                      style: AppTextStyles.bodySm,
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (isCurrent)
+                              const Icon(
+                                Icons.check_circle,
+                                color: AppColors.gold,
+                                size: 20,
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.gold.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.group_outlined,
-                            size: 18,
-                            color: AppColors.gold,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(t.name, style: AppTextStyles.labelMd),
-                              if (t.department != null &&
-                                  t.department!.isNotEmpty)
-                                Text(
-                                  t.department!,
-                                  style: AppTextStyles.bodySm,
-                                ),
-                            ],
-                          ),
-                        ),
-                        if (isCurrent)
-                          const Icon(
-                            Icons.check_circle,
-                            color: AppColors.gold,
-                            size: 20,
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+                  );
+                }).toList(),
+              ),
             ),
           const SizedBox(height: 24),
         ],

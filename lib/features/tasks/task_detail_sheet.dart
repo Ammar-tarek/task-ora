@@ -560,7 +560,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             width: double.maxFinite,
             height: 300,
             child: ListView.builder(
-              shrinkWrap: true,
+              // ignore: deprecated_member_use
+              cacheExtent: 250.0,
+              addRepaintBoundaries: true,
               itemCount: _allEmployees.length,
               itemBuilder: (_, idx) {
                 final emp = _allEmployees[idx];
@@ -1292,15 +1294,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         if (_comments.isEmpty)
           Text('No comments yet', style: AppTextStyles.bodySm)
         else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _comments.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (_, i) {
-              final c = _comments[i];
-              return _CommentTile(comment: c);
-            },
+          Column(
+            children: _comments.map((c) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _CommentTile(comment: c),
+            )).toList(),
           ),
 
         if (_perms.canAddComment) ...[
@@ -1388,46 +1386,39 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       children: [
         _SectionLabel('EDIT HISTORY'),
         const SizedBox(height: 10),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _editLogs.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
-          itemBuilder: (_, i) {
-            final log = _editLogs[i];
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.edit_note_rounded,
-                    size: 16,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(log.editorName, style: AppTextStyles.labelMd),
-                        if (log.summary != null)
-                          Text(
-                            log.summary!,
-                            style: AppTextStyles.bodySm.copyWith(
-                              color: AppColors.onSurfaceVariant,
-                            ),
+        Column(
+          children: _editLogs.map((log) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.edit_note_rounded,
+                  size: 16,
+                  color: AppColors.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(log.editorName, style: AppTextStyles.labelMd),
+                      if (log.summary != null)
+                        Text(
+                          log.summary!,
+                          style: AppTextStyles.bodySm.copyWith(
+                            color: AppColors.onSurfaceVariant,
                           ),
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
-                  Text(
-                    log.timeDisplay,
-                    style: AppTextStyles.dataSm.copyWith(fontSize: 11),
-                  ),
-                ],
-              ),
-            );
-          },
+                ),
+                Text(
+                  log.timeDisplay,
+                  style: AppTextStyles.dataSm.copyWith(fontSize: 11),
+                ),
+              ],
+            ),
+          )).toList(),
         ),
       ],
     );

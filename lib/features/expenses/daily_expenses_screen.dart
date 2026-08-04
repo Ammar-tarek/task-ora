@@ -144,12 +144,10 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<LocaleController>();
-    final profile = context.watch<AuthNotifier>().profile;
-    final privs = context.watch<TeamPrivilegesNotifier>();
-    // "Manager view" = admin, a manager with the privilege, or a granted employee.
-    final isManager = profile?.isAdmin == true || privs.canManageExpenses;
-    final canManageExpenses = isManager;
+    context.select<LocaleController, Locale>((l) => l.locale);
+    final profile = context.select<AuthNotifier, dynamic>((a) => a.profile);
+    final canManageExpenses = (profile?.isAdmin == true) || context.select<TeamPrivilegesNotifier, bool>((p) => p.canManageExpenses);
+    final isManager = canManageExpenses;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -646,7 +644,10 @@ class _ManageCategoriesDialogState extends State<_ManageCategoriesDialog> {
                       child: Text('No categories yet'),
                     )
                   : ListView.builder(
-                      shrinkWrap: true,
+                      // ignore: deprecated_member_use
+                      cacheExtent: 250.0,
+                      itemExtent: 48.0,
+                      addRepaintBoundaries: true,
                       itemCount: _cats.length,
                       itemBuilder: (_, i) {
                         final cat = _cats[i];
@@ -767,6 +768,7 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
         ],
       ),
     );
+    ctrl.dispose();
     if (name != null && name.isNotEmpty) {
       final ok = await ExpenseRepository.createCategory(name: name);
       if (ok) {

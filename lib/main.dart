@@ -22,11 +22,14 @@ import 'core/theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('ar', null);
-  await SupabaseService.initialize();
+
+  // Parallelize core startup requirements (Supabase & locale formatting)
+  await Future.wait([
+    initializeDateFormatting('ar', null),
+    SupabaseService.initialize(),
+  ]);
+
   RealtimeService.instance.init(); // live auto-refresh across the app
-  await LocalNotificationService.init(); // device push-notification setup
-  await PushNotificationService.init(); // FCM push notification setup
 
   final auth = AuthNotifier();
   final teamPrivs = TeamPrivilegesNotifier(auth);
@@ -48,6 +51,12 @@ void main() async {
       child: CbToDoApp(router: router),
     ),
   );
+
+  // Secondary non-blocking background initialization after initial frame render
+  Future.wait([
+    LocalNotificationService.init(),
+    PushNotificationService.init(),
+  ]);
 }
 
 class CbToDoApp extends StatefulWidget {
@@ -127,16 +136,16 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     // Rebuild whenever the theme mode changes so the palette swap takes effect.
-    final themeCtrl = context.watch<ThemeController>();
-    final localeCtrl = context.watch<LocaleController>();
+    final isDark = context.select<ThemeController, bool>((t) => t.isDark);
+    final locale = context.select<LocaleController, Locale>((l) => l.locale);
 
     return MaterialApp.router(
       title: 'CashBack',
       debugShowCheckedModeBanner: false,
-      locale: localeCtrl.locale,
+      locale: locale,
       theme: AppTheme.build(),
       darkTheme: AppTheme.build(),
-      themeMode: themeCtrl.isDark ? ThemeMode.dark : ThemeMode.light,
+      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       routerConfig: widget.router,
       scrollBehavior: const AppScrollBehavior(),
       supportedLocales: const [Locale('en'), Locale('ar')],
