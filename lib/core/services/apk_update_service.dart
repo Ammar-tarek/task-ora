@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:background_downloader/background_downloader.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 
@@ -488,7 +489,7 @@ class ApkUpdateService {
                     url: downloadUrl,
                     filename: 'task_ora_v$latestVersion.apk',
                     directory: 'updates',
-                    baseDirectory: BaseDirectory.applicationSupport,
+                    baseDirectory: BaseDirectory.temporary,
                     updates: Updates.statusAndProgress,
                   );
 
@@ -540,7 +541,7 @@ class ApkUpdateService {
                       });
                     }
                     if (path.isNotEmpty) {
-                      await OpenFilex.open(path);
+                      await _openApk(path, downloadUrl);
                     }
                     return;
                   }
@@ -553,7 +554,7 @@ class ApkUpdateService {
                       url: downloadUrl,
                       filename: 'task_ora_v$latestVersion.apk',
                       directory: 'updates',
-                      baseDirectory: BaseDirectory.applicationSupport,
+                      baseDirectory: BaseDirectory.temporary,
                     );
                     final filePath = await task.filePath();
 
@@ -612,7 +613,7 @@ class ApkUpdateService {
                                 'Version $latestVersion has been downloaded successfully.';
                           });
                         }
-                        await OpenFilex.open(filePath);
+                        await _openApk(filePath, downloadUrl);
                         return;
                       }
                     }
@@ -731,7 +732,7 @@ class ApkUpdateService {
                     onPressed: () async {
                       if (downloadedPath != null &&
                           downloadedPath!.isNotEmpty) {
-                        await OpenFilex.open(downloadedPath!);
+                        await _openApk(downloadedPath!, downloadUrl);
                       }
                     },
                     icon: const Icon(Icons.install_mobile, size: 18),
@@ -986,6 +987,29 @@ class ApkUpdateService {
         }),
       ],
     );
+  }
+
+  /// Opens the downloaded APK using OpenFilex with explicit package-archive MIME type.
+  /// If package installer cannot be launched, falls back to opening the download URL in browser.
+  static Future<void> _openApk(String filePath, String downloadUrl) async {
+    try {
+      final file = File(filePath);
+      if (await file.exists() && (await file.length()) > 0) {
+        final result = await OpenFilex.open(
+          filePath,
+          type: 'application/vnd.android.package-archive',
+        );
+        if (result.type == ResultType.done) return;
+      }
+    } catch (_) {}
+
+    // Fallback: open download URL in external browser/installer
+    try {
+      final uri = Uri.parse(downloadUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
   }
 }
 

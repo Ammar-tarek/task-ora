@@ -29,15 +29,18 @@ class NotificationTriggerService {
     'attendance_checkin',
     'attendance_checkout',
     'attendance_approved',
+    'attendance_overridden',
     'penalty_applied',
     'penalty_created',
     'penalty_updated',
+    'penalty_rejected',
     'expense_created',
     'expense_approved',
     'expense_rejected',
     'role_changed',
     'team_changed',
     'announcement_created',
+    'client_updated',
   };
 
   /// Call after the user signs in (profile is available).

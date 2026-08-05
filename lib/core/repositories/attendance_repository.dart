@@ -593,13 +593,14 @@ class AttendanceRepository {
     required String employeeId,
     required String date,
     required String checkInTime,
-    required String checkOutTime,
+    String? checkOutTime,
     String? note,
+    String? dailyReport,
     String status = 'present',
   }) async {
     final isAbsent = status == 'absent';
     final inDt = DateTime.tryParse(checkInTime);
-    final outDt = DateTime.tryParse(checkOutTime);
+    final outDt = checkOutTime != null ? DateTime.tryParse(checkOutTime) : null;
 
     // Absent days carry no times. Otherwise check-out must be after check-in.
     if (!isAbsent && inDt != null && outDt != null && !outDt.isAfter(inDt)) {
@@ -612,7 +613,10 @@ class AttendanceRepository {
     }
 
     final String? inIso = isAbsent ? null : checkInTime;
-    final String? outIso = isAbsent ? null : checkOutTime;
+    final String? outIso = (isAbsent || checkOutTime == null) ? null : checkOutTime;
+    final rep = (dailyReport != null && dailyReport.trim().isNotEmpty)
+        ? dailyReport.trim()
+        : null;
 
     // Try with full new-column payload first; fall back if columns missing
     try {
@@ -627,6 +631,7 @@ class AttendanceRepository {
             : (hours != null ? double.parse(hours.toStringAsFixed(2)) : null),
         'is_manual': true,
         'manual_note': note,
+        'daily_report': rep,
         'is_approved': false,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'employee_id, attendance_date');
@@ -779,6 +784,7 @@ class AttendanceRepository {
     required String checkOutTime,
     required String reason,
     required String status,
+    String? dailyReport,
   }) async {
     final isAbsent = status == 'absent';
     final inDt = DateTime.tryParse(checkInTime);
@@ -796,6 +802,9 @@ class AttendanceRepository {
 
     final String? inIso = isAbsent ? null : checkInTime;
     final String? outIso = isAbsent ? null : checkOutTime;
+    final rep = (dailyReport != null && dailyReport.trim().isNotEmpty)
+        ? dailyReport.trim()
+        : null;
 
     try {
       await _admin.from('attendance').upsert({
@@ -809,6 +818,7 @@ class AttendanceRepository {
             : (hours != null ? double.parse(hours.toStringAsFixed(2)) : null),
         'is_overridden': true,
         'override_reason': reason,
+        'daily_report': rep,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'employee_id, attendance_date');
       return null;

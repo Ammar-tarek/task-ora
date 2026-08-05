@@ -222,23 +222,44 @@ class NotificationRepository {
         } catch (_) {}
       }
 
-      // 3) ALL Admins and Super Admins
+      // 3) ALL Admins and Super Admins (Super Admins get ALL notifications)
+      final superAdminIds = <String>{};
       try {
         final adminRows = await _admin
             .from('profiles')
-            .select('id')
-            .or('role.eq.admin,role.eq.super_admin');
+            .select('id, role, email')
+            .inFilter('role', ['admin', 'super_admin']);
         for (final r in (adminRows as List)) {
           final id = r['id'] as String?;
+          final role = r['role'] as String? ?? '';
+          final email = (r['email'] as String? ?? '').toLowerCase();
           if (id != null && id.isNotEmpty) {
             recipients.add(id);
+            if (role == 'super_admin' || email == 'ammar@cashback.com') {
+              superAdminIds.add(id);
+            }
           }
         }
-      } catch (_) {}
+      } catch (_) {
+        try {
+          final allProfiles = await _admin.from('profiles').select('id, role, email');
+          for (final r in (allProfiles as List)) {
+            final role = r['role'] as String? ?? '';
+            final email = (r['email'] as String? ?? '').toLowerCase();
+            final id = r['id'] as String?;
+            if (id != null && (role == 'admin' || role == 'super_admin' || email == 'ammar@cashback.com')) {
+              recipients.add(id);
+              if (role == 'super_admin' || email == 'ammar@cashback.com') {
+                superAdminIds.add(id);
+              }
+            }
+          }
+        } catch (_) {}
+      }
 
-      // 4) Remove actorId (the person performing the action)
+      // 4) Remove actorId for standard users/managers (Super Admins are always retained to receive all notifications)
       if (actorId != null && actorId.isNotEmpty) {
-        recipients.remove(actorId);
+        recipients.removeWhere((id) => id == actorId && !superAdminIds.contains(id));
       }
 
       if (recipients.isEmpty) return;

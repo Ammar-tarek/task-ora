@@ -54,7 +54,10 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
     final scopeTeamId = (profile?.isAdmin == true || profile?.isSuperAdmin == true) ? null : profile?.teamId;
     List<PenaltyItem> data;
     if (canManage) {
-      data = await PenaltyRepository.fetchAll(teamId: scopeTeamId);
+      data = await PenaltyRepository.fetchAll(
+        teamId: scopeTeamId,
+        issuerId: profile?.id,
+      );
     } else {
       data = await PenaltyRepository.fetchForEmployee(profile?.id ?? '');
     }
@@ -377,6 +380,12 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final dropdownBg = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFFFFFFF);
+    final textColor = isDark ? const Color(0xFFF5F5F5) : const Color(0xFF1C1B1B);
+    final itemTextStyle = AppTextStyles.bodyMd.copyWith(color: textColor);
+
     return AlertDialog(
       title: const Text('Add Penalty'),
       content: SizedBox(
@@ -390,12 +399,18 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
                 // Employee picker
                 DropdownButtonFormField<String>(
                   initialValue: _selectedEmployee,
+                  dropdownColor: dropdownBg,
+                  style: itemTextStyle,
+                  iconEnabledColor: textColor,
                   decoration: const InputDecoration(labelText: 'Employee'),
                   items: widget.employees
                       .map(
                         (e) => DropdownMenuItem<String>(
                           value: e['id'] as String,
-                          child: Text(e['full_name'] as String? ?? ''),
+                          child: Text(
+                            e['full_name'] as String? ?? '',
+                            style: itemTextStyle,
+                          ),
                         ),
                       )
                       .toList(),
@@ -407,12 +422,18 @@ class _AddPenaltyDialogState extends State<_AddPenaltyDialog> {
                 // Type picker
                 DropdownButtonFormField<String>(
                   initialValue: _selectedType,
+                  dropdownColor: dropdownBg,
+                  style: itemTextStyle,
+                  iconEnabledColor: textColor,
                   decoration: const InputDecoration(labelText: 'Penalty Type'),
                   items: widget.types
                       .map(
                         (t) => DropdownMenuItem<String>(
                           value: t['id'] as String,
-                          child: Text(t['name'] as String? ?? ''),
+                          child: Text(
+                            t['name'] as String? ?? '',
+                            style: itemTextStyle,
+                          ),
                         ),
                       )
                       .toList(),

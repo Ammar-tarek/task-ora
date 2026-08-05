@@ -93,7 +93,8 @@ class PenaltyRepository {
 
   /// All penalties — for admin / manager views.
   /// Pass [teamId] to scope to a specific team's employees.
-  static Future<List<PenaltyItem>> fetchAll({String? teamId}) async {
+  /// Pass [issuerId] to include penalties issued or approved by the current user.
+  static Future<List<PenaltyItem>> fetchAll({String? teamId, String? issuerId}) async {
     try {
       List<dynamic> data = [];
       try {
@@ -102,13 +103,43 @@ class PenaltyRepository {
               .from('profiles')
               .select('id')
               .eq('team_id', teamId);
-          final ids = (members as List).map((m) => m['id'] as String).toList();
-          if (ids.isEmpty) return [];
-          data = await _admin
-              .from('penalties')
-              .select(_select)
-              .inFilter('employee_id', ids)
-              .order('penalty_date', ascending: false);
+          final ids = (members as List).map((m) => m['id'] as String).toSet();
+          if (issuerId != null && issuerId.isNotEmpty) {
+            ids.add(issuerId);
+          }
+          final idList = ids.toList();
+
+          if (idList.isEmpty && (issuerId == null || issuerId.isEmpty)) {
+            data = [];
+          } else if (issuerId != null && issuerId.isNotEmpty) {
+            final res1 = idList.isNotEmpty
+                ? await _admin
+                    .from('penalties')
+                    .select(_select)
+                    .inFilter('employee_id', idList)
+                    .order('penalty_date', ascending: false)
+                : [];
+            final res2 = await _admin
+                .from('penalties')
+                .select(_select)
+                .eq('approved_by', issuerId)
+                .order('penalty_date', ascending: false);
+
+            final map = <String, dynamic>{};
+            for (final item in res1) {
+              map[item['id'] as String] = item;
+            }
+            for (final item in (res2 as List)) {
+              map[item['id'] as String] = item;
+            }
+            data = map.values.toList();
+          } else {
+            data = await _admin
+                .from('penalties')
+                .select(_select)
+                .inFilter('employee_id', idList)
+                .order('penalty_date', ascending: false);
+          }
         } else {
           data = await _admin
               .from('penalties')
@@ -122,12 +153,16 @@ class PenaltyRepository {
               .from('profiles')
               .select('id')
               .eq('team_id', teamId);
-          final ids = (members as List).map((m) => m['id'] as String).toList();
-          if (ids.isEmpty) return [];
+          final ids = (members as List).map((m) => m['id'] as String).toSet();
+          if (issuerId != null && issuerId.isNotEmpty) {
+            ids.add(issuerId);
+          }
+          final idList = ids.toList();
+          if (idList.isEmpty) return [];
           data = await _admin
               .from('penalties')
               .select()
-              .inFilter('employee_id', ids)
+              .inFilter('employee_id', idList)
               .order('penalty_date', ascending: false);
         } else {
           data = await _admin
@@ -165,20 +200,29 @@ class PenaltyRepository {
 
   /// Penalties for a specific employee — for self-service employee view.
   static Future<List<PenaltyItem>> fetchForEmployee(String employeeId) async {
+    if (employeeId.isEmpty) return [];
     try {
       List<dynamic> data = [];
       try {
-        data = await _client
+        data = await _admin
             .from('penalties')
             .select(_select)
             .eq('employee_id', employeeId)
             .order('penalty_date', ascending: false);
       } catch (_) {
-        data = await _client
-            .from('penalties')
-            .select()
-            .eq('employee_id', employeeId)
-            .order('penalty_date', ascending: false);
+        try {
+          data = await _admin
+              .from('penalties')
+              .select()
+              .eq('employee_id', employeeId)
+              .order('penalty_date', ascending: false);
+        } catch (_) {
+          data = await _client
+              .from('penalties')
+              .select()
+              .eq('employee_id', employeeId)
+              .order('penalty_date', ascending: false);
+        }
       }
 
       final profiles = await _fetchProfilesMap();

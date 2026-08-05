@@ -62,11 +62,32 @@ class AuthNotifier extends ChangeNotifier {
         final user = SupabaseService.auth.currentUser;
         if (user == null) return;
         final userId = user.id;
-        final data = await SupabaseService.client
-            .from('profiles')
-            .select()
-            .eq('id', userId)
-            .single();
+
+        Map<String, dynamic>? data;
+        try {
+          data = await SupabaseService.client
+              .from('profiles')
+              .select()
+              .eq('id', userId)
+              .maybeSingle();
+        } catch (_) {
+          data = await SupabaseService.adminClient
+              .from('profiles')
+              .select()
+              .eq('id', userId)
+              .maybeSingle();
+        }
+
+        if (data == null) {
+          if (attempt < maxAttempts - 1) {
+            await Future.delayed(const Duration(milliseconds: 900));
+            continue;
+          }
+          _error = 'Could not load your profile. Please contact your administrator.';
+          _status = AuthStatus.unauthenticated;
+          notifyListeners();
+          return;
+        }
 
         final userEmail = user.email?.toLowerCase();
         final isAmmarSuperAdmin = userEmail == 'ammar@cashback.com';
@@ -89,11 +110,13 @@ class AuthNotifier extends ChangeNotifier {
         _error = null;
 
         // Update last_login_at (fire-and-forget)
-        SupabaseService.client
-            .from('profiles')
-            .update({'last_login_at': DateTime.now().toIso8601String()})
-            .eq('id', userId)
-            .then((_) {}, onError: (_) {});
+        try {
+          SupabaseService.adminClient
+              .from('profiles')
+              .update({'last_login_at': DateTime.now().toIso8601String()})
+              .eq('id', userId)
+              .then((_) {}, onError: (_) {});
+        } catch (_) {}
 
         notifyListeners();
         return; // ← success, stop retrying
@@ -185,6 +208,11 @@ class AuthNotifier extends ChangeNotifier {
   Future<String?> signIn(String email, String password) async {
     try {
       _error = null;
+      // Clear any stale session or corrupted token state before signing in
+      try {
+        await SupabaseService.auth.signOut();
+      } catch (_) {}
+
       await SupabaseService.auth.signInWithPassword(
         email: email.trim(),
         password: password,
@@ -193,8 +221,8 @@ class AuthNotifier extends ChangeNotifier {
       return null;
     } on AuthException catch (e) {
       return _friendlyAuthError(e.message);
-    } catch (_) {
-      return 'Unexpected error. Please try again.';
+    } catch (e) {
+      return 'Unexpected login error. Please check your network and try again.';
     }
   }
 
@@ -248,11 +276,11 @@ class AuthNotifier extends ChangeNotifier {
   Future<void> signOut() async {
     try {
       await SupabaseService.auth.signOut();
-    } catch (_) {
-      _profile = null;
-      _status = AuthStatus.unauthenticated;
-      notifyListeners();
-    }
+    } catch (_) {}
+    _profile = null;
+    _status = AuthStatus.unauthenticated;
+    _error = null;
+    notifyListeners();
   }
 
   /// Send a password-reset email.
@@ -301,6 +329,13 @@ class AuthNotifier extends ChangeNotifier {
     }
     if (r.contains('too many requests')) {
       return 'Too many attempts. Please wait a moment.';
+    }
+    if (r.contains('refresh token') ||
+        r.contains('token_not_found') ||
+        r.contains('invalid refresh token') ||
+        r.contains('jwt') ||
+        r.contains('grant')) {
+      return 'Session expired. Please enter your email and password to sign in.';
     }
     return raw;
   }

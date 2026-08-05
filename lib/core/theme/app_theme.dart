@@ -181,12 +181,13 @@ class AppTheme {
   AppTheme._();
 
   /// Kept for backwards-compatibility — resolves to the current mode's theme.
-  static ThemeData get light => build();
+  static ThemeData get light => build(false);
+  static ThemeData get dark => build(true);
 
-  /// Builds a ThemeData from the current [AppColors] palette. Call after
-  /// [AppColors.setDarkMode] so the two stay in sync.
-  static ThemeData build() {
-    final dark = AppColors.isDark;
+  /// Builds a ThemeData for light or dark mode.
+  static ThemeData build([bool? isDark]) {
+    final dark = isDark ?? AppColors.isDark;
+    AppColors.setDarkMode(dark);
     final base = ThemeData(
       useMaterial3: true,
       brightness: dark ? Brightness.dark : Brightness.light,
@@ -199,6 +200,9 @@ class AppTheme {
       headlineLarge: AppTextStyles.headlineLg,
       headlineMedium: AppTextStyles.headlineMd,
       headlineSmall: AppTextStyles.headlineSm,
+      titleLarge: AppTextStyles.headlineSm,
+      titleMedium: AppTextStyles.bodyMd,
+      titleSmall: AppTextStyles.bodySm,
       bodyLarge: AppTextStyles.bodyLg,
       bodyMedium: AppTextStyles.bodyMd,
       bodySmall: AppTextStyles.bodySm,
@@ -209,6 +213,10 @@ class AppTheme {
 
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.background,
+      canvasColor: AppColors.surfaceContainerLowest,
+      dropdownMenuTheme: DropdownMenuThemeData(
+        textStyle: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurface),
+      ),
       colorScheme: (dark ? const ColorScheme.dark() : const ColorScheme.light())
           .copyWith(
             brightness: dark ? Brightness.dark : Brightness.light,

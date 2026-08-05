@@ -1178,7 +1178,6 @@ class _ManualAttendanceDialog extends StatefulWidget {
 class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
   final _noteCtrl = TextEditingController();
   TimeOfDay _inTime = const TimeOfDay(hour: 9, minute: 0);
-  TimeOfDay _outTime = const TimeOfDay(hour: 17, minute: 0);
   DateTime _date = DateTime.now().subtract(const Duration(days: 1));
   String _status = 'present';
   bool _saving = false;
@@ -1195,10 +1194,6 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
       if (r.checkInTime != null) {
         final dt = DateTime.tryParse(r.checkInTime!);
         if (dt != null) _inTime = TimeOfDay.fromDateTime(AppTime.cairo(dt));
-      }
-      if (r.checkOutTime != null) {
-        final dt = DateTime.tryParse(r.checkOutTime!);
-        if (dt != null) _outTime = TimeOfDay.fromDateTime(AppTime.cairo(dt));
       }
       _status = r.status == 'absent' ? 'present' : r.status;
       _noteCtrl.text = r.manualNote ?? '';
@@ -1222,18 +1217,7 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
     ).toIso8601String();
   }
 
-  bool _endsAfterStart() {
-    final inMins = _inTime.hour * 60 + _inTime.minute;
-    final outMins = _outTime.hour * 60 + _outTime.minute;
-    return outMins > inMins;
-  }
-
   Future<void> _save() async {
-    // Check-out must be after check-in.
-    if (!_endsAfterStart()) {
-      setState(() => _error = 'Check-out time must be after check-in time.');
-      return;
-    }
     setState(() {
       _saving = true;
       _error = null;
@@ -1245,7 +1229,7 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
           '${_date.month.toString().padLeft(2, '0')}-'
           '${_date.day.toString().padLeft(2, '0')}',
       checkInTime: _buildDateTime(_date, _inTime),
-      checkOutTime: _buildDateTime(_date, _outTime),
+      checkOutTime: null,
       note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
       status: _status,
     );
@@ -1263,13 +1247,13 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
     }
   }
 
-  Future<void> _pickTime(bool isIn) async {
+  Future<void> _pickTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: isIn ? _inTime : _outTime,
+      initialTime: _inTime,
     );
     if (picked != null) {
-      setState(() => isIn ? _inTime = picked : _outTime = picked);
+      setState(() => _inTime = picked);
     }
   }
 
@@ -1292,7 +1276,7 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
     return AlertDialog(
-      title: Text(isEdit ? 'Edit Attendance' : 'Log Manual Attendance'),
+      title: Text(isEdit ? 'Edit Attendance' : 'Log Manual Check-In'),
       content: SizedBox(
         width: 360,
         child: SingleChildScrollView(
@@ -1362,21 +1346,7 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
                   Icons.access_time_outlined,
                   color: AppColors.gold,
                 ),
-                onTap: () => _pickTime(true),
-              ),
-
-              // Check-out time
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Check-out: ${_fmtTime(_outTime)}',
-                  style: AppTextStyles.bodyMd,
-                ),
-                trailing: const Icon(
-                  Icons.access_time_outlined,
-                  color: AppColors.gold,
-                ),
-                onTap: () => _pickTime(false),
+                onTap: _pickTime,
               ),
               const SizedBox(height: 8),
 
@@ -1386,7 +1356,7 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
                 maxLines: 2,
                 decoration: const InputDecoration(
                   labelText: 'Note (optional)',
-                  hintText: 'Reason for manual entry…',
+                  hintText: 'Reason for manual check-in…',
                 ),
               ),
 
@@ -1422,7 +1392,7 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
                     color: Colors.white,
                   ),
                 )
-              : Text(isEdit ? 'Update' : 'Submit'),
+              : Text(isEdit ? 'Update' : 'Manual Check In'),
         ),
       ],
     );
@@ -1442,6 +1412,7 @@ class _OverrideDialog extends StatefulWidget {
 
 class _OverrideDialogState extends State<_OverrideDialog> {
   final _reasonCtrl = TextEditingController();
+  final _reportCtrl = TextEditingController();
   TimeOfDay _inTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _outTime = const TimeOfDay(hour: 17, minute: 0);
   String _status = 'present';
@@ -1463,11 +1434,13 @@ class _OverrideDialogState extends State<_OverrideDialog> {
     }
     _status = widget.record.status;
     _reasonCtrl.text = widget.record.overrideReason ?? '';
+    _reportCtrl.text = widget.record.dailyReport ?? '';
   }
 
   @override
   void dispose() {
     _reasonCtrl.dispose();
+    _reportCtrl.dispose();
     super.dispose();
   }
 
@@ -1511,6 +1484,7 @@ class _OverrideDialogState extends State<_OverrideDialog> {
       checkInTime: _buildDateTime(widget.record.date, _inTime),
       checkOutTime: _buildDateTime(widget.record.date, _outTime),
       reason: _reasonCtrl.text.trim(),
+      dailyReport: _reportCtrl.text.trim().isEmpty ? null : _reportCtrl.text.trim(),
       status: _status,
     );
     if (!mounted) return;
@@ -1636,6 +1610,17 @@ class _OverrideDialogState extends State<_OverrideDialog> {
                     ),
                   ),
                 ),
+              const SizedBox(height: 8),
+
+              TextField(
+                controller: _reportCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Daily Report (optional)',
+                  hintText: 'Tasks completed, meetings, progress…',
+                  alignLabelWithHint: true,
+                ),
+              ),
               const SizedBox(height: 8),
 
               TextField(
@@ -2154,6 +2139,7 @@ class _AdminAddAttendanceDialog extends StatefulWidget {
 
 class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
   final _reasonCtrl = TextEditingController();
+  final _reportCtrl = TextEditingController();
   List<Map<String, String>> _employees = [];
   bool _loadingEmployees = true;
   String? _selectedEmployeeId;
@@ -2204,6 +2190,7 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
   @override
   void dispose() {
     _reasonCtrl.dispose();
+    _reportCtrl.dispose();
     super.dispose();
   }
 
@@ -2275,6 +2262,9 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
       checkInTime: _buildDateTime(_selectedDate, _inTime),
       checkOutTime: _buildDateTime(_selectedDate, _outTime),
       reason: note,
+      dailyReport: _reportCtrl.text.trim().isEmpty
+          ? null
+          : _reportCtrl.text.trim(),
       status: _status,
     );
 
@@ -2408,6 +2398,18 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
                       ),
                       const SizedBox(height: 8),
                     ],
+
+                    TextField(
+                      controller: _reportCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Daily Report (optional)',
+                        hintText:
+                            'Tasks completed, meetings, progress…',
+                        alignLabelWithHint: true,
+                      ),
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 12),
 
                     TextField(
                       controller: _reasonCtrl,
