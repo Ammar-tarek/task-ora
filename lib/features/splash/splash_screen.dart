@@ -1,8 +1,7 @@
-// lib/features/splash/splash_screen.dart
-// Pure animated splash — NO manual navigation.
-// The GoRouter redirect guard handles all routing once AuthNotifier resolves.
-
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/auth/auth_notifier.dart';
+import '../../core/l10n/app_strings.dart';
 import '../../core/theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -16,6 +15,7 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
   late final Animation<double> _scale;
+  bool _promptingBiometrics = false;
 
   @override
   void initState() {
@@ -30,7 +30,26 @@ class _SplashScreenState extends State<SplashScreen>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _ctrl.forward();
-    // No context.go() here — the router's refreshListenable handles it.
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _checkBiometricStatus();
+  }
+
+  void _checkBiometricStatus() {
+    final auth = context.watch<AuthNotifier>();
+    if (auth.status == AuthStatus.biometricRequired && !_promptingBiometrics) {
+      _promptingBiometrics = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final ok = await context.read<AuthNotifier>().authenticateBiometrics();
+        if (mounted && !ok) {
+          setState(() => _promptingBiometrics = false);
+        }
+      });
+    }
   }
 
   @override
@@ -41,6 +60,9 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final status = context.select<AuthNotifier, AuthStatus>((a) => a.status);
+    final isBiometricRequired = status == AuthStatus.biometricRequired;
+
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: Center(
@@ -88,15 +110,59 @@ class _SplashScreenState extends State<SplashScreen>
                     letterSpacing: 3,
                   ),
                 ),
-                const SizedBox(height: 56),
-                SizedBox(
-                  width: 28,
-                  child: LinearProgressIndicator(
-                    backgroundColor: Colors.white10,
-                    color: AppColors.gold,
-                    minHeight: 2,
+                const SizedBox(height: 48),
+                if (isBiometricRequired) ...[
+                  ElevatedButton.icon(
+                    onPressed: _promptingBiometrics
+                        ? null
+                        : () async {
+                            setState(() => _promptingBiometrics = true);
+                            final ok = await context
+                                .read<AuthNotifier>()
+                                .authenticateBiometrics();
+                            if (mounted && !ok) {
+                              setState(() => _promptingBiometrics = false);
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.fingerprint, size: 22),
+                    label: Text(
+                      S.t('unlock_with_biometrics'),
+                      style: AppTextStyles.labelMd.copyWith(color: Colors.black),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () async {
+                      await context.read<AuthNotifier>().signOut();
+                    },
+                    child: Text(
+                      S.t('login'),
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  SizedBox(
+                    width: 28,
+                    child: LinearProgressIndicator(
+                      backgroundColor: Colors.white10,
+                      color: AppColors.gold,
+                      minHeight: 2,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

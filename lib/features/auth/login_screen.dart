@@ -7,6 +7,9 @@ import '../../core/l10n/app_strings.dart';
 import '../../core/providers/locale_controller.dart';
 import '../../core/theme/app_theme.dart';
 
+import '../../core/services/biometric_service.dart';
+import '../../core/services/supabase_service.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -49,6 +52,63 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (error != null) {
       setState(() => _errorMsg = error);
+      return;
+    }
+
+    if (auth.shouldPromptBiometricEnable && mounted) {
+      final result = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogCtx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            S.t('biometric_prompt_title'),
+            style: AppTextStyles.headlineSm,
+          ),
+          content: Text(
+            S.t('biometric_prompt_msg'),
+            style: AppTextStyles.bodyMd,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child: Text(
+                S.t('not_now'),
+                style: AppTextStyles.labelMd.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                foregroundColor: Colors.black,
+              ),
+              onPressed: () => Navigator.pop(dialogCtx, true),
+              child: Text(
+                S.t('enable'),
+                style: AppTextStyles.labelMd.copyWith(color: Colors.black),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (result == true) {
+        final userId =
+            auth.profile?.id ?? SupabaseService.auth.currentUser?.id;
+        if (userId != null) {
+          final success = await BiometricService.instance.authenticate(
+            localizedReason: S.t('biometric_enable_reason'),
+          );
+          if (success) {
+            await BiometricService.instance.setBiometricEnabled(userId, true);
+          }
+        }
+      }
+      auth.completeBiometricPrompt();
     }
   }
 

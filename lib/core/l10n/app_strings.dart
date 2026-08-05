@@ -123,6 +123,26 @@ class S {
       'Nov': 'Nov',
       'Dec': 'Dec',
 
+      'security': 'SECURITY',
+      'enable_biometric_login': 'Enable Biometric Login',
+      'enable_biometric_login_sub': 'Use Fingerprint or Face ID for faster login',
+      'biometric_prompt_title': 'Enable Biometric Login?',
+      'biometric_prompt_msg':
+          'Would you like to use Fingerprint or Face ID for faster login next time?',
+      'enable': 'Enable',
+      'not_now': 'Not Now',
+      'biometric_auth_reason': 'Please authenticate to sign in to CashBack',
+      'biometric_enable_reason': 'Authenticate to enable biometric login',
+      'biometrics_not_available':
+          'Biometric authentication is not available on this device',
+      'biometrics_not_enrolled':
+          'No biometrics enrolled on this device. Please set up Fingerprint or Face ID in device settings.',
+      'biometrics_auth_failed': 'Biometric authentication failed.',
+      'biometrics_enabled_success': 'Biometric login enabled successfully.',
+      'biometrics_disabled_msg': 'Biometric login has been disabled.',
+      'unlock_with_biometrics': 'Unlock with Fingerprint / Face ID',
+      'biometrics_auth_cancelled': 'Biometric authentication cancelled.',
+
       // Settings
       'language': 'Language',
       'select_language': 'Select Language',
@@ -400,6 +420,26 @@ class S {
       'Oct': 'أكتوبر',
       'Nov': 'نوفمبر',
       'Dec': 'ديسمبر',
+
+      'security': 'الأمان',
+      'enable_biometric_login': 'تفعيل الدخول بالبصمة / Face ID',
+      'enable_biometric_login_sub':
+          'استخدام البصمة أو التعرف على الوجه لتسجيل الدخول السريع',
+      'biometric_prompt_title': 'تفعيل الدخول بالبصمة؟',
+      'biometric_prompt_msg':
+          'هل ترغب في استخدام البصمة أو Face ID لتسجيل الدخول بشكل أسرع في المرة القادمة؟',
+      'enable': 'تفعيل',
+      'not_now': 'ليس الآن',
+      'biometric_auth_reason': 'يرجى إثبات الهوية لتسجيل الدخول إلى كاش باك',
+      'biometric_enable_reason': 'اثبت هويتك لتفعيل الدخول بالبصمة',
+      'biometrics_not_available': 'البصمة غير متاحة على هذا الجهاز',
+      'biometrics_not_enrolled':
+          'لم يتم تسجيل أي بصمة على الجهاز. يرجى إعداد البصمة أو Face ID من إعدادات الجهاز.',
+      'biometrics_auth_failed': 'فشلت عملية التحقق من البصمة.',
+      'biometrics_enabled_success': 'تم تفعيل الدخول بالبصمة بنجاح.',
+      'biometrics_disabled_msg': 'تم إلغاء تفعيل الدخول بالبصمة.',
+      'unlock_with_biometrics': 'الفتح بواسطة البصمة / Face ID',
+      'biometrics_auth_cancelled': 'تم إلغاء التحقق من البصمة.',
 
       // Settings
       'language': 'اللغة',

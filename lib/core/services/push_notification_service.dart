@@ -1,10 +1,12 @@
 // lib/core/services/push_notification_service.dart
-// Handles Firebase Cloud Messaging (FCM) initialization, background handlers,
-// FCM token registration with Supabase profiles table, and local push triggers.
+// Handles Firebase Cloud Messaging (FCM) initialization across Web, Android, and iOS,
+// background message handlers, FCM token registration with Supabase profiles table,
+// and notification triggers.
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../firebase_options.dart';
 import '../models/profile_model.dart';
 import '../repositories/profile_repository.dart';
 import 'local_notification_service.dart';
@@ -12,7 +14,11 @@ import 'local_notification_service.dart';
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Ensure Firebase is initialized when handling background/terminated messages
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (_) {}
 }
 
 class PushNotificationService {
@@ -22,28 +28,40 @@ class PushNotificationService {
   static bool _initialized = false;
   String? _currentUserId;
 
-  /// Call once in `main()` before `runApp()`.
+  /// Call once during app startup.
   static Future<void> init() async {
     if (_initialized) return;
 
     try {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+
+      final isSupported =
+          kIsWeb ? await FirebaseMessaging.instance.isSupported() : true;
+      if (!isSupported) {
+        debugPrint('[FCM] Web Push is not supported in this browser environment.');
+        return;
+      }
+
       if (!kIsWeb) {
         FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
       }
 
       final messaging = FirebaseMessaging.instance;
 
-      // Request alert / sound permissions for FCM push on iOS & Android 13+ & Web
-      await messaging.requestPermission(
+      // Request permissions (alert, badge, sound)
+      final settings = await messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         provisional: false,
       );
 
+      debugPrint('[FCM] Permission status: ${settings.authorizationStatus}');
+
       if (!kIsWeb) {
-        // Set foreground notification options (show alert even when app is open)
+        // Set foreground notification options for native platforms
         await messaging.setForegroundNotificationPresentationOptions(
           alert: true,
           badge: true,
@@ -54,7 +72,8 @@ class PushNotificationService {
       // ── Foreground Message Listener ──────────────────────────────────────
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         final notification = message.notification;
-        final title = notification?.title ?? message.data['title'] ?? 'CashBack Alert';
+        final title =
+            notification?.title ?? message.data['title'] ?? 'CashBack Alert';
         final body = notification?.body ?? message.data['body'] ?? '';
         final type = message.data['type'] ?? 'task';
         final refType = message.data['reference_type'];
@@ -63,8 +82,12 @@ class PushNotificationService {
         LocalNotificationService.show(
           title: title,
           body: body,
-          type: type == 'hr' ? LocalNotificationService.typeHr : LocalNotificationService.typeTask,
-          payload: (refType != null && refId != null) ? '$refType:$refId' : 'notifications',
+          type: type == 'hr'
+              ? LocalNotificationService.typeHr
+              : LocalNotificationService.typeTask,
+          payload: (refType != null && refId != null)
+              ? '$refType:$refId'
+              : 'notifications',
         );
       });
 
@@ -77,17 +100,53 @@ class PushNotificationService {
       });
 
       _initialized = true;
-    } catch (_) {
-      // Firebase setup failed or missing configuration — gracefully fall back
+    } catch (e) {
+      debugPrint('[FCM] Initialization error or missing platform config: $e');
+    }
+  }
+
+  /// Explicitly check or request notification permissions via FCM.
+  Future<NotificationSettings?> requestNotificationPermission() async {
+    try {
+      if (!_initialized) await init();
+      final isSupported =
+          kIsWeb ? await FirebaseMessaging.instance.isSupported() : true;
+      if (!isSupported) return null;
+
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+
+      if (_currentUserId != null &&
+          (settings.authorizationStatus == AuthorizationStatus.authorized ||
+              settings.authorizationStatus == AuthorizationStatus.provisional)) {
+        final token = await FirebaseMessaging.instance.getToken();
+        if (token != null) {
+          await ProfileRepository.updateFcmToken(_currentUserId!, token);
+        }
+      }
+
+      return settings;
+    } catch (e) {
+      debugPrint('[FCM] Error requesting notification permission: $e');
+      return null;
     }
   }
 
   /// Call after user signs in to register & sync their FCM Token to Supabase.
   void start(ProfileModel profile) async {
     _currentUserId = profile.id;
-    if (!_initialized) return;
 
     try {
+      if (!_initialized) await init();
+
+      final isSupported =
+          kIsWeb ? await FirebaseMessaging.instance.isSupported() : true;
+      if (!isSupported) return;
+
       final messaging = FirebaseMessaging.instance;
 
       // Fetch and update token
@@ -102,13 +161,17 @@ class PushNotificationService {
           await ProfileRepository.updateFcmToken(_currentUserId!, newToken);
         }
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[FCM] Error syncing FCM token for user ${profile.id}: $e');
+    }
   }
 
   /// Call when the user signs out.
   void stop() async {
     if (_currentUserId != null) {
-      await ProfileRepository.updateFcmToken(_currentUserId!, null);
+      try {
+        await ProfileRepository.updateFcmToken(_currentUserId!, null);
+      } catch (_) {}
       _currentUserId = null;
     }
   }

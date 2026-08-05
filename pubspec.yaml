@@ -2,7 +2,7 @@ name: task_ora
 description: "CashBack Operations Dashboard"
 publish_to: 'none'
 
-version: 1.6.0+6
+version: 1.6.1+7
 
 environment:
   sdk: ^3.11.5
@@ -35,6 +35,10 @@ dependencies:
 
   # State management
   provider: ^6.1.2
+
+  # Security & Biometrics
+  local_auth: ^2.3.0
+  flutter_secure_storage: ^9.2.2
 
   # n8n / webhook integration
   http: ^1.2.2

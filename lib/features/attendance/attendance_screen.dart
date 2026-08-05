@@ -211,20 +211,28 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           child: DropdownButtonFormField<String?>(
             initialValue: _sumEmployeeId,
             isExpanded: true,
+            dropdownColor: AppColors.surfaceContainerLowest,
+            style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurface),
             decoration: const InputDecoration(
               labelText: 'Employee',
               prefixIcon: Icon(Icons.person_search_outlined),
               isDense: true,
             ),
             items: [
-              const DropdownMenuItem<String?>(
+              DropdownMenuItem<String?>(
                 value: null,
-                child: Text('All employees'),
+                child: Text(
+                  'All employees',
+                  style: TextStyle(color: AppColors.onSurface),
+                ),
               ),
               ..._summaries.map(
                 (s) => DropdownMenuItem<String?>(
                   value: s.employeeId,
-                  child: Text(s.name),
+                  child: Text(
+                    s.name,
+                    style: TextStyle(color: AppColors.onSurface),
+                  ),
                 ),
               ),
             ],
@@ -1319,6 +1327,8 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
               // Status
               DropdownButtonFormField<String>(
                 initialValue: _status,
+                dropdownColor: AppColors.surfaceContainerLowest,
+                style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurface),
                 decoration: const InputDecoration(labelText: 'Status'),
                 items: _statuses
                     .map(
@@ -1327,6 +1337,7 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
                         child: Text(
                           s[0].toUpperCase() +
                               s.substring(1).replaceAll('_', ' '),
+                          style: TextStyle(color: AppColors.onSurface),
                         ),
                       ),
                     )
@@ -1549,6 +1560,8 @@ class _OverrideDialogState extends State<_OverrideDialog> {
 
               DropdownButtonFormField<String>(
                 initialValue: _status,
+                dropdownColor: AppColors.surfaceContainerLowest,
+                style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurface),
                 decoration: const InputDecoration(labelText: 'Status'),
                 items: _statuses
                     .map(
@@ -1557,6 +1570,7 @@ class _OverrideDialogState extends State<_OverrideDialog> {
                         child: Text(
                           s[0].toUpperCase() +
                               s.substring(1).replaceAll('_', ' '),
+                          style: TextStyle(color: AppColors.onSurface),
                         ),
                       ),
                     )
@@ -2309,6 +2323,8 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
 
                     DropdownButtonFormField<String>(
                       initialValue: _selectedEmployeeId,
+                      dropdownColor: AppColors.surfaceContainerLowest,
+                      style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurface),
                       decoration: const InputDecoration(
                         labelText: 'Employee *',
                       ),
@@ -2316,7 +2332,10 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
                           .map(
                             (e) => DropdownMenuItem(
                               value: e['id'],
-                              child: Text(e['name'] ?? 'Unknown'),
+                              child: Text(
+                                e['name'] ?? 'Unknown',
+                                style: TextStyle(color: AppColors.onSurface),
+                              ),
                             ),
                           )
                           .toList(),
@@ -2340,6 +2359,8 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
 
                     DropdownButtonFormField<String>(
                       initialValue: _status,
+                      dropdownColor: AppColors.surfaceContainerLowest,
+                      style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurface),
                       decoration: const InputDecoration(labelText: 'Status'),
                       items: _statuses
                           .map(
@@ -2348,6 +2369,7 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
                               child: Text(
                                 s[0].toUpperCase() +
                                     s.substring(1).replaceAll('_', ' '),
+                                style: TextStyle(color: AppColors.onSurface),
                               ),
                             ),
                           )

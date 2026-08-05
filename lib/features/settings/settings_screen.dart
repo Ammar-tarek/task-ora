@@ -10,6 +10,8 @@ import '../../core/providers/theme_controller.dart';
 import '../../core/services/n8n_service.dart';
 import '../../core/services/wifi_attendance_service.dart';
 import '../../core/services/apk_update_service.dart';
+import '../../core/services/biometric_service.dart';
+import '../../core/services/push_notification_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../super_admin/reset_app_dialog.dart';
 import '../super_admin/archive_completed_tasks_dialog.dart';
@@ -23,6 +25,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _pushNotifs = true;
   bool _emailDigest = false;
+  bool _biometricEnabled = false;
 
   // n8n integration
   final _webhookCtrl = TextEditingController();
@@ -48,6 +51,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
     WifiAttendanceService.isEnabled().then((v) {
       if (mounted) setState(() => _wifiEnabled = v);
     });
+    _loadBiometricStatus();
+  }
+
+  Future<void> _loadBiometricStatus() async {
+    final userId = context.read<AuthNotifier>().profile?.id;
+    if (userId != null) {
+      final enabled =
+          await BiometricService.instance.isBiometricEnabled(userId);
+      if (mounted) setState(() => _biometricEnabled = enabled);
+    }
+  }
+
+  Future<void> _toggleBiometrics(bool enable) async {
+    final userId = context.read<AuthNotifier>().profile?.id;
+    if (userId == null) return;
+
+    if (!enable) {
+      await BiometricService.instance.setBiometricEnabled(userId, false);
+      if (mounted) {
+        setState(() => _biometricEnabled = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(S.t('biometrics_disabled_msg'))),
+        );
+      }
+      return;
+    }
+
+    final isAvailable = await BiometricService.instance.isAvailable();
+    if (!isAvailable) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(S.t('biometrics_not_enrolled'))),
+        );
+      }
+      return;
+    }
+
+    final success = await BiometricService.instance.authenticate(
+      localizedReason: S.t('biometric_enable_reason'),
+    );
+
+    if (success) {
+      await BiometricService.instance.setBiometricEnabled(userId, true);
+      if (mounted) {
+        setState(() => _biometricEnabled = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(S.t('biometrics_enabled_success'))),
+        );
+      }
+    } else {
+      if (mounted) {
+        setState(() => _biometricEnabled = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(S.t('biometrics_auth_failed'))),
+        );
+      }
+    }
   }
 
   @override
@@ -759,11 +819,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Divider(height: 1),
             ],
 
+            // Security
+            _SectionTitle(title: S.t('security')),
+            SwitchListTile(
+              value: _biometricEnabled,
+              onChanged: (v) => _toggleBiometrics(v),
+              title: Text(
+                S.t('enable_biometric_login'),
+                style: AppTextStyles.bodyMd,
+              ),
+              subtitle: Text(
+                S.t('enable_biometric_login_sub'),
+                style: AppTextStyles.bodySm,
+              ),
+              secondary: const Icon(
+                Icons.fingerprint_outlined,
+                color: AppColors.gold,
+              ),
+              activeThumbColor: AppColors.gold,
+              activeTrackColor: AppColors.primary,
+            ),
+            const Divider(height: 1),
+
             // Preferences
             _SectionTitle(title: S.t('preferences')),
             SwitchListTile(
               value: _pushNotifs,
-              onChanged: (v) => setState(() => _pushNotifs = v),
+              onChanged: (v) async {
+                setState(() => _pushNotifs = v);
+                if (v) {
+                  await PushNotificationService.instance
+                      .requestNotificationPermission();
+                }
+              },
               title: Text(S.t('push_notifs'), style: AppTextStyles.bodyMd),
               subtitle: Text(
                 S.t('push_notifs_sub'),
@@ -875,7 +963,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _SettingsTile(
               icon: Icons.system_update_outlined,
               title: S.t('check_updates'),
-              subtitle: 'v1.6.0+6',
+              subtitle: 'v1.6.1+7',
               onTap: () => ApkUpdateService.checkForUpdates(
                 context,
                 isManual: true,

@@ -5,8 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_model.dart';
 import '../services/supabase_service.dart';
+import '../services/biometric_service.dart';
+import '../l10n/app_strings.dart';
 
-enum AuthStatus { loading, authenticated, unauthenticated }
+enum AuthStatus { loading, authenticated, unauthenticated, biometricRequired }
 
 /// Returned by signUp() when Supabase requires email verification
 /// before the session is active.
@@ -16,37 +18,58 @@ class AuthNotifier extends ChangeNotifier {
   AuthStatus _status = AuthStatus.loading;
   ProfileModel? _profile;
   String? _error;
+  bool _isBiometricVerified = false;
+
+  bool _pendingBiometricEnablePrompt = false;
 
   AuthStatus get status => _status;
   ProfileModel? get profile => _profile;
   String? get error => _error;
   bool get isLoggedIn => _status == AuthStatus.authenticated;
+  bool get isBiometricVerified => _isBiometricVerified;
+  bool get shouldPromptBiometricEnable => _pendingBiometricEnablePrompt;
 
   AuthNotifier() {
-    SupabaseService.auth.onAuthStateChange.listen((data) {
-      final event = data.event;
-      // signedIn  → normal login
-      // tokenRefreshed / userUpdated → keep session alive
-      if (event == AuthChangeEvent.signedIn ||
-          event == AuthChangeEvent.tokenRefreshed ||
-          event == AuthChangeEvent.userUpdated) {
-        _fetchProfile();
-      } else if (event == AuthChangeEvent.signedOut) {
-        _profile = null;
-        _status = AuthStatus.unauthenticated;
-        _error = null;
-        notifyListeners();
-      }
-    });
+    try {
+      SupabaseService.auth.onAuthStateChange.listen((data) {
+        final event = data.event;
+        // signedIn  → normal login
+        // tokenRefreshed / userUpdated → keep session alive
+        if (event == AuthChangeEvent.signedIn ||
+            event == AuthChangeEvent.tokenRefreshed ||
+            event == AuthChangeEvent.userUpdated) {
+          _fetchProfile();
+        } else if (event == AuthChangeEvent.signedOut) {
+          _profile = null;
+          _isBiometricVerified = false;
+          _status = AuthStatus.unauthenticated;
+          _error = null;
+          notifyListeners();
+        }
+      });
 
-    _checkSession();
+      _checkSession();
+    } catch (_) {
+      _status = AuthStatus.unauthenticated;
+    }
   }
 
   Future<void> _checkSession() async {
     final session = SupabaseService.auth.currentSession;
     if (session != null) {
       await _fetchProfile();
+      if (_profile != null && _status == AuthStatus.authenticated) {
+        final isEnabled =
+            await BiometricService.instance.isBiometricEnabled(_profile!.id);
+        final isAvail = await BiometricService.instance.isAvailable();
+        if (isEnabled && isAvail && !_isBiometricVerified) {
+          _status = AuthStatus.biometricRequired;
+          notifyListeners();
+          return;
+        }
+      }
     } else {
+      _isBiometricVerified = false;
       _status = AuthStatus.unauthenticated;
       notifyListeners();
     }
@@ -106,7 +129,9 @@ class AuthNotifier extends ChangeNotifier {
         }
 
         _profile = ProfileModel.fromMap(data);
-        _status = AuthStatus.authenticated;
+        if (!_pendingBiometricEnablePrompt) {
+          _status = AuthStatus.authenticated;
+        }
         _error = null;
 
         // Update last_login_at (fire-and-forget)
@@ -203,27 +228,78 @@ class AuthNotifier extends ChangeNotifier {
     }
   }
 
+  /// Prompts user for biometric authentication (Fingerprint / Face ID).
+  /// If successful, unlocks app state to authenticated.
+  /// If cancelled or failed, resets state to unauthenticated and signs out.
+  Future<bool> authenticateBiometrics({String? reason}) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      await signOut();
+      return false;
+    }
+
+    final localizedReason = reason ?? S.t('biometric_auth_reason');
+    final success = await BiometricService.instance.authenticate(
+      localizedReason: localizedReason,
+    );
+
+    if (success) {
+      _isBiometricVerified = true;
+      _status = AuthStatus.authenticated;
+      _error = null;
+      notifyListeners();
+      return true;
+    } else {
+      await signOut();
+      return false;
+    }
+  }
+
   /// Sign in with email + password.
   /// Returns null on success, or an error string.
   Future<String?> signIn(String email, String password) async {
     try {
       _error = null;
+      _isBiometricVerified = true;
+      _pendingBiometricEnablePrompt = false;
+
       // Clear any stale session or corrupted token state before signing in
       try {
         await SupabaseService.auth.signOut();
       } catch (_) {}
 
-      await SupabaseService.auth.signInWithPassword(
+      final response = await SupabaseService.auth.signInWithPassword(
         email: email.trim(),
         password: password,
       );
-      // onAuthStateChange fires → _fetchProfile → notifyListeners → router redirects
+
+      final user = response.user ?? SupabaseService.auth.currentUser;
+      if (user != null) {
+        final isAvail = await BiometricService.instance.isAvailable();
+        final isEnabled =
+            await BiometricService.instance.isBiometricEnabled(user.id);
+        if (isAvail && !isEnabled) {
+          _pendingBiometricEnablePrompt = true;
+          // Stay loading so router doesn't navigate until user decides
+          _status = AuthStatus.loading;
+          notifyListeners();
+        }
+      }
       return null;
     } on AuthException catch (e) {
+      _pendingBiometricEnablePrompt = false;
       return _friendlyAuthError(e.message);
     } catch (e) {
+      _pendingBiometricEnablePrompt = false;
       return 'Unexpected login error. Please check your network and try again.';
     }
+  }
+
+  /// Called after user answers or dismisses the post-login biometric dialog
+  void completeBiometricPrompt() {
+    _pendingBiometricEnablePrompt = false;
+    _status = AuthStatus.authenticated;
+    notifyListeners();
   }
 
   /// Register a new user.
@@ -258,6 +334,7 @@ class AuthNotifier extends ChangeNotifier {
       // If Supabase immediately returns a session (email confirmation OFF),
       // manually kick off profile fetch so the redirect fires faster.
       if (response.session != null) {
+        _isBiometricVerified = true;
         await _fetchProfile();
       } else {
         // Email confirmation is ON — user must verify before they can log in.
@@ -278,6 +355,7 @@ class AuthNotifier extends ChangeNotifier {
       await SupabaseService.auth.signOut();
     } catch (_) {}
     _profile = null;
+    _isBiometricVerified = false;
     _status = AuthStatus.unauthenticated;
     _error = null;
     notifyListeners();

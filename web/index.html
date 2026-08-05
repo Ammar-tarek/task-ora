@@ -150,6 +150,14 @@
         }, 800);
       }
     });
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/firebase-messaging-sw.js').catch(function(err) {
+          console.log('FCM Service Worker registration failed: ', err);
+        });
+      });
+    }
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

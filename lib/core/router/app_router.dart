@@ -54,8 +54,8 @@ GoRouter makeRouter(AuthNotifier auth) {
       final loc = state.matchedLocation;
       final status = auth.status;
 
-      // ① Session still loading — stay on splash
-      if (status == AuthStatus.loading) {
+      // ① Session still loading or biometric lock active — stay on splash
+      if (status == AuthStatus.loading || status == AuthStatus.biometricRequired) {
         return loc == '/splash' ? null : '/splash';
       }
 
