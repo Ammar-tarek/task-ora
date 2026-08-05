@@ -1303,7 +1303,7 @@ class TaskRepository {
 
           await NotificationRepository.notifyAction(
             title: 'Task Assigned',
-            body: 'Task "$title" has been assigned to team members.',
+            body: 'Task "$title" has been assigned to you.',
             type: 'task_assigned',
             referenceType: 'task',
             referenceId: taskId,

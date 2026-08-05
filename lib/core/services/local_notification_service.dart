@@ -1,13 +1,25 @@
 // lib/core/services/local_notification_service.dart
-// Thin wrapper around flutter_local_notifications.
+// Thin wrapper around flutter_local_notifications & web notifications.
 // Call LocalNotificationService.init() once in main(), then use
 // LocalNotificationService.show() anywhere in the app.
 
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 import 'web_notification/web_notification.dart';
+
+class NotificationAlertPayload {
+  final String title;
+  final String body;
+  final String? payload;
+  const NotificationAlertPayload({
+    required this.title,
+    required this.body,
+    this.payload,
+  });
+}
 
 class LocalNotificationService {
   LocalNotificationService._();
@@ -20,6 +32,12 @@ class LocalNotificationService {
   /// Router reference for navigating when a push notification is tapped.
   static GoRouter? _router;
   static void setRouter(GoRouter router) => _router = router;
+
+  /// Stream of in-app notification alerts for active UI banner overlays.
+  static final _alertController =
+      StreamController<NotificationAlertPayload>.broadcast();
+  static Stream<NotificationAlertPayload> get onNotificationAlert =>
+      _alertController.stream;
 
   // ── Notification channel IDs ──────────────────────────────────────────────
 
@@ -90,9 +108,6 @@ class LocalNotificationService {
 
   // ── Tap handler ──────────────────────────────────────────────────────────
 
-  /// When the user taps a device notification, navigate to the notifications
-  /// screen. The payload (if present) is currently unused but available for
-  /// future per-notification deep-linking.
   static void _onNotificationTap(NotificationResponse response) {
     if (_router == null) return;
     _router!.push('/notifications');
@@ -100,14 +115,10 @@ class LocalNotificationService {
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  /// Pass one of these types to [show] to pick the right channel.
   static const String typeTask = 'task';
   static const String typeHr = 'hr';
 
-  /// Show a local notification immediately.
-  ///
-  /// [type]  — use [typeTask] or [typeHr].
-  /// [id]    — optional stable id; collisions replace the previous notif.
+  /// Show a local notification immediately & emit in-app banner alert.
   static Future<void> show({
     required String title,
     required String body,
@@ -115,6 +126,11 @@ class LocalNotificationService {
     int? id,
     String? payload,
   }) async {
+    // Always broadcast in-app alert payload for active UI screens
+    _alertController.add(
+      NotificationAlertPayload(title: title, body: body, payload: payload),
+    );
+
     if (!_initialized) return;
     if (kIsWeb) {
       showWebNotification(title: title, body: body);
