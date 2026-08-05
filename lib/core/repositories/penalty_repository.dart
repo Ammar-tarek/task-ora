@@ -38,14 +38,17 @@ class PenaltyItem {
     final rawStatus = m['status'] as String?;
     final calcStatus = rawStatus ?? (isApp ? 'approved' : 'pending');
 
+    final empId = m['employee_id'] as String? ?? m['user_id'] as String? ?? m['profile_id'] as String? ?? '';
+    final dateStr = m['penalty_date'] as String? ?? m['date'] as String? ?? m['created_at'] as String? ?? '';
+
     return PenaltyItem(
-      id: m['id'] as String,
-      employeeId: m['employee_id'] as String? ?? '',
+      id: m['id'] as String? ?? '',
+      employeeId: empId,
       employeeName: employee?['full_name'] as String? ?? 'Unknown',
       penaltyType: pType?['name'] as String? ?? 'Penalty',
       penaltyTypeId: m['penalty_type_id'] as String? ?? '',
       reason: m['reason'] as String? ?? '',
-      date: m['penalty_date'] as String? ?? '',
+      date: dateStr,
       amount: (m['amount'] as num?)?.toDouble() ?? 0,
       isApplied: isApp || calcStatus == 'approved',
       status: calcStatus,
@@ -162,13 +165,11 @@ class PenaltyRepository {
           data = await _admin
               .from('penalties')
               .select()
-              .inFilter('employee_id', idList)
-              .order('penalty_date', ascending: false);
+              .inFilter('employee_id', idList);
         } else {
           data = await _admin
               .from('penalties')
-              .select()
-              .order('penalty_date', ascending: false);
+              .select();
         }
       }
 
@@ -177,7 +178,7 @@ class PenaltyRepository {
 
       return data.map((m) {
         final itemMap = Map<String, dynamic>.from(m as Map);
-        final empId = itemMap['employee_id'] as String?;
+        final empId = itemMap['employee_id'] as String? ?? itemMap['user_id'] as String?;
         final typeId = itemMap['penalty_type_id'] as String?;
         final apprId = itemMap['approved_by'] as String?;
 
@@ -217,11 +218,22 @@ class PenaltyRepository {
               .eq('employee_id', employeeId)
               .order('penalty_date', ascending: false);
         } catch (_) {
-          data = await _client
-              .from('penalties')
-              .select()
-              .eq('employee_id', employeeId)
-              .order('penalty_date', ascending: false);
+          try {
+            data = await _admin
+                .from('penalties')
+                .select()
+                .eq('employee_id', employeeId);
+          } catch (_) {
+            try {
+              final raw = await _client
+                  .from('penalties')
+                  .select()
+                  .eq('employee_id', employeeId);
+              data = raw as List;
+            } catch (_) {
+              data = [];
+            }
+          }
         }
       }
 
@@ -230,7 +242,7 @@ class PenaltyRepository {
 
       return data.map((m) {
         final itemMap = Map<String, dynamic>.from(m as Map);
-        final empId = itemMap['employee_id'] as String?;
+        final empId = itemMap['employee_id'] as String? ?? itemMap['user_id'] as String?;
         final typeId = itemMap['penalty_type_id'] as String?;
         final apprId = itemMap['approved_by'] as String?;
 

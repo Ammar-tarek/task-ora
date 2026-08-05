@@ -2145,7 +2145,6 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
   String? _selectedEmployeeId;
   late String _selectedDate;
   TimeOfDay _inTime = const TimeOfDay(hour: 9, minute: 0);
-  TimeOfDay _outTime = const TimeOfDay(hour: 17, minute: 0);
   String _status = 'present';
   bool _saving = false;
   String? _error;
@@ -2207,12 +2206,6 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
 
   bool get _isAbsent => _status == 'absent';
 
-  bool _endsAfterStart() {
-    final inMins = _inTime.hour * 60 + _inTime.minute;
-    final outMins = _outTime.hour * 60 + _outTime.minute;
-    return outMins > inMins;
-  }
-
   Future<void> _pickDate() async {
     final initial = DateTime.tryParse(_selectedDate) ?? DateTime.now();
     final picked = await showDatePicker(
@@ -2226,13 +2219,13 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
     }
   }
 
-  Future<void> _pickTime(bool isIn) async {
+  Future<void> _pickTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: isIn ? _inTime : _outTime,
+      initialTime: _inTime,
     );
     if (picked != null) {
-      setState(() => isIn ? _inTime = picked : _outTime = picked);
+      setState(() => _inTime = picked);
     }
   }
 
@@ -2241,10 +2234,6 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
   Future<void> _save() async {
     if (_selectedEmployeeId == null) {
       setState(() => _error = 'Please select an employee.');
-      return;
-    }
-    if (!_isAbsent && !_endsAfterStart()) {
-      setState(() => _error = 'Check-out time must be after check-in time.');
       return;
     }
     setState(() {
@@ -2260,7 +2249,7 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
       employeeId: _selectedEmployeeId!,
       date: _selectedDate,
       checkInTime: _buildDateTime(_selectedDate, _inTime),
-      checkOutTime: _buildDateTime(_selectedDate, _outTime),
+      checkOutTime: null,
       reason: note,
       dailyReport: _reportCtrl.text.trim().isEmpty
           ? null
@@ -2287,7 +2276,7 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
         children: [
           Icon(Icons.person_add_alt_1_outlined, color: AppColors.gold),
           SizedBox(width: 8),
-          Text('Add Employee Attendance'),
+          Text('Add Employee Check-In'),
         ],
       ),
       content: SizedBox(
@@ -2381,20 +2370,7 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
                           Icons.access_time_outlined,
                           color: AppColors.gold,
                         ),
-                        onTap: () => _pickTime(true),
-                      ),
-
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          'Check-out: ${_fmtTime(_outTime)}',
-                          style: AppTextStyles.bodyMd,
-                        ),
-                        trailing: const Icon(
-                          Icons.access_time_outlined,
-                          color: AppColors.gold,
-                        ),
-                        onTap: () => _pickTime(false),
+                        onTap: _pickTime,
                       ),
                       const SizedBox(height: 8),
                     ],

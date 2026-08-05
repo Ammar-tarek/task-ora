@@ -781,14 +781,14 @@ class AttendanceRepository {
     required String employeeId,
     required String date,
     required String checkInTime,
-    required String checkOutTime,
+    String? checkOutTime,
     required String reason,
     required String status,
     String? dailyReport,
   }) async {
     final isAbsent = status == 'absent';
     final inDt = DateTime.tryParse(checkInTime);
-    final outDt = DateTime.tryParse(checkOutTime);
+    final outDt = checkOutTime != null ? DateTime.tryParse(checkOutTime) : null;
 
     // Absent days carry no times. Otherwise check-out must be after check-in.
     if (!isAbsent && inDt != null && outDt != null && !outDt.isAfter(inDt)) {

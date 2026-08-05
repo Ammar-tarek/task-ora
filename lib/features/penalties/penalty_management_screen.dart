@@ -1,6 +1,7 @@
 // lib/features/penalties/penalty_management_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
@@ -47,13 +48,9 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
     if (!mounted) return;
 
     final isAdminOrManager = profile?.isAdminOrManager == true;
-    final canManage =
-        isAdminOrManager ||
-        context.read<TeamPrivilegesNotifier>().canManagePenalties;
-    // Admin & Super Admin see everyone; manager sees only their team.
     final scopeTeamId = (profile?.isAdmin == true || profile?.isSuperAdmin == true) ? null : profile?.teamId;
-    List<PenaltyItem> data;
-    if (canManage) {
+    List<PenaltyItem> data = [];
+    if (isAdminOrManager) {
       data = await PenaltyRepository.fetchAll(
         teamId: scopeTeamId,
         issuerId: profile?.id,
@@ -61,6 +58,18 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
     } else {
       data = await PenaltyRepository.fetchForEmployee(profile?.id ?? '');
     }
+
+    // Always merge penalties assigned to the logged-in user to guarantee they appear
+    if (profile != null && profile.id.isNotEmpty) {
+      final ownPenalties = await PenaltyRepository.fetchForEmployee(profile.id);
+      final existingIds = data.map((p) => p.id).toSet();
+      for (final p in ownPenalties) {
+        if (!existingIds.contains(p.id)) {
+          data.add(p);
+        }
+      }
+    }
+
     if (mounted) {
       setState(() {
         _penalties = data;
@@ -86,7 +95,18 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.maybePop(context),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              final role = profile?.role;
+              if (role == 'admin' || role == 'super_admin' || role == 'manager') {
+                context.go('/dashboard');
+              } else {
+                context.go('/tasks');
+              }
+            }
+          },
           tooltip: 'Back',
         ),
         title: Text(isManager ? S.t('penalty_management') : S.t('penalties')),

@@ -82,10 +82,10 @@ GoRouter makeRouter(AuthNotifier auth) {
         return (role == 'admin' || role == 'manager') ? '/dashboard' : '/tasks';
       }
 
-      // ④ Logged in — redirect away from auth-only screens
-      if (loc == '/splash' || loc == '/login' || loc == '/signup') {
+      // ④ Logged in — redirect away from auth-only screens & root path '/'
+      if (loc == '/' || loc == '/splash' || loc == '/login' || loc == '/signup') {
         final role = auth.profile?.role ?? 'employee';
-        if (role == 'admin') return '/dashboard';
+        if (role == 'admin' || role == 'super_admin') return '/dashboard';
         if (role == 'manager') return '/dashboard';
         if (role == 'employee') return '/tasks';
         if (role == 'client') return '/tasks';
@@ -153,6 +153,7 @@ GoRouter makeRouter(AuthNotifier auth) {
     },
 
     routes: [
+      GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
       // ── Auth ──────────────────────────────────────────────────────────────
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
