@@ -7,7 +7,7 @@ class ApkDownloadBanner extends StatefulWidget {
   const ApkDownloadBanner({super.key});
 
   static const String apkUrl =
-      'https://github.com/Ammar-tarek/task-ora/releases/download/1.0.5/app-release.apk';
+      'https://github.com/Ammar-tarek/task-ora/releases/download/1.6.0/app-release.apk';
 
   static Future<void> downloadApk() async {
     final uri = Uri.parse(apkUrl);
