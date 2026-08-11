@@ -417,6 +417,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           Icons.how_to_reg_outlined,
                           () => context.push('/attendance'),
                         ),
+                        if (profile?.isClient != true)
+                          _QuickActionData(
+                            'penalties',
+                            Icons.gavel_outlined,
+                            () => context.push('/penalties'),
+                          ),
                         // Finance & Expenses — admin only
                         if (isAdmin) ..._adminFinanceActions(context),
                       ],

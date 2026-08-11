@@ -109,7 +109,7 @@ class _PenaltyManagementScreenState extends State<PenaltyManagementScreen> {
           },
           tooltip: 'Back',
         ),
-        title: Text(isManager ? S.t('penalty_management') : S.t('penalties')),
+        title: Text(isManager ? S.t('penalty_management') : S.t('my_penalties')),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
@@ -680,7 +680,7 @@ class _PenaltyCard extends StatelessWidget {
                 style: AppTextStyles.bodySm.copyWith(fontSize: 11),
               ),
               const Spacer(),
-              if (isManager && !isOwnPenalty && isPending) ...[
+              if ((onApprove != null || onReject != null) && isPending) ...[
                 if (onReject != null)
                   TextButton(
                     onPressed: onReject,

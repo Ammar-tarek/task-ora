@@ -2,6 +2,8 @@
 // Per-client finance view: tasks, calendar meetings (with cost), and CRM entries.
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/auth/auth_notifier.dart';
 import '../../core/models/client_model.dart';
 import '../../core/models/task_model.dart';
 import '../../core/repositories/client_repository.dart';
@@ -59,6 +61,55 @@ class _ClientFinanceScreenState extends State<ClientFinanceScreen>
     }
   }
 
+  Future<void> _confirmDeleteClient() async {
+    if (_client == null) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: const Text('Delete Client?'),
+        content: Text(
+          'Are you sure you want to delete "${_client!.companyName}"?\n\n'
+          'This will permanently remove the client account and profile.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.statusHigh,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Client'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _loading = true);
+      final res = await ClientRepository.deleteClient(_client!.id);
+      if (!mounted) return;
+      if (res.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Client "${_client!.companyName}" removed.')),
+        );
+        Navigator.pop(context);
+      } else {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.error,
+            content: Text(res.error ?? 'Failed to delete client.'),
+          ),
+        );
+      }
+    }
+  }
+
   // ── Financial summary ───────────────────────────────────────────────────────
 
   double get _totalTaskCost => _tasks.fold(0, (s, t) => s + (t.cost ?? 0));
@@ -71,11 +122,21 @@ class _ClientFinanceScreenState extends State<ClientFinanceScreen>
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.select<AuthNotifier, dynamic>((a) => a.profile);
+    final isAdmin = profile?.isAdmin ?? false;
     final name = _client?.companyName ?? 'Client';
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(name),
+        actions: [
+          if (isAdmin && _client != null)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: AppColors.error),
+              tooltip: 'Delete client',
+              onPressed: _confirmDeleteClient,
+            ),
+        ],
         bottom: TabBar(
           controller: _tab,
           tabs: const [

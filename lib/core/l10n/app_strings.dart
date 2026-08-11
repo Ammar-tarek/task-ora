@@ -39,6 +39,7 @@ class S {
       'team_privileges': 'Team Privileges',
       'roles_privileges': 'Roles & Privileges',
       'penalty_management': 'Penalty Management',
+      'my_penalties': 'My Penalties',
       'analytics': 'Analytics',
 
       // Dashboard & Headers
@@ -337,6 +338,7 @@ class S {
       'team_privileges': 'صلاحيات الفريق',
       'roles_privileges': 'الأدوار والصلاحيات',
       'penalty_management': 'إدارة الجزاءات',
+      'my_penalties': 'جزاءاتي',
       'analytics': 'التحليلات',
 
       // Dashboard & Headers

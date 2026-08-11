@@ -150,17 +150,21 @@ class ClientRepository {
         return (client: null, error: 'Failed to create user account');
       }
 
-      // 2. Upsert profile row (trigger may have already created it)
+      // 2. Wait for DB trigger to complete creating profile row
+      await Future.delayed(const Duration(milliseconds: 800));
+
+      // 3. Upsert profile row (set role = 'client')
       await _adminDb.from('profiles').upsert({
         'id': userId,
         'full_name': fullName,
         'role': 'client',
+        'status': 'active',
       });
 
-      // 3. Insert client_profiles row
+      // 4. Insert/Upsert client_profiles row
       final data = await _adminDb
           .from('client_profiles')
-          .insert({
+          .upsert({
             'id': userId,
             'company_name': companyName,
             'contact_person': contactPerson,
@@ -465,5 +469,83 @@ class ClientRepository {
         }
       }
     } catch (_) {}
+  }
+
+  static Future<void> deleteEvent(String eventId) async {
+    try {
+      await _adminDb.from('event_attendees').delete().eq('event_id', eventId);
+      await _adminDb.from('events').delete().eq('id', eventId);
+    } catch (_) {}
+  }
+
+  /// Deletes client profile, user profile, unlinks references, and deletes auth user.
+  static Future<({bool success, String? error})> deleteClient(String clientId) async {
+    try {
+      // 1. Unlink client_id from tables that retain history
+      final tablesToUnlink = [
+        ('tasks', 'client_id'),
+        ('events', 'client_id'),
+        ('room_bookings', 'client_id'),
+        ('custom_rows', 'linked_client_id'),
+        ('custom_tables', 'client_id'),
+      ];
+      for (final pair in tablesToUnlink) {
+        try {
+          await _adminDb.from(pair.$1).update({pair.$2: null}).eq(pair.$2, clientId);
+        } catch (_) {}
+      }
+
+      // 2. Delete client-specific child records
+      final tablesToDeleteByClient = [
+        'ai_interactions',
+        'crm_payments',
+        'crm_entries',
+        'client_invoices',
+        'client_task_visibility',
+        'client_task_column_visibility',
+      ];
+      for (final table in tablesToDeleteByClient) {
+        try {
+          await _adminDb.from(table).delete().eq('client_id', clientId);
+        } catch (_) {}
+      }
+
+      // 3. Delete profile-specific child records
+      final tablesToDeleteByProfile = [
+        'event_attendees',
+        'task_assignees',
+        'notifications',
+      ];
+      for (final table in tablesToDeleteByProfile) {
+        try {
+          await _adminDb.from(table).delete().eq('profile_id', clientId);
+        } catch (_) {}
+      }
+
+      // 4. Delete from client_profiles
+      try {
+        await _adminDb.from('client_profiles').delete().eq('id', clientId);
+      } on PostgrestException catch (e) {
+        return (success: false, error: 'Could not remove client profile: ${e.message}');
+      } catch (e) {
+        return (success: false, error: 'Could not remove client profile: $e');
+      }
+
+      // 5. Delete profile row
+      try {
+        await _adminDb.from('profiles').delete().eq('id', clientId);
+      } on PostgrestException catch (e) {
+        return (success: false, error: 'Could not remove profile: ${e.message}');
+      } catch (_) {}
+
+      // 6. Delete auth user
+      try {
+        await _adminDb.auth.admin.deleteUser(clientId);
+      } catch (_) {}
+
+      return (success: true, error: null);
+    } catch (e) {
+      return (success: false, error: e.toString());
+    }
   }
 }

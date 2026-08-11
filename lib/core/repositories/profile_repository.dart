@@ -114,14 +114,14 @@ class ProfileRepository {
     required String email,
     required String password,
     required String fullName,
-    required String role, // 'manager' or 'employee'
+    required String role, // 'admin', 'manager', 'employee', 'client'
     String? teamId, // auto-assign to this team after creation
+    String? companyName,
+    String? contactPerson,
+    String? phone,
   }) async {
     try {
-      // Step 1: Create auth user with only full_name in metadata.
-      // We intentionally omit 'role' here so the handle_new_user DB trigger
-      // creates the profile row with its default role ('employee'), avoiding
-      // any CHECK constraint that doesn't include 'manager'.
+      // Step 1: Create auth user with full_name in metadata.
       final response = await SupabaseService.adminClient.auth.admin.createUser(
         AdminUserAttributes(
           email: email.trim(),
@@ -134,16 +134,33 @@ class ProfileRepository {
       final userId = response.user?.id;
       if (userId == null) return 'Failed to create account.';
 
-      // Step 2: Wait for the trigger to insert the profile row, then update
-      // the role and name explicitly — bypassing any trigger constraints.
+      // Step 2: Wait for trigger to insert the profile row, then update role
       await Future.delayed(const Duration(milliseconds: 800));
       await SupabaseService.adminClient.from('profiles').upsert({
         'id': userId,
         'full_name': fullName.trim(),
         'role': role,
         'status': 'active',
-        'team_id': ?teamId,
+        if (teamId != null && teamId.isNotEmpty) 'team_id': teamId,
       });
+
+      // Step 3: If role is client, ensure client_profiles row exists
+      if (role == 'client') {
+        final compName = (companyName != null && companyName.trim().isNotEmpty)
+            ? companyName.trim()
+            : fullName.trim();
+        final contactP = (contactPerson != null && contactPerson.trim().isNotEmpty)
+            ? contactPerson.trim()
+            : fullName.trim();
+
+        await SupabaseService.adminClient.from('client_profiles').upsert({
+          'id': userId,
+          'company_name': compName,
+          'contact_person': contactP,
+          'email': email.trim(),
+          if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+        });
+      }
 
       return null;
     } on AuthException catch (e) {

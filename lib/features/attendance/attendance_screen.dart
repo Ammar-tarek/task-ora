@@ -492,20 +492,48 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ],
       ),
       // FAB for employee self-service or admin/manager manual entry
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: isManager
-            ? _showAdminAddAttendanceDialog
-            : () => _showManualEntryDialog(null),
-        backgroundColor: AppColors.primary,
-        icon: Icon(
-          isManager ? Icons.person_add_alt_1_outlined : Icons.add,
-          color: AppColors.gold,
-        ),
-        label: Text(
-          isManager ? 'Add Attendance' : 'Log Attendance',
-          style: const TextStyle(color: AppColors.gold),
-        ),
-      ),
+      floatingActionButton: isManager
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'log_manual_fab',
+                  onPressed: () => _showManualEntryDialog(null),
+                  backgroundColor: AppColors.surfaceContainerLowest,
+                  icon: const Icon(
+                    Icons.edit_note_outlined,
+                    color: AppColors.gold,
+                  ),
+                  label: const Text(
+                    'Log Attendance',
+                    style: TextStyle(color: AppColors.gold),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'admin_add_fab',
+                  onPressed: _showAdminAddAttendanceDialog,
+                  backgroundColor: AppColors.primary,
+                  icon: const Icon(
+                    Icons.person_add_alt_1_outlined,
+                    color: AppColors.gold,
+                  ),
+                  label: const Text(
+                    'Add / Override',
+                    style: TextStyle(color: AppColors.gold),
+                  ),
+                ),
+              ],
+            )
+          : FloatingActionButton.extended(
+              onPressed: () => _showManualEntryDialog(null),
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.add, color: AppColors.gold),
+              label: const Text(
+                'Log Attendance',
+                style: TextStyle(color: AppColors.gold),
+              ),
+            ),
       body: Column(
         children: [
           const TeamFilterChip(),
@@ -620,6 +648,27 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _showManualEntryDialog(null),
+                                    icon: const Icon(
+                                      Icons.edit_note_outlined,
+                                      size: 16,
+                                      color: AppColors.gold,
+                                    ),
+                                    label: const Text(
+                                      'Log Attendance',
+                                      style: TextStyle(color: AppColors.gold),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: AppColors.gold),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      textStyle: AppTextStyles.labelMd,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
                                   ElevatedButton.icon(
                                     onPressed: _showAdminAddAttendanceDialog,
                                     icon: const Icon(
@@ -628,7 +677,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                       color: AppColors.gold,
                                     ),
                                     label: const Text(
-                                      'Add Attendance',
+                                      'Add / Override',
                                       style: TextStyle(color: AppColors.gold),
                                     ),
                                     style: ElevatedButton.styleFrom(
@@ -706,7 +755,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                     record: r,
                                     isManager: true,
                                     onEdit: canManageAttendance
-                                        ? () => _showOverrideDialog(r)
+                                        ? () => (r.isManual
+                                            ? _showManualEntryDialog(r)
+                                            : _showOverrideDialog(r))
                                         : null,
                                     onApprove:
                                         (!canManageAttendance ||
@@ -1048,14 +1099,14 @@ class _AttendanceRow extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (!isManager &&
-                        record.isManual &&
-                        record.manualNote != null) ...[
+                    if (record.isManual && record.manualNote != null) ...[
                       const SizedBox(height: 2),
                       Text(
                         'Note: ${record.manualNote}',
                         style: AppTextStyles.bodySm.copyWith(
-                          color: AppColors.onSurfaceVariant,
+                          color: isManager
+                              ? AppColors.gold
+                              : AppColors.onSurfaceVariant,
                           fontSize: 11,
                         ),
                       ),
@@ -1190,12 +1241,16 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
   String _status = 'present';
   bool _saving = false;
   String? _error;
+  String? _selectedEmployeeId;
+  List<Map<String, String>> _employees = [];
+  bool _loadingEmployees = false;
 
   static const _statuses = ['present', 'late', 'half_day'];
 
   @override
   void initState() {
     super.initState();
+    _selectedEmployeeId = widget.employeeId;
     final r = widget.existing;
     if (r != null) {
       _date = DateTime.tryParse(r.date) ?? _date;
@@ -1205,6 +1260,45 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
       }
       _status = r.status == 'absent' ? 'present' : r.status;
       _noteCtrl.text = r.manualNote ?? '';
+    }
+
+    final profile = context.read<AuthNotifier>().profile;
+    final privs = context.read<TeamPrivilegesNotifier>();
+    final isManager = profile?.isAdmin == true || privs.canManageAttendance;
+    if (isManager && widget.existing == null) {
+      _loadEmployees();
+    }
+  }
+
+  Future<void> _loadEmployees() async {
+    setState(() => _loadingEmployees = true);
+    try {
+      final data = await SupabaseService.adminClient
+          .from('profiles')
+          .select('id, full_name')
+          .neq('role', 'client')
+          .eq('status', 'active')
+          .order('full_name');
+      final list = (data as List)
+          .map(
+            (m) => {
+              'id': m['id'] as String,
+              'name': m['full_name'] as String? ?? 'Unknown',
+            },
+          )
+          .toList();
+      if (mounted) {
+        setState(() {
+          _employees = list;
+          if (list.isNotEmpty &&
+              (_selectedEmployeeId == null || _selectedEmployeeId!.isEmpty)) {
+            _selectedEmployeeId = list.first['id'];
+          }
+          _loadingEmployees = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingEmployees = false);
     }
   }
 
@@ -1226,12 +1320,17 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
   }
 
   Future<void> _save() async {
+    final targetEmp = _selectedEmployeeId ?? widget.employeeId;
+    if (targetEmp.isEmpty) {
+      setState(() => _error = 'Please select an employee.');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
     });
     final ok = await AttendanceRepository.manualAddAttendance(
-      employeeId: widget.employeeId,
+      employeeId: targetEmp,
       date:
           '${_date.year.toString().padLeft(4, '0')}-'
           '${_date.month.toString().padLeft(2, '0')}-'
@@ -1283,109 +1382,152 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+    final profile = context.watch<AuthNotifier>().profile;
+    final privs = context.watch<TeamPrivilegesNotifier>();
+    final isManager = profile?.isAdmin == true || privs.canManageAttendance;
+
     return AlertDialog(
-      title: Text(isEdit ? 'Edit Attendance' : 'Log Manual Check-In'),
+      title: Text(isEdit ? 'Edit Manual Attendance' : 'Log Manual Check-In'),
       content: SizedBox(
         width: 360,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_error != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _error!,
-                    style: AppTextStyles.bodySm.copyWith(
-                      color: AppColors.error,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-
-              // Date
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Date: ${_fmtDate(_date)}',
-                  style: AppTextStyles.bodyMd,
-                ),
-                trailing: const Icon(
-                  Icons.calendar_today_outlined,
-                  color: AppColors.gold,
-                ),
-                onTap: isEdit ? null : _pickDate,
-              ),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
-
-              // Status
-              DropdownButtonFormField<String>(
-                initialValue: _status,
-                dropdownColor: AppColors.surfaceContainerLowest,
-                style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurface),
-                decoration: const InputDecoration(labelText: 'Status'),
-                items: _statuses
-                    .map(
-                      (s) => DropdownMenuItem(
-                        value: s,
+        child: _loadingEmployees
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.gold),
+              )
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_error != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         child: Text(
-                          s[0].toUpperCase() +
-                              s.substring(1).replaceAll('_', ' '),
-                          style: TextStyle(color: AppColors.onSurface),
+                          _error!,
+                          style: AppTextStyles.bodySm.copyWith(
+                            color: AppColors.error,
+                          ),
                         ),
                       ),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _status = v ?? 'present'),
-              ),
-              const SizedBox(height: 12),
+                      const SizedBox(height: 12),
+                    ],
 
-              // Check-in time
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Check-in: ${_fmtTime(_inTime)}',
-                  style: AppTextStyles.bodyMd,
-                ),
-                trailing: const Icon(
-                  Icons.access_time_outlined,
-                  color: AppColors.gold,
-                ),
-                onTap: _pickTime,
-              ),
-              const SizedBox(height: 8),
+                    if (isManager && !isEdit && _employees.isNotEmpty) ...[
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedEmployeeId,
+                        dropdownColor: AppColors.surfaceContainerLowest,
+                        style: AppTextStyles.bodyMd.copyWith(
+                          color: AppColors.onSurface,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Employee',
+                          prefixIcon: Icon(Icons.person_outlined),
+                        ),
+                        items: _employees
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e['id'],
+                                child: Text(
+                                  e['name'] ?? 'Unknown',
+                                  style: TextStyle(color: AppColors.onSurface),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) =>
+                            setState(() => _selectedEmployeeId = v),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
 
-              // Note
-              TextField(
-                controller: _noteCtrl,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Note (optional)',
-                  hintText: 'Reason for manual check-in…',
-                ),
-              ),
+                    // Date
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        'Date: ${_fmtDate(_date)}',
+                        style: AppTextStyles.bodyMd,
+                      ),
+                      trailing: const Icon(
+                        Icons.calendar_today_outlined,
+                        color: AppColors.gold,
+                      ),
+                      onTap: isEdit ? null : _pickDate,
+                    ),
+                    const Divider(height: 1),
+                    const SizedBox(height: 8),
 
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'This record will be pending until a manager approves it.',
-                  style: AppTextStyles.bodySm.copyWith(color: AppColors.gold),
+                    // Status
+                    DropdownButtonFormField<String>(
+                      initialValue: _status,
+                      dropdownColor: AppColors.surfaceContainerLowest,
+                      style: AppTextStyles.bodyMd.copyWith(
+                        color: AppColors.onSurface,
+                      ),
+                      decoration: const InputDecoration(labelText: 'Status'),
+                      items: _statuses
+                          .map(
+                            (s) => DropdownMenuItem(
+                              value: s,
+                              child: Text(
+                                s[0].toUpperCase() +
+                                    s.substring(1).replaceAll('_', ' '),
+                                style: TextStyle(color: AppColors.onSurface),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) =>
+                          setState(() => _status = v ?? 'present'),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Check-in time
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        'Check-in: ${_fmtTime(_inTime)}',
+                        style: AppTextStyles.bodyMd,
+                      ),
+                      trailing: const Icon(
+                        Icons.access_time_outlined,
+                        color: AppColors.gold,
+                      ),
+                      onTap: _pickTime,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Note
+                    TextField(
+                      controller: _noteCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Note (optional)',
+                        hintText: 'Reason for manual check-in…',
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.gold.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        isManager
+                            ? 'This manual attendance record will be saved for review/approval.'
+                            : 'This record will be pending until a manager approves it.',
+                        style: AppTextStyles.bodySm.copyWith(
+                          color: AppColors.gold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
       ),
       actions: [
         TextButton(
@@ -1970,6 +2112,20 @@ class __EmployeeMonthlyAttendanceDialogState
     _load();
   }
 
+  Future<void> _showManualEntryDialog(AttendanceRecord record) async {
+    await showDialog(
+      context: context,
+      builder: (_) => _ManualAttendanceDialog(
+        employeeId: record.employeeId,
+        existing: record,
+        onSaved: () {
+          widget.onRefreshParent();
+          _load();
+        },
+      ),
+    );
+  }
+
   Future<void> _showOverrideDialog(AttendanceRecord record) async {
     await showDialog(
       context: context,
@@ -2099,7 +2255,9 @@ class __EmployeeMonthlyAttendanceDialogState
                     record: r,
                     isManager: isManager,
                     onEdit: canManageAttendance
-                        ? () => _showOverrideDialog(r)
+                        ? () => (r.isManual
+                            ? _showManualEntryDialog(r)
+                            : _showOverrideDialog(r))
                         : null,
                     onApprove:
                         (!canManageAttendance ||

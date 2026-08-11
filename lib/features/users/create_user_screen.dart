@@ -28,6 +28,8 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
   final _namCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+  final _companyCtrl = TextEditingController();
+  final _contactCtrl = TextEditingController();
   bool _saving = false;
   bool _obscurePass = true;
   String _selectedRole = 'manager';
@@ -62,6 +64,8 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     _namCtrl.dispose();
     _emailCtrl.dispose();
     _passCtrl.dispose();
+    _companyCtrl.dispose();
+    _contactCtrl.dispose();
     _promoteSearch.dispose();
     super.dispose();
   }
@@ -91,6 +95,8 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       fullName: _namCtrl.text.trim(),
       role: role,
       teamId: widget.teamId,
+      companyName: _companyCtrl.text.trim().isEmpty ? null : _companyCtrl.text.trim(),
+      contactPerson: _contactCtrl.text.trim().isEmpty ? null : _contactCtrl.text.trim(),
     );
 
     if (!mounted) return;
@@ -112,6 +118,8 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       _namCtrl.clear();
       _emailCtrl.clear();
       _passCtrl.clear();
+      _companyCtrl.clear();
+      _contactCtrl.clear();
     }
   }
 
@@ -276,7 +284,13 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                 Text(
                   isAdmin
                       ? (isNew
-                            ? 'Create Manager Account'
+                            ? (_selectedRole == 'admin'
+                                ? 'Create Admin Account'
+                                : _selectedRole == 'client'
+                                    ? 'Create Client Account'
+                                    : _selectedRole == 'manager'
+                                        ? 'Create Manager Account'
+                                        : 'Create Employee Account')
                             : 'Promote to Manager')
                       : 'Create Employee Account',
                   style: AppTextStyles.labelMd,
@@ -285,7 +299,11 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                 Text(
                   isAdmin
                       ? (isNew
-                            ? 'Creates a brand-new account with manager privileges.'
+                            ? (_selectedRole == 'admin'
+                                ? 'Creates a new account with full administrative privileges.'
+                                : _selectedRole == 'client'
+                                    ? 'Creates a client account for portal access.'
+                                    : 'Creates a new user account with assigned permissions.')
                             : 'Upgrade an existing employee to manager role.')
                       : 'New account can view and update tasks for their team.',
                   style: AppTextStyles.bodySm.copyWith(
@@ -423,9 +441,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
             // Role selection dropdown
             Builder(
               builder: (context) {
-                final isSuperAdmin = context.read<AuthNotifier>().profile?.isSuperAdmin == true;
+                final isAdmin = context.read<AuthNotifier>().profile?.isAdmin == true;
                 final items = [
-                  if (isSuperAdmin)
+                  if (isAdmin)
                     const DropdownMenuItem(value: 'admin', child: Text('Admin (Full System Access)')),
                   const DropdownMenuItem(value: 'manager', child: Text('Manager (Team & Operations Access)')),
                   const DropdownMenuItem(value: 'employee', child: Text('Employee (Tasks & Attendance Access)')),
@@ -445,6 +463,29 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                 );
               },
             ),
+
+            if (_selectedRole == 'client') ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _companyCtrl,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'COMPANY NAME (OPTIONAL)',
+                  hintText: 'e.g. Acme Corp (defaults to full name if empty)',
+                  prefixIcon: Icon(Icons.business_outlined, size: 18),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _contactCtrl,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'CONTACT PERSON (OPTIONAL)',
+                  hintText: 'Defaults to full name if empty',
+                  prefixIcon: Icon(Icons.contact_mail_outlined, size: 18),
+                ),
+              ),
+            ],
 
             const SizedBox(height: 8),
             Text(

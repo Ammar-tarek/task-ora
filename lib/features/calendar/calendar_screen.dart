@@ -341,6 +341,39 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
   }
 
+  Future<void> _deleteEvent(CalEvent event) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: const Text('Delete Event?'),
+        content: Text('Are you sure you want to delete "${event.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.statusHigh,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await ClientRepository.deleteEvent(event.id);
+      if (mounted) {
+        setState(() {
+          _events.removeWhere((e) => e.id == event.id);
+        });
+      }
+    }
+  }
+
   void _showEventDetail(CalEvent event) {
     final profile = context.read<AuthNotifier>().profile;
     showModalBottomSheet(
@@ -355,6 +388,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         event: event,
         profile: profile,
         onEdit: () => _showEditEventSheet(event),
+        onDelete: () => _deleteEvent(event),
         onEdited: (updated) => setState(() {
           final idx = _events.indexWhere((e) => e.id == updated.id);
           if (idx != -1) _events[idx] = updated;
@@ -376,6 +410,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       builder: (_) => _EditEventSheet(
         event: event,
         createdBy: profile?.id ?? '',
+        onDelete: () => _deleteEvent(event),
         onUpdated: (updated) => setState(() {
           final idx = _events.indexWhere((e) => e.id == updated.id);
           if (idx != -1) _events[idx] = updated;
@@ -1361,11 +1396,13 @@ class _EventDetailSheet extends StatelessWidget {
     required this.event,
     this.profile,
     this.onEdit,
+    this.onDelete,
     this.onEdited,
   });
   final CalEvent event;
   final ProfileModel? profile;
   final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
   final ValueChanged<CalEvent>? onEdited;
 
   String _timeLabel() {
@@ -1393,6 +1430,10 @@ class _EventDetailSheet extends StatelessWidget {
     final canEdit =
         profile != null &&
         (profile!.isAdmin || profile!.isManager || profile!.isClient);
+    final canDelete =
+        profile != null &&
+        (profile!.isAdmin || profile!.isManager);
+
     return Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.72,
@@ -1489,7 +1530,23 @@ class _EventDetailSheet extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
+                  ],
+                  if (canDelete) ...[
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          onDelete?.call();
+                        },
+                        icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.error),
+                        label: const Text('Delete', style: TextStyle(color: AppColors.error)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.error),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                   ],
                   Expanded(
                     child: FilledButton.icon(
@@ -1999,10 +2056,12 @@ class _EditEventSheet extends StatefulWidget {
   const _EditEventSheet({
     required this.event,
     required this.createdBy,
+    this.onDelete,
     required this.onUpdated,
   });
   final CalEvent event;
   final String createdBy;
+  final VoidCallback? onDelete;
   final ValueChanged<CalEvent> onUpdated;
 
   @override
@@ -2438,6 +2497,24 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                           ),
                   ),
                 ),
+                if (widget.onDelete != null) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        widget.onDelete?.call();
+                      },
+                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                      label: const Text('Delete Event', style: TextStyle(color: AppColors.error)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.error),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

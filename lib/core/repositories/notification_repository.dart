@@ -257,9 +257,12 @@ class NotificationRepository {
         } catch (_) {}
       }
 
-      // 4) Remove actorId for standard users/managers (Super Admins are always retained to receive all notifications)
+      // 4) Remove actorId for standard users/managers UNLESS explicitly targeted in targetUserIds
       if (actorId != null && actorId.isNotEmpty) {
-        recipients.removeWhere((id) => id == actorId && !superAdminIds.contains(id));
+        final explicitlyTargeted = targetUserIds?.contains(actorId) ?? false;
+        if (!explicitlyTargeted) {
+          recipients.removeWhere((id) => id == actorId && !superAdminIds.contains(id));
+        }
       }
 
       if (recipients.isEmpty) return;

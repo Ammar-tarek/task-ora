@@ -89,9 +89,13 @@ class _ClientsScreenState extends State<ClientsScreen> {
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (_, i) => _ClientCard(
                   client: _clients[i],
+                  isAdmin: isAdmin,
                   onTap: () =>
                       context.push('/clients/${_clients[i].id}/finance'),
                   onEdit: () => _showEditSheet(context, _clients[i]),
+                  onDelete: isAdmin
+                      ? () => _confirmDeleteClient(_clients[i])
+                      : null,
                 ),
               ),
             ),
@@ -129,6 +133,8 @@ class _ClientsScreenState extends State<ClientsScreen> {
   }
 
   void _showEditSheet(BuildContext context, ClientModel client) {
+    final profile = context.read<AuthNotifier>().profile;
+    final isAdmin = profile?.isAdmin ?? false;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -137,8 +143,60 @@ class _ClientsScreenState extends State<ClientsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => _EditClientSheet(client: client, onSaved: _load),
+      builder: (_) => _EditClientSheet(
+        client: client,
+        isAdmin: isAdmin,
+        onSaved: _load,
+        onDelete: isAdmin ? () => _confirmDeleteClient(client) : null,
+      ),
     );
+  }
+
+  Future<void> _confirmDeleteClient(ClientModel client) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: const Text('Delete Client?'),
+        content: Text(
+          'Are you sure you want to delete "${client.companyName}"?\n\n'
+          'This will permanently remove the client account and profile.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.statusHigh,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Client'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _loading = true);
+      final res = await ClientRepository.deleteClient(client.id);
+      if (!mounted) return;
+      if (res.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Client "${client.companyName}" removed.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.error,
+            content: Text(res.error ?? 'Failed to delete client.'),
+          ),
+        );
+      }
+      _load();
+    }
   }
 }
 
@@ -202,10 +260,14 @@ class _ClientCard extends StatelessWidget {
     required this.client,
     required this.onTap,
     required this.onEdit,
+    this.isAdmin = false,
+    this.onDelete,
   });
   final ClientModel client;
   final VoidCallback onTap;
   final VoidCallback onEdit;
+  final bool isAdmin;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -300,6 +362,16 @@ class _ClientCard extends StatelessWidget {
               tooltip: 'Edit client',
               onPressed: onEdit,
             ),
+            if (isAdmin && onDelete != null)
+              IconButton(
+                icon: const Icon(
+                  Icons.delete_outline,
+                  size: 18,
+                  color: AppColors.error,
+                ),
+                tooltip: 'Delete client',
+                onPressed: onDelete,
+              ),
             Icon(Icons.chevron_right, color: AppColors.outlineVariant),
           ],
         ),
@@ -585,9 +657,16 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
 
 // ── Edit client bottom sheet ───────────────────────────────────────────────────
 class _EditClientSheet extends StatefulWidget {
-  const _EditClientSheet({required this.client, required this.onSaved});
+  const _EditClientSheet({
+    required this.client,
+    required this.onSaved,
+    this.isAdmin = false,
+    this.onDelete,
+  });
   final ClientModel client;
   final VoidCallback onSaved;
+  final bool isAdmin;
+  final VoidCallback? onDelete;
 
   @override
   State<_EditClientSheet> createState() => _EditClientSheetState();
@@ -865,6 +944,31 @@ class _EditClientSheetState extends State<_EditClientSheet> {
                       ),
               ),
             ),
+            if (widget.isAdmin && widget.onDelete != null) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onDelete?.call();
+                  },
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: AppColors.error,
+                  ),
+                  label: const Text(
+                    'Delete Client',
+                    style: TextStyle(color: AppColors.error),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.error),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

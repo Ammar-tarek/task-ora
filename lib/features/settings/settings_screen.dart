@@ -327,6 +327,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => context.push('/penalties'),
               ),
               const Divider(height: 1),
+            ] else if (profile?.isClient != true) ...[
+              _SettingsTile(
+                icon: Icons.warning_amber_outlined,
+                title: S.t('my_penalties'),
+                onTap: () => context.push('/penalties'),
+              ),
+              const Divider(height: 1),
             ],
 
             // ── Attendance Settings (all roles that get tracked) ─────────────
