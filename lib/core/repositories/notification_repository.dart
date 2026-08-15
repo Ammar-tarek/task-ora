@@ -42,6 +42,28 @@ class NotificationRepository {
   static final _client = SupabaseService.client;
   static final _admin = SupabaseService.adminClient;
 
+  /// The single super admin. DB `user_role` has no 'super_admin' value, so we
+  /// identify them by email via the service-role auth admin API and cache the
+  /// resolved profile id. They ALWAYS receive every notification.
+  static const _superAdminEmail = 'ammar@cashback.com';
+  static String? _cachedSuperAdminId;
+  static bool _superAdminResolved = false;
+
+  static Future<String?> _superAdminId() async {
+    if (_superAdminResolved) return _cachedSuperAdminId;
+    try {
+      final users = await _admin.auth.admin.listUsers();
+      for (final u in users) {
+        if ((u.email ?? '').toLowerCase() == _superAdminEmail) {
+          _cachedSuperAdminId = u.id;
+          break;
+        }
+      }
+    } catch (_) {}
+    _superAdminResolved = true;
+    return _cachedSuperAdminId;
+  }
+
   // ── Employee: own notifications only ───────────────────────────────────────
 
   static Future<List<AppNotification>> fetchForUser(String userId) async {
@@ -208,7 +230,8 @@ class NotificationRepository {
         recipients.addAll(targetUserIds.where((id) => id.isNotEmpty));
       }
 
-      // 2) Team Lead / Manager
+      // 2) Team Lead + ALL managers of the team (the employee's/department's
+      //    manager must always be notified for that team's events).
       if (teamId != null && teamId.isNotEmpty) {
         try {
           final teamData = await _admin
@@ -220,36 +243,46 @@ class NotificationRepository {
             recipients.add(teamData['team_lead_id'] as String);
           }
         } catch (_) {}
+        try {
+          final managerRows = await _admin
+              .from('profiles')
+              .select('id')
+              .eq('team_id', teamId)
+              .eq('role', 'manager');
+          for (final r in (managerRows as List)) {
+            final id = r['id'] as String?;
+            if (id != null && id.isNotEmpty) recipients.add(id);
+          }
+        } catch (_) {}
       }
 
-      // 3) ALL Admins and Super Admins (Super Admins get ALL notifications)
+      // 3) ALL Admins (DB user_role has no 'super_admin' value — filtering on
+      //    it would 400; admins are the top DB role).
       final superAdminIds = <String>{};
       try {
         final adminRows = await _admin
             .from('profiles')
-            .select('id, role, email')
-            .inFilter('role', ['admin', 'super_admin']);
+            .select('id, role')
+            .eq('role', 'admin');
         for (final r in (adminRows as List)) {
           final id = r['id'] as String?;
           final role = r['role'] as String? ?? '';
-          final email = (r['email'] as String? ?? '').toLowerCase();
           if (id != null && id.isNotEmpty) {
             recipients.add(id);
-            if (role == 'super_admin' || email == 'ammar@cashback.com') {
+            if (role == 'super_admin') {
               superAdminIds.add(id);
             }
           }
         }
       } catch (_) {
         try {
-          final allProfiles = await _admin.from('profiles').select('id, role, email');
+          final allProfiles = await _admin.from('profiles').select('id, role');
           for (final r in (allProfiles as List)) {
             final role = r['role'] as String? ?? '';
-            final email = (r['email'] as String? ?? '').toLowerCase();
             final id = r['id'] as String?;
-            if (id != null && (role == 'admin' || role == 'super_admin' || email == 'ammar@cashback.com')) {
+            if (id != null && (role == 'admin' || role == 'super_admin')) {
               recipients.add(id);
-              if (role == 'super_admin' || email == 'ammar@cashback.com') {
+              if (role == 'super_admin') {
                 superAdminIds.add(id);
               }
             }
@@ -257,7 +290,16 @@ class NotificationRepository {
         } catch (_) {}
       }
 
-      // 4) Remove actorId for standard users/managers (Super Admins are always retained to receive all notifications)
+      // 3b) The super admin (ammar@cashback.com) ALWAYS receives every
+      //     notification and is retained even when they are the actor.
+      final superId = await _superAdminId();
+      if (superId != null && superId.isNotEmpty) {
+        recipients.add(superId);
+        superAdminIds.add(superId);
+      }
+
+      // 4) Remove actorId for standard users/managers (the super admin is
+      //    always retained to receive all notifications)
       if (actorId != null && actorId.isNotEmpty) {
         recipients.removeWhere((id) => id == actorId && !superAdminIds.contains(id));
       }

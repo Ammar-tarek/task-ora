@@ -142,6 +142,10 @@ class S {
       'biometrics_disabled_msg': 'Biometric login has been disabled.',
       'unlock_with_biometrics': 'Unlock with Fingerprint / Face ID',
       'biometrics_auth_cancelled': 'Biometric authentication cancelled.',
+      'login_with_fingerprint': 'Sign in with fingerprint',
+      'biometric_no_session':
+          'No saved session on this device. Please sign in with your password first.',
+      'biometric_failed': 'Fingerprint sign-in failed. Try again or use your password.',
 
       // Settings
       'language': 'Language',
@@ -440,6 +444,10 @@ class S {
       'biometrics_disabled_msg': 'تم إلغاء تفعيل الدخول بالبصمة.',
       'unlock_with_biometrics': 'الفتح بواسطة البصمة / Face ID',
       'biometrics_auth_cancelled': 'تم إلغاء التحقق من البصمة.',
+      'login_with_fingerprint': 'الدخول بالبصمة',
+      'biometric_no_session':
+          'لا توجد جلسة محفوظة على هذا الجهاز. الرجاء تسجيل الدخول بكلمة المرور أولاً.',
+      'biometric_failed': 'فشل الدخول بالبصمة. حاول مرة أخرى أو استخدم كلمة المرور.',
 
       // Settings
       'language': 'اللغة',

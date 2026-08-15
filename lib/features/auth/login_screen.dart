@@ -21,7 +21,41 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passCtrl = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
+  bool _biometricAvailable = false;
   String? _errorMsg;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometricAvailable();
+  }
+
+  Future<void> _checkBiometricAvailable() async {
+    final avail = await BiometricService.instance.isAvailable();
+    if (mounted) setState(() => _biometricAvailable = avail);
+  }
+
+  /// Fingerprint login = unlock the already-persisted Supabase session.
+  /// Biometrics alone cannot create a Supabase session, so if none is
+  /// persisted on this device the user must sign in with a password first.
+  Future<void> _biometricLogin() async {
+    final auth = context.read<AuthNotifier>();
+    if (SupabaseService.auth.currentSession == null) {
+      setState(() => _errorMsg = S.t('biometric_no_session'));
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _errorMsg = null;
+    });
+    final ok = await auth.authenticateBiometrics();
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (!ok) {
+      setState(() => _errorMsg = S.t('biometric_failed'));
+    }
+    // On success the router auto-navigates away via AuthNotifier status change.
+  }
 
   @override
   void dispose() {
@@ -300,6 +334,42 @@ class _LoginScreenState extends State<LoginScreen> {
                       : Text(S.t('login')),
                 ),
               ),
+
+              // Fingerprint login option (only if device has biometrics)
+              if (_biometricAvailable) ...[
+                const SizedBox(height: 16),
+                Center(
+                  child: Column(
+                    children: [
+                      InkWell(
+                        onTap: _loading ? null : _biometricLogin,
+                        borderRadius: BorderRadius.circular(40),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.gold.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.fingerprint,
+                            color: AppColors.gold,
+                            size: 30,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        S.t('login_with_fingerprint'),
+                        style: AppTextStyles.bodySm.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
 
               // Create account link

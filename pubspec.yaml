@@ -2,7 +2,7 @@ name: task_ora
 description: "CashBack Operations Dashboard"
 publish_to: 'none'
 
-version: 1.6.1+7
+version: 1.6.2+8
 
 environment:
   sdk: ^3.11.5

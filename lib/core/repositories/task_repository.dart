@@ -1074,7 +1074,10 @@ class TaskRepository {
     String? clientId,
     String? description,
     String priority = 'medium',
+    String status = 'not_started',
     String? dueDate,
+    double? cost,
+    int completionPercentage = 0,
   }) async {
     try {
       final result = await _client
@@ -1087,7 +1090,9 @@ class TaskRepository {
             'description': description,
             'priority': priority,
             'due_date': dueDate,
-            'status': 'not_started',
+            'status': status,
+            'completion_percentage': completionPercentage,
+            'cost': ?cost,
           })
           .select('id')
           .single();
@@ -1108,6 +1113,61 @@ class TaskRepository {
       return taskId;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Turn [task] into the first of a numbered series and create [count] more.
+  /// The main task is renamed to "Title 1"; the new copies continue from 2
+  /// ("Title 2", "Title 3", …). Copies carry ONLY the client and department
+  /// (team) — no assignees, default priority/status, no other details. The
+  /// original task keeps its assignees and all its details (only the title
+  /// gains the " 1" suffix).
+  /// Returns the number of copies created, or 0 on failure.
+  static Future<int> incrementTask({
+    required TaskModel task,
+    required int count,
+    required String createdBy,
+  }) async {
+    if (count <= 0) return 0;
+    try {
+      // Strip any existing trailing " <number>" so re-incrementing stays clean.
+      final base = task.title.replaceFirst(RegExp(r'\s+\d+$'), '').trim();
+
+      // Copies numbered from 2 (the main task is #1).
+      final rows = <Map<String, dynamic>>[
+        for (var i = 2; i <= count + 1; i++)
+          {
+            'title': '$base $i',
+            'created_by': createdBy,
+            'team_id': task.teamId,
+            'client_id': task.clientId,
+            'priority': 'medium',
+            'status': 'not_started',
+          },
+      ];
+      await _client.from('tasks').insert(rows);
+
+      // Rename the main task to "<base> 1" so the series reads 1, 2, 3, …
+      await _client
+          .from('tasks')
+          .update({'title': '$base 1'})
+          .eq('id', task.id);
+
+      try {
+        await NotificationRepository.notifyAction(
+          title: 'Tasks Created',
+          body: '$count copies of "$base" were created.',
+          type: 'task_created',
+          referenceType: 'task',
+          referenceId: task.id,
+          teamId: task.teamId,
+          actorId: createdBy,
+        );
+      } catch (_) {}
+
+      return count;
+    } catch (_) {
+      return 0;
     }
   }
 

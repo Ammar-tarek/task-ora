@@ -963,7 +963,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _SettingsTile(
               icon: Icons.system_update_outlined,
               title: S.t('check_updates'),
-              subtitle: 'v1.6.1+7',
+              subtitle: 'v1.6.2+8',
               onTap: () => ApkUpdateService.checkForUpdates(
                 context,
                 isManual: true,

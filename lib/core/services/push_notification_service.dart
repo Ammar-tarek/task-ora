@@ -28,6 +28,12 @@ class PushNotificationService {
   static bool _initialized = false;
   String? _currentUserId;
 
+  /// Web Push (VAPID) public key from Firebase → Cloud Messaging → Web config.
+  /// Required by FCM to mint a token on WEB only. Safe to embed in the web
+  /// client (it is the public half of the key pair). Ignored on Android/iOS.
+  static const String _webVapidKey =
+      'BOS4B6zTSh0N5BizqhxMrGSJNchKs5HOMKScPojddHG_O20wxeSxga3Nfx60UUZcDszsrKJUuLjtd1OaOUwqFao';
+
   /// Call once during app startup.
   static Future<void> init() async {
     if (_initialized) return;
@@ -123,7 +129,9 @@ class PushNotificationService {
       if (_currentUserId != null &&
           (settings.authorizationStatus == AuthorizationStatus.authorized ||
               settings.authorizationStatus == AuthorizationStatus.provisional)) {
-        final token = await FirebaseMessaging.instance.getToken();
+        final token = await FirebaseMessaging.instance.getToken(
+          vapidKey: kIsWeb ? _webVapidKey : null,
+        );
         if (token != null) {
           await ProfileRepository.updateFcmToken(_currentUserId!, token);
         }
@@ -149,8 +157,10 @@ class PushNotificationService {
 
       final messaging = FirebaseMessaging.instance;
 
-      // Fetch and update token
-      final token = await messaging.getToken();
+      // Fetch and update token (web requires the VAPID key; native ignores it)
+      final token = await messaging.getToken(
+        vapidKey: kIsWeb ? _webVapidKey : null,
+      );
       if (token != null) {
         await ProfileRepository.updateFcmToken(profile.id, token);
       }
@@ -166,8 +176,9 @@ class PushNotificationService {
     }
   }
 
-  /// Call when the user signs out.
-  void stop() async {
+  /// Clear the FCM token. Call ONLY on explicit user logout — never on app
+  /// close, backgrounding, or biometric lock.
+  Future<void> stop() async {
     if (_currentUserId != null) {
       try {
         await ProfileRepository.updateFcmToken(_currentUserId!, null);
