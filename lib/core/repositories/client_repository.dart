@@ -17,7 +17,9 @@ class CalEventData {
   final String? clientName;
   final double? cost;
   final List<String> attendeeNames;
+  final List<String> attendeeIds;
   final String? roomName;
+  final String status;
 
   const CalEventData({
     required this.id,
@@ -28,7 +30,9 @@ class CalEventData {
     this.clientName,
     this.cost,
     this.attendeeNames = const [],
+    this.attendeeIds = const [],
     this.roomName,
+    this.status = 'pending',
   });
 
   factory CalEventData.fromMap(Map<String, dynamic> m) {
@@ -44,12 +48,17 @@ class CalEventData {
       clientName: client?['company_name'] as String?,
       cost: (m['cost'] as num?)?.toDouble(),
       roomName: m['location'] as String?,
+      status: m['status'] as String? ?? 'pending',
       attendeeNames: attendees
           .map((a) {
             final p = a['profile'] as Map<String, dynamic>?;
             return p?['full_name'] as String? ?? '';
           })
           .where((n) => n.isNotEmpty)
+          .toList(),
+      attendeeIds: attendees
+          .map((a) => (a as Map<String, dynamic>)['profile_id'] as String? ?? '')
+          .where((id) => id.isNotEmpty)
           .toList(),
     );
   }
@@ -320,6 +329,35 @@ class ClientRepository {
     }
   }
 
+  /// Events the given profile is an attendee of, with the FULL attendee list
+  /// for each event preserved. Used to restrict the calendar for employees and
+  /// managers to only the events assigned to them.
+  static Future<List<CalEventData>> fetchMyEvents(String profileId) async {
+    try {
+      final links = await _adminDb
+          .from('event_attendees')
+          .select('event_id')
+          .eq('profile_id', profileId);
+      final ids = (links as List)
+          .map((r) => (r as Map<String, dynamic>)['event_id'] as String?)
+          .whereType<String>()
+          .toSet()
+          .toList();
+      if (ids.isEmpty) return [];
+
+      final data = await _adminDb
+          .from('events')
+          .select(
+            '*, client:client_profiles(company_name), event_attendees(profile_id, profile:profiles(full_name))',
+          )
+          .inFilter('id', ids)
+          .order('start_time', ascending: true);
+      return (data as List).map((m) => CalEventData.fromMap(m)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   static Future<List<CalEventData>> fetchClientEvents(String clientId) async {
     try {
       final data = await _adminDb
@@ -387,7 +425,9 @@ class ClientRepository {
             );
       }
 
-      // Notify Admin, SuperAdmin, and Assigned Attendees about the new calendar event
+      // Notify Admins, SuperAdmin, and Assigned Attendees about the new event.
+      // [actorId] excludes the admin who created it (the super admin is always
+      // retained by notifyAction's own policy).
       final dateStr = '${start.day}/${start.month}/${start.year}';
       final timeStr = '${AppTime.hm(start)} - ${AppTime.hm(end)}';
       await NotificationRepository.notifyAction(
@@ -397,6 +437,7 @@ class ClientRepository {
         referenceType: 'calendar',
         referenceId: eventId,
         targetUserIds: attendeeIds,
+        actorId: createdBy,
       );
 
       // Auto-create CRM invoice so the cost appears on the client's finance page
@@ -465,5 +506,73 @@ class ClientRepository {
         }
       }
     } catch (_) {}
+  }
+
+  /// Update only an event's status (done / cancelled_by_client / cancelled_by_us
+  /// / pending). Notifies the assigned attendees of the change (push via the
+  /// notifications insert trigger); [changedBy] is excluded from that alert.
+  static Future<void> updateEventStatus({
+    required String eventId,
+    required String status,
+    String? changedBy,
+  }) async {
+    try {
+      await _adminDb
+          .from('events')
+          .update({
+            'status': status,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', eventId);
+
+      // Fetch title + attendees so we can notify the assigned people.
+      final row = await _adminDb
+          .from('events')
+          .select('title, event_attendees(profile_id)')
+          .eq('id', eventId)
+          .maybeSingle();
+      if (row == null) return;
+
+      final title = row['title'] as String? ?? 'Event';
+      final attendees = (row['event_attendees'] as List<dynamic>? ?? [])
+          .map((a) => (a as Map<String, dynamic>)['profile_id'] as String? ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      if (attendees.isEmpty) return;
+
+      await NotificationRepository.notifyAction(
+        title: 'Event Status Updated',
+        body: 'Event "$title" is now "${_eventStatusLabel(status)}".',
+        type: 'calendar_event',
+        referenceType: 'calendar',
+        referenceId: eventId,
+        targetUserIds: attendees,
+        actorId: changedBy,
+      );
+    } catch (_) {}
+  }
+
+  /// Permanently remove an event and its attendee links.
+  static Future<void> deleteEvent(String eventId) async {
+    try {
+      // Remove attendee links first (in case no FK cascade is configured).
+      await _adminDb.from('event_attendees').delete().eq('event_id', eventId);
+      await _adminDb.from('events').delete().eq('id', eventId);
+    } catch (_) {}
+  }
+
+  static String _eventStatusLabel(String status) {
+    switch (status) {
+      case 'done':
+        return 'Done';
+      case 'cancelled_by_client':
+        return 'Cancelled by client';
+      case 'cancelled_by_us':
+        return 'Cancelled by us';
+      case 'pending':
+        return 'Pending';
+      default:
+        return status.replaceAll('_', ' ');
+    }
   }
 }

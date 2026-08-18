@@ -33,8 +33,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _testingWebhook = false;
   String? _webhookStatus;
 
-  // WiFi attendance
-  final _wifiSsidCtrl = TextEditingController();
+  // WiFi attendance — one controller per configured company WiFi network.
+  final List<TextEditingController> _wifiSsidCtrls = [];
   bool _wifiEnabled = false;
   bool _savingWifi = false;
   String? _wifiStatus;
@@ -45,8 +45,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     N8nService.getWebhookUrl().then((url) {
       if (mounted) _webhookCtrl.text = url;
     });
-    WifiAttendanceService.getCompanySsid().then((ssid) {
-      if (mounted && ssid != null) setState(() => _wifiSsidCtrl.text = ssid);
+    WifiAttendanceService.getCompanySsids().then((ssids) {
+      if (!mounted) return;
+      setState(() {
+        for (final c in _wifiSsidCtrls) {
+          c.dispose();
+        }
+        _wifiSsidCtrls
+          ..clear()
+          ..addAll(ssids.map((s) => TextEditingController(text: s)));
+      });
     });
     WifiAttendanceService.isEnabled().then((v) {
       if (mounted) setState(() => _wifiEnabled = v);
@@ -69,6 +77,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (!enable) {
       await BiometricService.instance.setBiometricEnabled(userId, false);
+      // Wipe the stored biometric-login credentials when the user opts out.
+      await BiometricService.instance.clearCredentials();
       if (mounted) {
         setState(() => _biometricEnabled = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -113,8 +123,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _webhookCtrl.dispose();
-    _wifiSsidCtrl.dispose();
+    for (final c in _wifiSsidCtrls) {
+      c.dispose();
+    }
     super.dispose();
+  }
+
+  void _addWifiField() {
+    setState(() => _wifiSsidCtrls.add(TextEditingController()));
+  }
+
+  void _removeWifiField(int index) {
+    setState(() => _wifiSsidCtrls.removeAt(index).dispose());
   }
 
   Future<void> _saveWebhook() async {
@@ -165,10 +185,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     final adminId = context.read<AuthNotifier>().profile?.id;
     try {
-      await WifiAttendanceService.setCompanySsid(
-        _wifiSsidCtrl.text.trim(),
-        updatedBy: adminId,
-      );
+      final ssids = _wifiSsidCtrls
+          .map((c) => c.text.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      await WifiAttendanceService.setCompanySsids(ssids, updatedBy: adminId);
       await WifiAttendanceService.setEnabled(_wifiEnabled, updatedBy: adminId);
       if (mounted) {
         setState(() {
@@ -186,6 +207,158 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
       }
     }
+  }
+
+  InputDecoration _wifiFieldDecoration() => InputDecoration(
+        hintText: S.t('wifi_ssid_hint'),
+        hintStyle: AppTextStyles.bodySm.copyWith(
+          color: AppColors.onSurfaceVariant,
+        ),
+        prefixIcon: const Icon(
+          Icons.wifi_outlined,
+          color: AppColors.gold,
+          size: 18,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: AppColors.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: AppColors.outlineVariant),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(
+            color: AppColors.outlineVariant.withValues(alpha: 0.4),
+          ),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+      );
+
+  /// Admin editor: a dynamic add/remove list of company WiFi SSIDs.
+  Widget _buildWifiEditor() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          S.t('wifi_networks_label'),
+          style: AppTextStyles.labelCaps.copyWith(
+            color: AppColors.onSurfaceVariant,
+            fontSize: 10,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (int i = 0; i < _wifiSsidCtrls.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _wifiSsidCtrls[i],
+                    enabled: _wifiEnabled,
+                    decoration: _wifiFieldDecoration(),
+                  ),
+                ),
+                IconButton(
+                  tooltip: S.t('delete'),
+                  onPressed: _wifiEnabled ? () => _removeWifiField(i) : null,
+                  icon: Icon(
+                    Icons.remove_circle_outline,
+                    color: _wifiEnabled
+                        ? AppColors.error
+                        : AppColors.onSurfaceVariant,
+                    size: 22,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            onPressed: _wifiEnabled ? _addWifiField : null,
+            icon: const Icon(Icons.add, size: 18),
+            label: Text(S.t('add_wifi_network')),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Read-only view (non-admins): the list of configured company WiFi networks.
+  Widget _buildWifiReadOnly() {
+    final ssids = _wifiSsidCtrls
+        .map((c) => c.text.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  S.t('wifi_networks_label'),
+                  style: AppTextStyles.labelCaps.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.lock_outline,
+                size: 16,
+                color: AppColors.onSurfaceVariant,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (ssids.isEmpty)
+            Text(
+              S.t('wifi_not_set'),
+              style: AppTextStyles.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            )
+          else
+            for (final ssid in ssids)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.wifi_outlined,
+                      color: AppColors.gold,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        ssid,
+                        style: AppTextStyles.bodyMd.copyWith(
+                          color: AppColors.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -329,6 +502,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Divider(height: 1),
             ],
 
+            // My Penalties — employees (non-managers) can view their own record.
+            if (!isManager && profile?.isClient != true) ...[
+              _SettingsTile(
+                icon: Icons.gavel_outlined,
+                title: S.t('my_penalties'),
+                onTap: () => context.push('/penalties'),
+              ),
+              const Divider(height: 1),
+            ],
+
             // ── Attendance Settings (all roles that get tracked) ─────────────
             if (profile?.isClient != true) ...[
               _SectionTitle(title: S.t('attendance')),
@@ -371,101 +554,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Admin: editable SSID field. Others: read-only display.
+                    // Admin: editable list of networks. Others: read-only list.
                     if (isAdmin)
-                      TextField(
-                        controller: _wifiSsidCtrl,
-                        enabled: _wifiEnabled,
-                        decoration: InputDecoration(
-                          labelText: S.t('wifi_ssid_label'),
-                          hintText: S.t('wifi_ssid_hint'),
-                          hintStyle: AppTextStyles.bodySm.copyWith(
-                            color: AppColors.onSurfaceVariant,
-                          ),
-                          prefixIcon: const Icon(
-                            Icons.wifi_outlined,
-                            color: AppColors.gold,
-                            size: 18,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: AppColors.outlineVariant,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: AppColors.outlineVariant,
-                            ),
-                          ),
-                          disabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: AppColors.outlineVariant.withValues(
-                                alpha: 0.4,
-                              ),
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                        ),
-                      )
+                      _buildWifiEditor()
                     else
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceContainerLowest,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.outlineVariant),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.wifi_outlined,
-                              color: AppColors.gold,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    S.t('wifi_ssid_label'),
-                                    style: AppTextStyles.labelCaps.copyWith(
-                                      color: AppColors.onSurfaceVariant,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _wifiSsidCtrl.text.isEmpty
-                                        ? S.t('wifi_not_set')
-                                        : _wifiSsidCtrl.text,
-                                    style: AppTextStyles.bodyMd.copyWith(
-                                      color: _wifiSsidCtrl.text.isEmpty
-                                          ? AppColors.onSurfaceVariant
-                                          : AppColors.onSurface,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.lock_outline,
-                              size: 16,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ],
-                        ),
-                      ),
+                      _buildWifiReadOnly(),
 
                     // Save button — admin only.
                     if (isAdmin) ...[

@@ -84,6 +84,7 @@ class PushNotificationService {
         final type = message.data['type'] ?? 'task';
         final refType = message.data['reference_type'];
         final refId = message.data['reference_id'];
+        final rowId = message.data['id'] as String?;
 
         LocalNotificationService.show(
           title: title,
@@ -94,6 +95,7 @@ class PushNotificationService {
           payload: (refType != null && refId != null)
               ? '$refType:$refId'
               : 'notifications',
+          dedupeKey: rowId,
         );
       });
 

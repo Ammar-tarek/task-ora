@@ -16,6 +16,47 @@ class BiometricService {
 
   static const String _keyPrefix = 'biometric_enabled_';
 
+  // Biometric-gated login credentials. Stored ONLY when the user enables
+  // biometric login (with the password they just typed), inside the platform
+  // secure store (Android Keystore / iOS Keychain). Used to re-authenticate
+  // after a logout when the user taps "Sign in with fingerprint".
+  static const String _kCredEmail = 'bio_cred_email';
+  static const String _kCredPassword = 'bio_cred_password';
+
+  /// Persist login credentials for biometric re-login (encrypted at rest).
+  Future<void> saveCredentials(String email, String password) async {
+    try {
+      await _storage.write(key: _kCredEmail, value: email);
+      await _storage.write(key: _kCredPassword, value: password);
+    } catch (e) {
+      debugPrint('Error saving biometric credentials: $e');
+    }
+  }
+
+  /// Read stored biometric-login credentials, or null if none.
+  Future<({String email, String password})?> readCredentials() async {
+    try {
+      final email = await _storage.read(key: _kCredEmail);
+      final password = await _storage.read(key: _kCredPassword);
+      if (email != null && email.isNotEmpty &&
+          password != null && password.isNotEmpty) {
+        return (email: email, password: password);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// True when biometric-login credentials are stored on this device.
+  Future<bool> hasCredentials() async => (await readCredentials()) != null;
+
+  /// Wipe stored biometric-login credentials (called when biometric is disabled).
+  Future<void> clearCredentials() async {
+    try {
+      await _storage.delete(key: _kCredEmail);
+      await _storage.delete(key: _kCredPassword);
+    } catch (_) {}
+  }
+
   /// Checks if hardware supports biometrics and device allows biometric checks.
   Future<bool> isHardwareSupported() async {
     if (kIsWeb) return false;

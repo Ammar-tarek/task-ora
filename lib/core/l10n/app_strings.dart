@@ -142,6 +142,7 @@ class S {
       'biometrics_disabled_msg': 'Biometric login has been disabled.',
       'unlock_with_biometrics': 'Unlock with Fingerprint / Face ID',
       'biometrics_auth_cancelled': 'Biometric authentication cancelled.',
+      'my_penalties': 'My Penalties',
       'login_with_fingerprint': 'Sign in with fingerprint',
       'biometric_no_session':
           'No saved session on this device. Please sign in with your password first.',
@@ -168,8 +169,11 @@ class S {
       'wifi_attendance_user_desc':
           'When you connect to the company WiFi, your attendance is recorded automatically and sent for approval. These settings are managed by your administrator.',
       'wifi_ssid_label': 'Company WiFi Name (SSID)',
+      'wifi_networks_label': 'Company WiFi Networks',
       'wifi_ssid_hint': 'e.g. CompanyOffice_5G',
       'wifi_not_set': 'Not set by administrator yet',
+      'wifi_networks_none': 'No networks configured yet',
+      'add_wifi_network': 'Add WiFi Network',
       'save_attendance_settings': 'Save Attendance Settings',
       'n8n_webhook_title': 'n8n Webhook URL',
       'n8n_webhook_desc':
@@ -444,6 +448,7 @@ class S {
       'biometrics_disabled_msg': 'تم إلغاء تفعيل الدخول بالبصمة.',
       'unlock_with_biometrics': 'الفتح بواسطة البصمة / Face ID',
       'biometrics_auth_cancelled': 'تم إلغاء التحقق من البصمة.',
+      'my_penalties': 'مخالفاتي',
       'login_with_fingerprint': 'الدخول بالبصمة',
       'biometric_no_session':
           'لا توجد جلسة محفوظة على هذا الجهاز. الرجاء تسجيل الدخول بكلمة المرور أولاً.',
@@ -470,8 +475,11 @@ class S {
       'wifi_attendance_user_desc':
           'عند الاتصال بشبكة WiFi الشركة، يتم تسجيل حضورك تلقائيًا وإرساله للاعتماد. يتم إدارة هذه الإعدادات بواسطة المسؤول.',
       'wifi_ssid_label': 'اسم شبكة WiFi الشركة (SSID)',
+      'wifi_networks_label': 'شبكات WiFi الخاصة بالشركة',
       'wifi_ssid_hint': 'مثال: CompanyOffice_5G',
       'wifi_not_set': 'لم يتم تعيينها من المسؤول بعد',
+      'wifi_networks_none': 'لم يتم إضافة أي شبكة بعد',
+      'add_wifi_network': 'إضافة شبكة WiFi',
       'save_attendance_settings': 'حفظ إعدادات الحضور',
       'n8n_webhook_title': 'رابط Webhook لـ n8n',
       'n8n_webhook_desc':

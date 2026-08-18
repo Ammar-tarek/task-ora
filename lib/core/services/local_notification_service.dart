@@ -118,14 +118,35 @@ class LocalNotificationService {
   static const String typeTask = 'task';
   static const String typeHr = 'hr';
 
+  // Cross-path de-duplication: the same `notifications` row can arrive via BOTH
+  // the Supabase Realtime listener (foreground) and FCM onMessage. Suppress a
+  // repeat of the same row id within a short window so it's shown only once.
+  static final Map<String, int> _recentKeys = {};
+  static const int _dedupeWindowMs = 15000;
+
+  static bool _isDuplicate(String? key) {
+    if (key == null || key.isEmpty) return false;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _recentKeys.removeWhere((_, ts) => now - ts > _dedupeWindowMs);
+    if (_recentKeys.containsKey(key)) return true;
+    _recentKeys[key] = now;
+    return false;
+  }
+
   /// Show a local notification immediately & emit in-app banner alert.
+  /// Pass [dedupeKey] (the notifications row id) so the same event delivered
+  /// via both Realtime and FCM is only shown once.
   static Future<void> show({
     required String title,
     required String body,
     String type = typeTask,
     int? id,
     String? payload,
+    String? dedupeKey,
   }) async {
+    // Drop a duplicate of the same notification row (Realtime + FCM overlap).
+    if (_isDuplicate(dedupeKey)) return;
+
     // Always broadcast in-app alert payload for active UI screens
     _alertController.add(
       NotificationAlertPayload(title: title, body: body, payload: payload),

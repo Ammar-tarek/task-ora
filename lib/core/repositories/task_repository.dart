@@ -994,8 +994,8 @@ class TaskRepository {
         if (taskData != null) {
           final title = taskData['title'] as String? ?? 'Task';
           final teamId = taskData['team_id'] as String?;
-          final assignees = taskData['assignees'] as List? ?? [];
-          final assigneeIds = assignees.map((a) => a['id'] as String).toList();
+          final assignees = taskData['task_assignees'] as List? ?? [];
+          final assigneeIds = assignees.map((a) => a['profile_id'] as String).toList();
 
           final authorData = await _client
               .from('profiles')
@@ -1040,8 +1040,8 @@ class TaskRepository {
         if (taskData != null) {
           final title = taskData['title'] as String? ?? 'Task';
           final teamId = taskData['team_id'] as String?;
-          final assignees = taskData['assignees'] as List? ?? [];
-          final assigneeIds = assignees.map((a) => a['id'] as String).toList();
+          final assignees = taskData['task_assignees'] as List? ?? [];
+          final assigneeIds = assignees.map((a) => a['profile_id'] as String).toList();
 
           await NotificationRepository.notifyAction(
             title: 'Task Status Updated',
@@ -1213,8 +1213,8 @@ class TaskRepository {
       try {
         final taskData = await fetchTaskDetail(id);
         if (taskData != null) {
-          final assignees = taskData['assignees'] as List? ?? [];
-          final assigneeIds = assignees.map((a) => a['id'] as String).toList();
+          final assignees = taskData['task_assignees'] as List? ?? [];
+          final assigneeIds = assignees.map((a) => a['profile_id'] as String).toList();
           await NotificationRepository.notifyAction(
             title: 'Task Updated',
             body: 'Task "$title" details were updated.',
@@ -1261,8 +1261,8 @@ class TaskRepository {
         if (taskData != null) {
           final title = taskData['title'] as String? ?? 'Task';
           final teamId = taskData['team_id'] as String?;
-          final assignees = taskData['assignees'] as List? ?? [];
-          final assigneeIds = assignees.map((a) => a['id'] as String).toList();
+          final assignees = taskData['task_assignees'] as List? ?? [];
+          final assigneeIds = assignees.map((a) => a['profile_id'] as String).toList();
 
           await NotificationRepository.notifyAction(
             title: 'Task Progress Updated',
@@ -1295,8 +1295,8 @@ class TaskRepository {
         if (taskData != null) {
           title = taskData['title'] as String?;
           teamId = taskData['team_id'] as String?;
-          final assignees = taskData['assignees'] as List? ?? [];
-          assigneeIds = assignees.map((a) => a['id'] as String).toList();
+          final assignees = taskData['task_assignees'] as List? ?? [];
+          assigneeIds = assignees.map((a) => a['profile_id'] as String).toList();
         }
       } catch (_) {}
 

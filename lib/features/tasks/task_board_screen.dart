@@ -313,7 +313,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   // ── Load ─────────────────────────────────────────────────────────────────
 
-  Future<void> _load({bool animate = true}) async {
+  Future<void> _load({bool animate = true, int attempt = 0}) async {
     if (animate) {
       setState(() {
         _loading = true;
@@ -322,6 +322,17 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     }
     try {
       final profile = context.read<AuthNotifier>().profile;
+
+      // Cold start / biometric unlock: the Supabase session + profile may still
+      // be resolving when this first fires. Keep the spinner and retry instead
+      // of flashing "Error loading tasks" until the retry succeeds.
+      if (profile == null) {
+        if (attempt < 6 && mounted) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          return _load(animate: false, attempt: attempt + 1);
+        }
+      }
+
       _profile = profile;
       _perms = profile != null ? TaskPermissions(profile) : null;
 
@@ -349,6 +360,12 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         });
       }
     } catch (e) {
+      // A first-load failure right after cold start is usually the access token
+      // still refreshing — retry a few times before surfacing the error.
+      if (attempt < 3 && mounted) {
+        await Future.delayed(const Duration(milliseconds: 600));
+        return _load(animate: false, attempt: attempt + 1);
+      }
       if (mounted) {
         setState(() {
           _error = e.toString();

@@ -95,6 +95,7 @@ class NotificationTriggerService {
                   payload: (refType != null && refId != null)
                       ? '$refType:$refId'
                       : 'notifications',
+                  dedupeKey: notifId,
                 );
               },
             )

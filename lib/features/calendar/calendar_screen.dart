@@ -27,7 +27,9 @@ class CalEvent {
     this.clientId,
     this.cost,
     this.attendeeNames = const [],
+    this.attendeeIds = const [],
     this.roomName,
+    this.status = 'pending',
   });
   final String id;
   final String title;
@@ -40,7 +42,65 @@ class CalEvent {
   final String? clientId;
   final double? cost;
   final List<String> attendeeNames;
+  final List<String> attendeeIds;
   final String? roomName;
+  final String status;
+
+  CalEvent copyWith({String? status}) => CalEvent(
+        id: id,
+        title: title,
+        start: start,
+        end: end,
+        color: color,
+        isAllDay: isAllDay,
+        assigneeInitials: assigneeInitials,
+        clientName: clientName,
+        clientId: clientId,
+        cost: cost,
+        attendeeNames: attendeeNames,
+        attendeeIds: attendeeIds,
+        roomName: roomName,
+        status: status ?? this.status,
+      );
+}
+
+/// The event statuses the UI lets you pick, in display order.
+const List<String> kEventStatuses = [
+  'pending',
+  'done',
+  'cancelled_by_client',
+  'cancelled_by_us',
+];
+
+String eventStatusLabel(String status) {
+  switch (status) {
+    case 'done':
+      return 'Done';
+    case 'cancelled_by_client':
+      return 'Cancelled by client';
+    case 'cancelled_by_us':
+      return 'Cancelled by us';
+    case 'pending':
+      return 'Pending';
+    default:
+      // Humanize any legacy status (scheduled / in_progress / completed / …).
+      final s = status.replaceAll('_', ' ');
+      return s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+  }
+}
+
+Color eventStatusColor(String status) {
+  switch (status) {
+    case 'done':
+    case 'completed':
+      return AppColors.statusDone;
+    case 'cancelled_by_client':
+    case 'cancelled_by_us':
+    case 'cancelled':
+      return AppColors.error;
+    default:
+      return AppColors.gold;
+  }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -145,7 +205,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Future<void> _loadEvents() async {
-    final data = await ClientRepository.fetchAllEvents();
+    final profile = context.read<AuthNotifier>().profile;
+    // Admins / super admins see every event. Employees and managers only see
+    // events they are assigned to (as attendees).
+    final data = (profile != null && profile.isAdmin)
+        ? await ClientRepository.fetchAllEvents()
+        : await ClientRepository.fetchMyEvents(profile?.id ?? '');
     if (!mounted) return;
     setState(() {
       _events = data
@@ -162,7 +227,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
               clientName: e.clientName,
               cost: e.cost,
               roomName: e.roomName,
+              status: e.status,
               attendeeNames: e.attendeeNames,
+              attendeeIds: e.attendeeIds,
               assigneeInitials: e.attendeeNames.isNotEmpty
                   ? e.attendeeNames.first.substring(0, 1).toUpperCase()
                   : null,
@@ -358,6 +425,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
         onEdited: (updated) => setState(() {
           final idx = _events.indexWhere((e) => e.id == updated.id);
           if (idx != -1) _events[idx] = updated;
+        }),
+        onStatusChanged: (status) => setState(() {
+          final idx = _events.indexWhere((e) => e.id == event.id);
+          if (idx != -1) _events[idx] = _events[idx].copyWith(status: status);
+        }),
+        onDeleted: () => setState(() {
+          _events.removeWhere((e) => e.id == event.id);
         }),
       ),
     );
@@ -1356,20 +1430,35 @@ class _CurrentTimeLine extends StatelessWidget {
 }
 
 // ── Event detail bottom sheet ──────────────────────────────────────────────────
-class _EventDetailSheet extends StatelessWidget {
+class _EventDetailSheet extends StatefulWidget {
   const _EventDetailSheet({
     required this.event,
     this.profile,
     this.onEdit,
     this.onEdited,
+    this.onStatusChanged,
+    this.onDeleted,
   });
   final CalEvent event;
   final ProfileModel? profile;
   final VoidCallback? onEdit;
   final ValueChanged<CalEvent>? onEdited;
+  final ValueChanged<String>? onStatusChanged;
+  final VoidCallback? onDeleted;
+
+  @override
+  State<_EventDetailSheet> createState() => _EventDetailSheetState();
+}
+
+class _EventDetailSheetState extends State<_EventDetailSheet> {
+  late String _status = widget.event.status;
+  bool _busy = false;
+
+  CalEvent get _event => widget.event;
+  ProfileModel? get _profile => widget.profile;
 
   String _timeLabel() {
-    if (event.isAllDay) return 'All day';
+    if (_event.isAllDay) return 'All day';
     String fmt(DateTime d) => AppTime.hm(d);
     const months = [
       'Jan',
@@ -1385,17 +1474,81 @@ class _EventDetailSheet extends StatelessWidget {
       'Nov',
       'Dec',
     ];
-    return '${months[event.start.month - 1]} ${event.start.day}  •  ${fmt(event.start)} – ${fmt(event.end)}';
+    return '${months[_event.start.month - 1]} ${_event.start.day}  •  ${fmt(_event.start)} – ${fmt(_event.end)}';
+  }
+
+  Future<void> _changeStatus(String status) async {
+    if (status == _status || _busy) return;
+    setState(() => _busy = true);
+    await ClientRepository.updateEventStatus(
+      eventId: _event.id,
+      status: status,
+      changedBy: _profile?.id,
+    );
+    if (!mounted) return;
+    setState(() {
+      _status = status;
+      _busy = false;
+    });
+    widget.onStatusChanged?.call(status);
+  }
+
+  Future<void> _confirmDelete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete event?'),
+        content: Text(
+          'This permanently removes "${_event.title}". This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    await ClientRepository.deleteEvent(_event.id);
+    if (!mounted) return;
+    widget.onDeleted?.call();
+    Navigator.pop(context);
+  }
+
+  Widget _statusChip(String status) {
+    final color = eventStatusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        eventStatusLabel(status),
+        style: AppTextStyles.labelMd.copyWith(color: color, fontSize: 11),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final canEdit =
-        profile != null &&
-        (profile!.isAdmin || profile!.isManager || profile!.isClient);
+        _profile != null &&
+        (_profile!.isAdmin || _profile!.isManager || _profile!.isClient);
+    // Status changes and deletion are staff-management actions (not clients).
+    final canManage =
+        _profile != null && (_profile!.isAdmin || _profile!.isManager);
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.72,
+        maxHeight: MediaQuery.of(context).size.height * 0.78,
       ),
       child: SafeArea(
         child: SingleChildScrollView(
@@ -1403,6 +1556,7 @@ class _EventDetailSheet extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
                 child: Container(
@@ -1421,67 +1575,113 @@ class _EventDetailSheet extends StatelessWidget {
                     width: 14,
                     height: 14,
                     decoration: BoxDecoration(
-                      color: event.color,
+                      color: _event.color,
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(event.title, style: AppTextStyles.headlineSm),
+                    child: Text(_event.title, style: AppTextStyles.headlineSm),
                   ),
-                  if (event.assigneeInitials != null)
+                  if (_event.assigneeInitials != null)
                     Container(
                       width: 34,
                       height: 34,
                       decoration: BoxDecoration(
-                        color: event.color.withValues(alpha: 0.15),
+                        color: _event.color.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        event.assigneeInitials!,
-                        style: AppTextStyles.labelMd.copyWith(color: event.color),
+                        _event.assigneeInitials!,
+                        style: AppTextStyles.labelMd.copyWith(color: _event.color),
                       ),
                     ),
                 ],
               ),
+              const SizedBox(height: 10),
+              Align(alignment: Alignment.centerLeft, child: _statusChip(_status)),
               const SizedBox(height: 16),
               _DetailRow(icon: Icons.access_time_outlined, text: _timeLabel()),
-              if (event.roomName != null)
+              if (_event.roomName != null)
                 _DetailRow(
                   icon: Icons.meeting_room_outlined,
-                  text: 'Room: ${event.roomName}',
+                  text: 'Room: ${_event.roomName}',
                 ),
-              if (event.clientName != null)
+              if (_event.clientName != null)
                 _DetailRow(
                   icon: Icons.business_outlined,
-                  text: event.clientName!,
+                  text: _event.clientName!,
                 ),
-              if (event.cost != null && event.cost! > 0)
+              if (_event.cost != null && _event.cost! > 0)
                 _DetailRow(
                   icon: Icons.attach_money_outlined,
-                  text: 'Cost: \$${event.cost!.toStringAsFixed(2)}',
+                  text: 'Cost: \$${_event.cost!.toStringAsFixed(2)}',
                 ),
-              if (event.attendeeNames.isNotEmpty)
+              if (_event.attendeeNames.isNotEmpty)
                 _DetailRow(
                   icon: Icons.group_outlined,
-                  text: event.attendeeNames.join(', '),
+                  text: _event.attendeeNames.join(', '),
                 ),
-              if (event.assigneeInitials != null && event.attendeeNames.isEmpty)
+              if (_event.assigneeInitials != null && _event.attendeeNames.isEmpty)
                 _DetailRow(
                   icon: Icons.person_outline,
-                  text: 'Assigned to ${event.assigneeInitials}',
+                  text: 'Assigned to ${_event.assigneeInitials}',
                 ),
-              const SizedBox(height: 8),
+
+              // Status selector (staff only).
+              if (canManage) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Status',
+                  style: AppTextStyles.labelCaps.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final s in kEventStatuses)
+                      ChoiceChip(
+                        label: Text(eventStatusLabel(s)),
+                        selected: _status == s,
+                        onSelected:
+                            _busy ? null : (_) => _changeStatus(s),
+                        labelStyle: AppTextStyles.labelMd.copyWith(
+                          fontSize: 11,
+                          color: _status == s
+                              ? eventStatusColor(s)
+                              : AppColors.onSurfaceVariant,
+                        ),
+                        selectedColor:
+                            eventStatusColor(s).withValues(alpha: 0.15),
+                        backgroundColor: AppColors.surface,
+                        side: BorderSide(
+                          color: _status == s
+                              ? eventStatusColor(s).withValues(alpha: 0.5)
+                              : AppColors.outlineVariant,
+                        ),
+                        showCheckmark: false,
+                      ),
+                  ],
+                ),
+              ],
+
+              const SizedBox(height: 16),
               Row(
                 children: [
                   if (canEdit) ...[
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          onEdit?.call();
-                        },
+                        onPressed: _busy
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                                widget.onEdit?.call();
+                              },
                         icon: const Icon(Icons.edit_outlined, size: 16),
                         label: const Text('Edit'),
                         style: OutlinedButton.styleFrom(
@@ -1503,6 +1703,21 @@ class _EventDetailSheet extends StatelessWidget {
                   ),
                 ],
               ),
+              // Delete (staff only) — destructive, kept separate below.
+              if (canManage) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: _busy ? null : _confirmDelete,
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Delete event'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1701,6 +1916,7 @@ class _AddEventSheetState extends State<_AddEventSheet> {
       cost: cost,
       roomName: _selectedRoom,
       attendeeNames: selectedNames,
+      attendeeIds: attendeeIds,
       assigneeInitials: selectedNames.isNotEmpty
           ? selectedNames.first.substring(0, 1).toUpperCase()
           : null,
@@ -2176,9 +2392,13 @@ class _EditEventSheetState extends State<_EditEventSheet> {
       clientName: _selectedClient?.companyName,
       cost: cost,
       roomName: _selectedRoom,
+      status: widget.event.status,
       attendeeNames: selectedNames.isNotEmpty
           ? selectedNames
           : widget.event.attendeeNames,
+      attendeeIds: attendeeIds.isNotEmpty
+          ? attendeeIds
+          : widget.event.attendeeIds,
       assigneeInitials: selectedNames.isNotEmpty
           ? selectedNames.first.substring(0, 1).toUpperCase()
           : widget.event.assigneeInitials,
