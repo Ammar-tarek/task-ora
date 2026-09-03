@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_model.dart';
 import '../services/supabase_service.dart';
 import '../services/biometric_service.dart';
+import '../services/push_notification_service.dart';
 import '../l10n/app_strings.dart';
 
 enum AuthStatus { loading, authenticated, unauthenticated, biometricRequired }
@@ -55,24 +56,48 @@ class AuthNotifier extends ChangeNotifier {
   }
 
   Future<void> _checkSession() async {
-    final session = SupabaseService.auth.currentSession;
-    if (session != null) {
-      await _fetchProfile();
-      if (_profile != null && _status == AuthStatus.authenticated) {
-        final isEnabled =
-            await BiometricService.instance.isBiometricEnabled(_profile!.id);
-        final isAvail = await BiometricService.instance.isAvailable();
-        if (isEnabled && isAvail && !_isBiometricVerified) {
-          _status = AuthStatus.biometricRequired;
-          notifyListeners();
-          return;
-        }
-      }
-    } else {
+    var session = SupabaseService.auth.currentSession;
+    if (session == null) {
       _isBiometricVerified = false;
       _status = AuthStatus.unauthenticated;
       notifyListeners();
+      return;
     }
+
+    // Restore/refresh the persisted session BEFORE any authenticated page or
+    // query runs. A stale (expired) access token would otherwise make the
+    // first data loads fail with RLS errors ("Error loading tasks"). Refresh
+    // instead of logging the user out.
+    if (session.isExpired) {
+      try {
+        await SupabaseService.auth.refreshSession();
+      } catch (_) {
+        // Refresh failed (offline / revoked refresh token). Keep whatever
+        // session remains; don't force logout here.
+      }
+      session = SupabaseService.auth.currentSession;
+      if (session == null) {
+        _isBiometricVerified = false;
+        _status = AuthStatus.unauthenticated;
+        notifyListeners();
+        return;
+      }
+    }
+
+    // Decide the biometric gate from the session's user id — WITHOUT flipping
+    // to authenticated first. This keeps data screens from mounting (and
+    // querying) while the app is still locked.
+    final userId = session.user.id;
+    final isEnabled = await BiometricService.instance.isBiometricEnabled(userId);
+    final isAvail = await BiometricService.instance.isAvailable();
+    if (isEnabled && isAvail && !_isBiometricVerified) {
+      _status = AuthStatus.biometricRequired;
+      notifyListeners();
+      return;
+    }
+
+    // No biometric lock (or already verified) → load profile & authenticate.
+    await _fetchProfile();
   }
 
   /// Fetch the profile row. Retries up to 4 times with a 1s delay to handle
@@ -129,7 +154,11 @@ class AuthNotifier extends ChangeNotifier {
         }
 
         _profile = ProfileModel.fromMap(data);
-        if (!_pendingBiometricEnablePrompt) {
+        // Don't flip to authenticated while the biometric lock is still active
+        // — a background tokenRefreshed event must not bypass the lock.
+        final biometricLocked =
+            _status == AuthStatus.biometricRequired && !_isBiometricVerified;
+        if (!_pendingBiometricEnablePrompt && !biometricLocked) {
           _status = AuthStatus.authenticated;
         }
         _error = null;
@@ -232,9 +261,12 @@ class AuthNotifier extends ChangeNotifier {
   /// If successful, unlocks app state to authenticated.
   /// If cancelled or failed, resets state to unauthenticated and signs out.
   Future<bool> authenticateBiometrics({String? reason}) async {
-    final user = SupabaseService.auth.currentUser;
-    if (user == null) {
-      await signOut();
+    var session = SupabaseService.auth.currentSession;
+    if (session == null) {
+      // Nothing persisted to unlock → user must sign in normally.
+      _isBiometricVerified = false;
+      _status = AuthStatus.unauthenticated;
+      notifyListeners();
       return false;
     }
 
@@ -243,16 +275,34 @@ class AuthNotifier extends ChangeNotifier {
       localizedReason: localizedReason,
     );
 
-    if (success) {
-      _isBiometricVerified = true;
-      _status = AuthStatus.authenticated;
-      _error = null;
-      notifyListeners();
-      return true;
-    } else {
-      await signOut();
+    if (!success) {
+      // Cancelled / failed. Do NOT sign out — the persisted Supabase session
+      // stays intact so the user can retry. Remain locked (biometricRequired).
       return false;
     }
+
+    _isBiometricVerified = true;
+    _error = null;
+
+    // Refresh the token if it expired while the app was closed, BEFORE loading
+    // any authenticated data — prevents the post-unlock "Error loading tasks".
+    if (session.isExpired) {
+      try {
+        await SupabaseService.auth.refreshSession();
+      } catch (_) {}
+      session = SupabaseService.auth.currentSession;
+      if (session == null) {
+        _isBiometricVerified = false;
+        _status = AuthStatus.unauthenticated;
+        notifyListeners();
+        return false;
+      }
+    }
+
+    // Load profile and flip to authenticated. This also (re)registers the FCM
+    // token via the main auth listener — no re-login required.
+    await _fetchProfile();
+    return true;
   }
 
   /// Sign in with email + password.
@@ -350,7 +400,12 @@ class AuthNotifier extends ChangeNotifier {
   }
 
   /// Sign out and clear state.
+  /// This is the ONLY path that clears the FCM token — biometric lock,
+  /// backgrounding, and app close must never reach here.
   Future<void> signOut() async {
+    try {
+      await PushNotificationService.instance.stop();
+    } catch (_) {}
     try {
       await SupabaseService.auth.signOut();
     } catch (_) {}

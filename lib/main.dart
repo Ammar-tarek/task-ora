@@ -114,8 +114,11 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
         if (mounted && !kIsWeb) ApkUpdateService.checkForUpdates(context);
       });
     } else {
+      // Only stop the realtime notification listener on non-authenticated
+      // states (loading, biometric lock, logged out). Do NOT clear the FCM
+      // token here — transient states must keep it registered. The token is
+      // cleared solely on explicit logout (AuthNotifier.signOut).
       NotificationTriggerService.instance.stop();
-      PushNotificationService.instance.stop();
     }
   }
 
@@ -143,9 +146,10 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
       title: 'CashBack',
       debugShowCheckedModeBanner: false,
       locale: locale,
-      theme: AppTheme.build(false),
-      darkTheme: AppTheme.build(true),
-      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
+      // Build ONLY the active palette. AppTheme.build mutates the global
+      // AppColors statics, so building both here would leave the statics in
+      // whichever ran last (dark) — breaking pages that read AppColors.* directly.
+      theme: AppTheme.build(isDark),
       routerConfig: widget.router,
       scrollBehavior: const AppScrollBehavior(),
       supportedLocales: const [Locale('en'), Locale('ar')],

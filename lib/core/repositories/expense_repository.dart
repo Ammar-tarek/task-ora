@@ -46,6 +46,21 @@ class ExpenseItem {
 class ExpenseRepository {
   static final _admin = SupabaseService.adminClient;
 
+  /// Team id of a profile — used so expense decisions reach the recorder's
+  /// department manager (via NotificationRepository.notifyAction).
+  static Future<String?> _teamIdForProfile(String profileId) async {
+    try {
+      final p = await _admin
+          .from('profiles')
+          .select('team_id')
+          .eq('id', profileId)
+          .maybeSingle();
+      return p?['team_id'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── Expenses ─────────────────────────────────────────────────────────────────
 
   /// Fetch expense records. Pass [teamId] to scope to a specific team
@@ -139,12 +154,14 @@ class ExpenseRepository {
           final amt = exp['amount'];
           final desc = exp['description'] as String? ?? 'Expense';
           if (recorderId != null) {
+            final teamId = await _teamIdForProfile(recorderId);
             await NotificationRepository.notifyAction(
               title: 'Expense Approved',
               body: 'Your expense of \$$amt ($desc) was approved.',
               type: 'expense_approved',
               referenceType: 'expense',
               referenceId: expenseId,
+              teamId: teamId,
               targetUserIds: [recorderId],
               actorId: approvedById,
             );
@@ -176,12 +193,14 @@ class ExpenseRepository {
           final amt = exp['amount'];
           final desc = exp['description'] as String? ?? 'Expense';
           if (recorderId != null) {
+            final teamId = await _teamIdForProfile(recorderId);
             await NotificationRepository.notifyAction(
               title: 'Expense Rejected',
               body: 'Your expense of \$$amt ($desc) was rejected.',
               type: 'expense_rejected',
               referenceType: 'expense',
               referenceId: expenseId,
+              teamId: teamId,
               targetUserIds: [recorderId],
               actorId: rejectedById,
             );

@@ -385,6 +385,97 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   }
 
   bool _archiving = false;
+  bool _incrementing = false;
+
+  // ── Increment (create numbered copies) ─────────────────────────────────────
+
+  Future<void> _incrementTask() async {
+    if (_task == null) return;
+    final uid = context.read<AuthNotifier>().profile!.id;
+    final countCtrl = TextEditingController(text: '1');
+
+    final count = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: const Text('Increment Task'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This task becomes "${_task!.title} 1"; copies continue from 2. '
+              'Copies keep the client and department only — no assignees.',
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: countCtrl,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'How many copies?',
+                prefixIcon: Icon(
+                  Icons.numbers,
+                  color: AppColors.gold,
+                  size: 18,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final n = int.tryParse(countCtrl.text.trim()) ?? 0;
+              Navigator.pop(ctx, n);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+
+    if (count == null) return;
+    if (count <= 0) {
+      _showSnack('Enter a number greater than 0', isError: true);
+      return;
+    }
+    if (count > 100) {
+      _showSnack('Maximum 100 copies at a time', isError: true);
+      return;
+    }
+
+    setState(() => _incrementing = true);
+    try {
+      final created = await TaskRepository.incrementTask(
+        task: _task!,
+        count: count,
+        createdBy: uid,
+      );
+      if (created > 0) {
+        _showSnack('Created $created cop${created == 1 ? 'y' : 'ies'}');
+        widget.onUpdated?.call();
+        if (mounted) Navigator.pop(context);
+      } else {
+        throw Exception('Increment failed');
+      }
+    } catch (e) {
+      _showSnack('Could not increment: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _incrementing = false);
+    }
+  }
 
   Future<void> _toggleArchive() async {
     final profile = context.read<AuthNotifier>().profile;
@@ -1466,7 +1557,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   // ── Action buttons ────────────────────────────────────────────────────────
 
   Widget _buildActions() {
-    final busy = _saving || _deleting;
+    final busy = _saving || _deleting || _incrementing;
 
     // Client — close only
     if (_perms.profile.isClient) {
@@ -1577,6 +1668,24 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                   color: AppColors.gold,
                 ),
                 label: const Text('Move to another department'),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          // Increment — create numbered copies (client + department only)
+          if (_task != null) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : _incrementTask,
+                icon: _incrementing
+                    ? _Spinner(color: AppColors.gold)
+                    : const Icon(
+                        Icons.control_point_duplicate,
+                        size: 18,
+                        color: AppColors.gold,
+                      ),
+                label: const Text('Increment task (numbered copies)'),
               ),
             ),
             const SizedBox(height: 12),

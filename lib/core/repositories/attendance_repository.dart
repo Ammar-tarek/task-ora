@@ -110,6 +110,21 @@ class AttendanceRepository {
 
   static const _select = '*, employee:profiles(full_name)';
 
+  /// Team id of an employee — used so attendance notifications reach that
+  /// employee's department manager (via NotificationRepository.notifyAction).
+  static Future<String?> _teamIdForEmployee(String employeeId) async {
+    try {
+      final p = await _admin
+          .from('profiles')
+          .select('team_id')
+          .eq('id', employeeId)
+          .maybeSingle();
+      return p?['team_id'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Resolve active staff (non-client) ids for a team, or all if [teamId] null.
   static Future<List<Map<String, String>>> _staff({String? teamId}) async {
     try {
@@ -681,12 +696,14 @@ class AttendanceRepository {
           final empId = row['employee_id'] as String?;
           final date = row['attendance_date'] as String? ?? '';
           if (empId != null) {
+            final empTeamId = await _teamIdForEmployee(empId);
             await NotificationRepository.notifyAction(
               title: 'Attendance Approved',
               body: 'Your attendance record for $date has been approved.',
               type: 'attendance_approved',
               referenceType: 'attendance',
               referenceId: empId,
+              teamId: empTeamId,
               targetUserIds: [empId],
               actorId: approvedBy,
             );
@@ -721,12 +738,14 @@ class AttendanceRepository {
           final empId = row['employee_id'] as String?;
           final date = row['attendance_date'] as String? ?? '';
           if (empId != null) {
+            final empTeamId = await _teamIdForEmployee(empId);
             await NotificationRepository.notifyAction(
               title: '❌ Attendance Rejected',
               body: 'Your attendance record for $date was rejected.',
               type: 'attendance_alert',
               referenceType: 'attendance',
               referenceId: empId,
+              teamId: empTeamId,
               targetUserIds: [empId],
               actorId: rejectedBy,
             );
@@ -760,12 +779,14 @@ class AttendanceRepository {
           final empId = row['employee_id'] as String?;
           final date = row['attendance_date'] as String? ?? '';
           if (empId != null) {
+            final empTeamId = await _teamIdForEmployee(empId);
             await NotificationRepository.notifyAction(
               title: '⏰ Attendance Marked Late',
               body: 'Your attendance for $date was marked as Late.',
               type: 'attendance_alert',
               referenceType: 'attendance',
               referenceId: empId,
+              teamId: empTeamId,
               targetUserIds: [empId],
               actorId: updatedBy,
             );

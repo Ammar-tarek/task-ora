@@ -11,10 +11,15 @@ import '../../core/providers/team_filter_notifier.dart';
 import '../../core/providers/theme_controller.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/repositories/team_repository.dart';
+import '../../core/repositories/client_repository.dart';
+import '../../core/repositories/task_status_options_repository.dart';
 import '../../core/services/realtime_service.dart';
 import '../../core/models/task_model.dart';
 import '../../core/models/team_model.dart';
 import '../../core/models/profile_model.dart';
+import '../../core/models/client_model.dart';
+import '../../core/models/task_status_option.dart';
+import 'status_options_manager_sheet.dart';
 import '../../core/utils/task_permissions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/notion_table.dart';
@@ -308,7 +313,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   // ── Load ─────────────────────────────────────────────────────────────────
 
-  Future<void> _load({bool animate = true}) async {
+  Future<void> _load({bool animate = true, int attempt = 0}) async {
     if (animate) {
       setState(() {
         _loading = true;
@@ -317,6 +322,17 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     }
     try {
       final profile = context.read<AuthNotifier>().profile;
+
+      // Cold start / biometric unlock: the Supabase session + profile may still
+      // be resolving when this first fires. Keep the spinner and retry instead
+      // of flashing "Error loading tasks" until the retry succeeds.
+      if (profile == null) {
+        if (attempt < 6 && mounted) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          return _load(animate: false, attempt: attempt + 1);
+        }
+      }
+
       _profile = profile;
       _perms = profile != null ? TaskPermissions(profile) : null;
 
@@ -344,6 +360,12 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         });
       }
     } catch (e) {
+      // A first-load failure right after cold start is usually the access token
+      // still refreshing — retry a few times before surfacing the error.
+      if (attempt < 3 && mounted) {
+        await Future.delayed(const Duration(milliseconds: 600));
+        return _load(animate: false, attempt: attempt + 1);
+      }
       if (mounted) {
         setState(() {
           _error = e.toString();
@@ -2382,54 +2404,298 @@ class _CreateTaskSheet extends StatefulWidget {
 class _CreateTaskSheetState extends State<_CreateTaskSheet> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  final _costCtrl = TextEditingController();
+  final _commentCtrl = TextEditingController();
+  bool _commentIsInternal = true;
   String _priority = 'medium';
   String _status = 'not_started';
   DateTime? _dueDate;
+  double _progress = 0.0;
   bool _creating = false;
+
+  List<TaskStatusOption> _statusOptions = [];
 
   String? _selectedTeamId;
   List<TeamModel> _teams = [];
 
+  String? _clientId;
+  List<ClientModel> _clients = [];
+
+  List<ProfileModel> _allEmployees = [];
+  List<String> _selectedAssigneeIds = [];
+  bool _loadingMembers = false;
+
   @override
   void initState() {
     super.initState();
-    _loadTeams();
+    _loadInitial();
   }
 
-  Future<void> _loadTeams() async {
+  Future<void> _loadInitial() async {
     final profile = context.read<AuthNotifier>().profile;
+
+    // Clients (admin/manager create tasks with a client attached)
+    ClientRepository.fetchClients().then((clients) {
+      if (mounted) setState(() => _clients = clients);
+    });
+
+    // Status options — admin bootstraps on first run; all roles fetch.
+    () async {
+      if (profile?.isAdmin == true) {
+        await TaskStatusOptionsRepository.init(profile!.id);
+      }
+      final opts = await TaskStatusOptionsRepository.fetchOptions();
+      if (mounted) setState(() => _statusOptions = opts);
+    }();
+
     if (profile?.isAdmin == true) {
       final teams = await TeamRepository.fetchAllAdmin(activeOnly: true);
+      if (!mounted) return;
       setState(() {
         _teams = teams;
-        if (teams.isNotEmpty) {
-          _selectedTeamId = teams.first.id;
-        }
+        if (teams.isNotEmpty) _selectedTeamId = teams.first.id;
       });
     } else {
       _selectedTeamId = profile?.teamId;
     }
+    await _loadMembers(_selectedTeamId);
+  }
+
+  Future<void> _loadMembers(String? teamId) async {
+    if (teamId == null) {
+      setState(() {
+        _allEmployees = [];
+        _selectedAssigneeIds = [];
+      });
+      return;
+    }
+    setState(() => _loadingMembers = true);
+    try {
+      final currentProfile = context.read<AuthNotifier>().profile;
+      final members = await TeamRepository.fetchMembersAdmin(teamId);
+      members.removeWhere((e) => e.isClient);
+      if (currentProfile != null &&
+          !currentProfile.isClient &&
+          !members.any((e) => e.id == currentProfile.id)) {
+        members.insert(0, currentProfile);
+      }
+      if (!mounted) return;
+      setState(() {
+        _allEmployees = members;
+        // Drop any selected assignees no longer in the new team
+        _selectedAssigneeIds.removeWhere(
+          (id) => !members.any((e) => e.id == id),
+        );
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingMembers = false);
+    }
+  }
+
+  void _onTeamChanged(String? val) {
+    setState(() => _selectedTeamId = val);
+    _loadMembers(val);
   }
 
   Future<void> _create() async {
     if (_titleCtrl.text.trim().isEmpty) return;
     setState(() => _creating = true);
     final profile = context.read<AuthNotifier>().profile!;
-    await TaskRepository.createTask(
+    final taskId = await TaskRepository.createTask(
       title: _titleCtrl.text.trim(),
       description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
       createdBy: profile.id,
       teamId: _selectedTeamId,
+      clientId: _clientId,
       priority: _priority,
+      status: _status,
       dueDate: _dueDate?.toIso8601String().split('T').first,
+      cost: double.tryParse(_costCtrl.text.trim()),
+      completionPercentage: _progress.round(),
     );
+
+    if (taskId != null && _selectedAssigneeIds.isNotEmpty) {
+      try {
+        await TaskRepository.assignEmployees(
+          taskId: taskId,
+          profileIds: _selectedAssigneeIds,
+          assignedBy: profile.id,
+        );
+      } catch (_) {}
+    }
+
+    // Post initial comment (may embed a link) once the task exists.
+    final commentText = _commentCtrl.text.trim();
+    if (taskId != null && commentText.isNotEmpty) {
+      try {
+        await TaskRepository.addComment(
+          taskId,
+          profile.id,
+          commentText,
+          isInternal: _commentIsInternal,
+        );
+      } catch (_) {}
+    }
+
     widget.onCreated();
+  }
+
+  Future<void> _showStatusOptionsManager() async {
+    final profile = context.read<AuthNotifier>().profile;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatusOptionsManagerSheet(
+        isAdmin: profile?.isAdmin ?? false,
+        adminUserId: profile?.id,
+        onChanged: () async {
+          final opts = await TaskStatusOptionsRepository.fetchOptions();
+          if (mounted) setState(() => _statusOptions = opts);
+        },
+      ),
+    );
+  }
+
+  void _showInsertLinkDialog() {
+    final urlCtrl = TextEditingController();
+    final labelCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            const Icon(Icons.link, color: AppColors.gold),
+            const SizedBox(width: 8),
+            Text('Insert Link into Comment', style: AppTextStyles.headlineSm),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: urlCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Link URL *',
+                hintText: 'https://example.com',
+                prefixIcon: Icon(Icons.http, color: AppColors.gold),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: labelCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Link Label (Optional)',
+                hintText: 'e.g. Project Specs',
+                prefixIcon: Icon(Icons.label_outline, color: AppColors.gold),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final url = urlCtrl.text.trim();
+              if (url.isNotEmpty) {
+                final label = labelCtrl.text.trim();
+                final formatted = label.isNotEmpty ? '[$label]($url)' : url;
+                setState(() {
+                  if (_commentCtrl.text.isNotEmpty) {
+                    _commentCtrl.text = '${_commentCtrl.text} $formatted';
+                  } else {
+                    _commentCtrl.text = formatted;
+                  }
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Insert Link'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAssigneePicker() {
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          backgroundColor: AppColors.surfaceContainerLowest,
+          title: const Text('Select Assignees'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: _allEmployees.isEmpty
+                ? Center(
+                    child: Text(
+                      'No team members to assign',
+                      style: AppTextStyles.bodySm,
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _allEmployees.length,
+                    itemBuilder: (_, idx) {
+                      final emp = _allEmployees[idx];
+                      final sel = _selectedAssigneeIds.contains(emp.id);
+                      return CheckboxListTile(
+                        value: sel,
+                        activeColor: AppColors.gold,
+                        title: Row(
+                          children: [
+                            TAvatar(name: emp.fullName, size: 24),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                emp.fullName,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.bodyMd,
+                              ),
+                            ),
+                          ],
+                        ),
+                        onChanged: (v) {
+                          setDialog(() {
+                            if (v == true) {
+                              _selectedAssigneeIds.add(emp.id);
+                            } else {
+                              _selectedAssigneeIds.remove(emp.id);
+                            }
+                          });
+                          setState(() {});
+                        },
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _titleCtrl.dispose();
     _descCtrl.dispose();
+    _costCtrl.dispose();
+    _commentCtrl.dispose();
     super.dispose();
   }
 
@@ -2518,10 +2784,64 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
                       ),
                     )
                     .toList(),
-                onChanged: (val) => setState(() => _selectedTeamId = val),
+                onChanged: _onTeamChanged,
               ),
               const SizedBox(height: 18),
             ],
+
+            // Client
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('CLIENT', style: AppTextStyles.labelCaps),
+            ),
+            const SizedBox(height: 8),
+            if (_clients.isEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'No clients — create one in the Clients section.',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              DropdownButtonFormField<String?>(
+                initialValue: _clientId,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  hintText: 'No client attached',
+                  prefixIcon: const Icon(
+                    Icons.business_outlined,
+                    color: AppColors.gold,
+                    size: 18,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('— No client —'),
+                  ),
+                  ..._clients.map(
+                    (c) => DropdownMenuItem<String?>(
+                      value: c.id,
+                      child: Text(
+                        c.companyName,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: (val) => setState(() => _clientId = val),
+              ),
+            const SizedBox(height: 18),
 
             Align(
               alignment: Alignment.centerLeft,
@@ -2539,22 +2859,57 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
             ),
             const SizedBox(height: 18),
 
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('STATUS', style: AppTextStyles.labelCaps),
+            Row(
+              children: [
+                Text('STATUS', style: AppTextStyles.labelCaps),
+                const Spacer(),
+                TextButton.icon(
+                  icon: const Icon(Icons.tune, size: 14, color: AppColors.gold),
+                  label: Text(
+                    context.read<AuthNotifier>().profile?.isAdmin == true
+                        ? 'Edit Options'
+                        : 'View Options',
+                    style: AppTextStyles.bodySm.copyWith(color: AppColors.gold),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                  ),
+                  onPressed: _showStatusOptionsManager,
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 6,
-              children: [
-                _buildStatusChip('not_started', 'To Do'),
-                _buildStatusChip('in_progress', 'In Progress'),
-                _buildStatusChip('employee_done', 'Employee Done'),
-                _buildStatusChip('on_hold', 'On Hold'),
-              ],
+              children: _statusOptions
+                  .map((opt) => _buildStatusChip(opt.label, opt.displayLabel))
+                  .toList(),
             ),
             const SizedBox(height: 18),
+
+            // Progress
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('PROGRESS', style: AppTextStyles.labelCaps),
+                Text(
+                  '${_progress.round()}%',
+                  style: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Slider(
+              value: _progress,
+              min: 0,
+              max: 100,
+              divisions: 20,
+              activeColor: AppColors.gold,
+              inactiveColor: AppColors.outlineVariant,
+              onChanged: (v) => setState(() => _progress = v),
+            ),
+            const SizedBox(height: 14),
 
             Align(
               alignment: Alignment.centerLeft,
@@ -2612,6 +2967,140 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
                   ],
                 ),
               ),
+            ),
+            const SizedBox(height: 18),
+
+            // Cost
+            TextField(
+              controller: _costCtrl,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'COST',
+                hintText: 'e.g. 1500.00',
+                prefixIcon: Icon(
+                  Icons.monetization_on_outlined,
+                  color: AppColors.gold,
+                  size: 18,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // Assignees
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('ASSIGNEES', style: AppTextStyles.labelCaps),
+                if (_loadingMembers)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.gold,
+                    ),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(
+                      Icons.add_circle_outline,
+                      color: AppColors.gold,
+                    ),
+                    onPressed: _showAssigneePicker,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            if (_selectedAssigneeIds.isEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('No assignees', style: AppTextStyles.bodySm),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _selectedAssigneeIds.map((uid) {
+                  final emp = _allEmployees.firstWhere(
+                    (e) => e.id == uid,
+                    orElse: () => ProfileModel(
+                      id: uid,
+                      role: 'employee',
+                      fullName: 'Unknown',
+                      status: 'active',
+                      timezone: 'UTC',
+                      preferredLanguage: 'en',
+                      createdAt: '',
+                    ),
+                  );
+                  return Chip(
+                    avatar: TAvatar(name: emp.fullName, size: 18),
+                    label: Text(emp.fullName.split(' ').first),
+                    onDeleted: () =>
+                        setState(() => _selectedAssigneeIds.remove(uid)),
+                    deleteIcon: const Icon(Icons.cancel, size: 16),
+                  );
+                }).toList(),
+              ),
+            const SizedBox(height: 18),
+
+            // Initial comment (optional) — supports link insert + internal/public
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('COMMENT', style: AppTextStyles.labelCaps),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _commentCtrl,
+                    maxLines: 2,
+                    minLines: 1,
+                    decoration: InputDecoration(
+                      hintText: 'Add an initial comment… (optional)',
+                      hintStyle: AppTextStyles.bodySm,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: AppColors.outlineVariant),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.link, color: AppColors.gold, size: 20),
+                      tooltip: 'Insert Link into Comment',
+                      onPressed: _showInsertLinkDialog,
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        _commentIsInternal ? Icons.lock_outline : Icons.public,
+                        color: _commentIsInternal
+                            ? AppColors.primary
+                            : AppColors.onSurfaceVariant,
+                        size: 18,
+                      ),
+                      tooltip: _commentIsInternal
+                          ? 'Internal comment'
+                          : 'Visible to client',
+                      onPressed: () => setState(
+                        () => _commentIsInternal = !_commentIsInternal,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
             const SizedBox(height: 24),
 

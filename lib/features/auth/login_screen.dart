@@ -21,7 +21,58 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passCtrl = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
+  bool _biometricAvailable = false;
+  bool _hasStoredCreds = false;
   String? _errorMsg;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometricAvailable();
+  }
+
+  Future<void> _checkBiometricAvailable() async {
+    final avail = await BiometricService.instance.isAvailable();
+    final hasCreds = await BiometricService.instance.hasCredentials();
+    if (mounted) {
+      setState(() {
+        _biometricAvailable = avail;
+        _hasStoredCreds = hasCreds;
+      });
+    }
+  }
+
+  /// Fingerprint login: unlock the biometric-gated credentials stored at the
+  /// time the user enabled biometric login, then re-authenticate with them.
+  /// (Biometrics can't mint a Supabase session by themselves.)
+  Future<void> _biometricLogin() async {
+    final auth = context.read<AuthNotifier>();
+    final creds = await BiometricService.instance.readCredentials();
+    if (creds == null) {
+      setState(() => _errorMsg = S.t('biometric_no_session'));
+      return;
+    }
+    // Require a fresh fingerprint/face scan before using the stored credentials.
+    final unlocked = await BiometricService.instance.authenticate(
+      localizedReason: S.t('biometric_auth_reason'),
+    );
+    if (!unlocked) {
+      if (mounted) setState(() => _errorMsg = S.t('biometric_failed'));
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _errorMsg = null;
+    });
+    final error = await auth.signIn(creds.email, creds.password);
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (error != null) {
+      setState(() => _errorMsg = error);
+    }
+    // On success the router auto-navigates away via AuthNotifier status change.
+  }
 
   @override
   void dispose() {
@@ -105,10 +156,22 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           if (success) {
             await BiometricService.instance.setBiometricEnabled(userId, true);
+            // Save the credentials just entered so the user can sign in with
+            // fingerprint next time (even after an explicit logout).
+            await BiometricService.instance.saveCredentials(email, password);
           }
         }
       }
       auth.completeBiometricPrompt();
+    } else {
+      // Biometric not being prompted (already enabled, or unavailable). If it's
+      // enabled, refresh the stored credentials so fingerprint login keeps
+      // working after a password change.
+      final userId = auth.profile?.id ?? SupabaseService.auth.currentUser?.id;
+      if (userId != null &&
+          await BiometricService.instance.isBiometricEnabled(userId)) {
+        await BiometricService.instance.saveCredentials(email, password);
+      }
     }
   }
 
@@ -300,6 +363,43 @@ class _LoginScreenState extends State<LoginScreen> {
                       : Text(S.t('login')),
                 ),
               ),
+
+              // Fingerprint login option — only when the device has biometrics
+              // AND credentials were saved when biometric login was enabled.
+              if (_biometricAvailable && _hasStoredCreds) ...[
+                const SizedBox(height: 16),
+                Center(
+                  child: Column(
+                    children: [
+                      InkWell(
+                        onTap: _loading ? null : _biometricLogin,
+                        borderRadius: BorderRadius.circular(40),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.gold.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.fingerprint,
+                            color: AppColors.gold,
+                            size: 30,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        S.t('login_with_fingerprint'),
+                        style: AppTextStyles.bodySm.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
 
               // Create account link

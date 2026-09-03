@@ -47,15 +47,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final profile = context.read<AuthNotifier>().profile;
     if (profile == null) return;
 
-    List<AppNotification> rawData = await NotificationRepository.fetchForUser(profile.id);
-
-    if (profile.isAdmin) {
-      final allNotifs = await NotificationRepository.fetchAll();
-      rawData = [...rawData, ...allNotifs];
-    } else if (profile.isManager && profile.teamId != null) {
-      final teamNotifs = await NotificationRepository.fetchForTeam(profile.teamId!);
-      rawData = [...rawData, ...teamNotifs];
-    }
+    // Show ONLY the user's own notifications. Admins/managers already receive
+    // their own dedicated row for every event they should see (via
+    // NotificationRepository.notifyAction), so pulling other users' rows here
+    // would surface notifications addressed to people they aren't a recipient
+    // of — and create duplicate-looking entries.
+    final List<AppNotification> rawData =
+        await NotificationRepository.fetchForUser(profile.id);
 
     // 1) Filter out notifications ignored / dismissed by this user
     final prefs = await SharedPreferences.getInstance();
