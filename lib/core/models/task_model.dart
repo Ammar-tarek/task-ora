@@ -26,6 +26,7 @@ class TaskModel {
   final bool isArchived;
   final String? archivedAt;
   final String? archivedBy;
+  final bool hiddenFromClient;
   final List<TaskAssignee> assignees;
   final List<TaskComment> comments;
   final List<TaskEditLog> editLogs;
@@ -52,6 +53,7 @@ class TaskModel {
     this.isArchived = false,
     this.archivedAt,
     this.archivedBy,
+    this.hiddenFromClient = false,
     this.assignees = const [],
     this.comments = const [],
     this.editLogs = const [],
@@ -84,6 +86,7 @@ class TaskModel {
       isArchived: m['is_archived'] as bool? ?? false,
       archivedAt: m['archived_at'] as String?,
       archivedBy: m['archived_by'] as String?,
+      hiddenFromClient: m['hidden_from_client'] as bool? ?? false,
       assignees: rawAssignees
           .map((a) => TaskAssignee.fromMap(a as Map<String, dynamic>))
           .toList(),
@@ -162,6 +165,7 @@ class TaskModel {
   TaskModel copyWith({
     String? status,
     int? completionPercentage,
+    bool? hiddenFromClient,
     List<TaskComment>? comments,
     List<TaskEditLog>? editLogs,
   }) {
@@ -184,6 +188,10 @@ class TaskModel {
       boardId: boardId,
       boardColumnId: boardColumnId,
       createdAt: createdAt,
+      isArchived: isArchived,
+      archivedAt: archivedAt,
+      archivedBy: archivedBy,
+      hiddenFromClient: hiddenFromClient ?? this.hiddenFromClient,
       assignees: assignees,
       comments: comments ?? this.comments,
       editLogs: editLogs ?? this.editLogs,

@@ -8,12 +8,21 @@ import '../../core/models/client_model.dart';
 import '../../core/models/task_model.dart';
 import '../../core/repositories/client_repository.dart';
 import '../../core/repositories/finance_repository.dart';
+import '../../core/repositories/task_repository.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_time.dart';
 
 class ClientFinanceScreen extends StatefulWidget {
-  const ClientFinanceScreen({super.key, required this.clientId});
+  const ClientFinanceScreen({
+    super.key,
+    required this.clientId,
+    this.asClient = false,
+  });
   final String clientId;
+
+  /// True when the client is viewing their own portal. Filters out tasks
+  /// admins have hidden. Staff/admin open this with false.
+  final bool asClient;
 
   @override
   State<ClientFinanceScreen> createState() => _ClientFinanceScreenState();
@@ -46,7 +55,10 @@ class _ClientFinanceScreenState extends State<ClientFinanceScreen>
     setState(() => _loading = true);
     final results = await Future.wait([
       ClientRepository.fetchClientById(widget.clientId),
-      ClientRepository.fetchClientTasks(widget.clientId),
+      ClientRepository.fetchClientTasks(
+        widget.clientId,
+        asClient: widget.asClient,
+      ),
       ClientRepository.fetchClientEvents(widget.clientId),
       ClientRepository.fetchClientCrmEntries(widget.clientId),
     ]);
@@ -107,6 +119,42 @@ class _ClientFinanceScreenState extends State<ClientFinanceScreen>
           ),
         );
       }
+    }
+  }
+
+  Future<void> _toggleTaskVisibility(TaskModel task) async {
+    final newHidden = !task.hiddenFromClient;
+    // Optimistic update
+    setState(() {
+      final i = _tasks.indexWhere((t) => t.id == task.id);
+      if (i != -1) {
+        _tasks[i] = _tasks[i].copyWith(hiddenFromClient: newHidden);
+      }
+    });
+    final ok = await TaskRepository.setTaskClientVisibility(task.id, newHidden);
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newHidden ? 'Task hidden from client' : 'Task shown to client',
+          ),
+        ),
+      );
+    } else {
+      // Revert on failure
+      setState(() {
+        final i = _tasks.indexWhere((t) => t.id == task.id);
+        if (i != -1) {
+          _tasks[i] = _tasks[i].copyWith(hiddenFromClient: !newHidden);
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppColors.error,
+          content: Text('Could not update visibility'),
+        ),
+      );
     }
   }
 
@@ -191,7 +239,11 @@ class _ClientFinanceScreenState extends State<ClientFinanceScreen>
                   totalInvoiced: _totalInvoiced,
                   totalPaid: _totalPaid,
                 ),
-                _TasksTab(tasks: _tasks),
+                _TasksTab(
+                  tasks: _tasks,
+                  canManage: isAdmin,
+                  onToggleVisibility: _toggleTaskVisibility,
+                ),
                 _MeetingsTab(events: _events),
               ],
             ),
@@ -512,8 +564,16 @@ class _CrmRow extends StatelessWidget {
 
 // ── Tasks tab ──────────────────────────────────────────────────────────────────
 class _TasksTab extends StatelessWidget {
-  const _TasksTab({required this.tasks});
+  const _TasksTab({
+    required this.tasks,
+    this.canManage = false,
+    this.onToggleVisibility,
+  });
   final List<TaskModel> tasks;
+
+  /// Admin only — shows the show/hide-from-client control per task.
+  final bool canManage;
+  final ValueChanged<TaskModel>? onToggleVisibility;
 
   @override
   Widget build(BuildContext context) {
@@ -524,14 +584,24 @@ class _TasksTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       itemCount: tasks.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => _TaskRow(task: tasks[i]),
+      itemBuilder: (_, i) => _TaskRow(
+        task: tasks[i],
+        canManage: canManage,
+        onToggleVisibility: onToggleVisibility,
+      ),
     );
   }
 }
 
 class _TaskRow extends StatelessWidget {
-  const _TaskRow({required this.task});
+  const _TaskRow({
+    required this.task,
+    this.canManage = false,
+    this.onToggleVisibility,
+  });
   final TaskModel task;
+  final bool canManage;
+  final ValueChanged<TaskModel>? onToggleVisibility;
 
   Color _priorityColor() {
     switch (task.priority) {
@@ -548,42 +618,64 @@ class _TaskRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(10),
-        border: Border(left: BorderSide(color: _priorityColor(), width: 3)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(task.title, style: AppTextStyles.labelMd),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    _Chip(label: task.statusLabel, color: AppColors.primary),
-                    if (task.dueDate != null) ...[
-                      const SizedBox(width: 8),
-                      _Chip(
-                        label: task.dueDateDisplay,
-                        color: AppColors.outlineVariant,
-                      ),
+    final hidden = task.hiddenFromClient;
+    return Opacity(
+      opacity: canManage && hidden ? 0.55 : 1.0,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(10),
+          border: Border(left: BorderSide(color: _priorityColor(), width: 3)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(task.title, style: AppTextStyles.labelMd),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      _Chip(label: task.statusLabel, color: AppColors.primary),
+                      if (task.dueDate != null) ...[
+                        const SizedBox(width: 8),
+                        _Chip(
+                          label: task.dueDateDisplay,
+                          color: AppColors.outlineVariant,
+                        ),
+                      ],
+                      if (canManage && hidden) ...[
+                        const SizedBox(width: 8),
+                        _Chip(label: 'Hidden', color: AppColors.error),
+                      ],
                     ],
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            if (task.cost != null && task.cost! > 0)
+              Text(
+                'EGP ${task.cost!.toStringAsFixed(0)}',
+                style: AppTextStyles.dataMd.copyWith(color: AppColors.gold),
+              ),
+            if (canManage) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                icon: Icon(
+                  hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  size: 20,
+                  color: hidden ? AppColors.error : AppColors.onSurfaceVariant,
                 ),
-              ],
-            ),
-          ),
-          if (task.cost != null && task.cost! > 0)
-            Text(
-              'EGP ${task.cost!.toStringAsFixed(0)}',
-              style: AppTextStyles.dataMd.copyWith(color: AppColors.gold),
-            ),
-        ],
+                tooltip: hidden ? 'Hidden from client — tap to show' : 'Visible to client — tap to hide',
+                onPressed: onToggleVisibility == null
+                    ? null
+                    : () => onToggleVisibility!(task),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

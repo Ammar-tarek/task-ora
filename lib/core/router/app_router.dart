@@ -25,6 +25,7 @@ import '../../features/settings/settings_screen.dart';
 import '../../features/super_admin/archived_tasks_screen.dart';
 import '../../features/analytics/advanced_analytics_screen.dart';
 import '../../features/attendance/attendance_screen.dart';
+import '../../features/attendance/nfc_checkin_screen.dart';
 import '../../features/penalties/penalty_management_screen.dart';
 import '../../features/users/user_management_screen.dart';
 import '../../features/users/user_privileges_screen.dart';
@@ -42,6 +43,24 @@ import '../widgets/bottom_nav_shell.dart';
 
 /// Called from main.dart — receives the AuthNotifier so the router
 /// can listen for changes via [refreshListenable].
+/// Holds a deep-link target (e.g. the NFC `/checkin` URL) that arrived while
+/// the session was still loading or the user was signed out, so the router can
+/// return the user there automatically once they are authenticated.
+class PendingRedirect {
+  PendingRedirect._();
+  static String? _path;
+  static void set(String path) => _path = path;
+  static String? consume() {
+    final p = _path;
+    _path = null;
+    return p;
+  }
+}
+
+/// Paths that are entered via an external deep link / NFC tap and must survive
+/// the loading + login round-trip.
+bool _isDeepIntent(String loc) => loc == '/checkin';
+
 GoRouter makeRouter(AuthNotifier auth) {
   return GoRouter(
     initialLocation: '/splash',
@@ -54,18 +73,27 @@ GoRouter makeRouter(AuthNotifier auth) {
       final loc = state.matchedLocation;
       final status = auth.status;
 
-      // ① Session still loading or biometric lock active — stay on splash
+      // ① Session still loading or biometric lock active — stay on splash.
+      // Preserve a deep-link target (NFC /checkin) so it survives startup.
       if (status == AuthStatus.loading || status == AuthStatus.biometricRequired) {
+        if (_isDeepIntent(loc)) PendingRedirect.set(loc);
         return loc == '/splash' ? null : '/splash';
       }
 
-      // ② Not logged in — must see login screen
+      // ② Not logged in — must see login screen. Remember a deep-link target
+      // so the user is returned there after they sign in.
       if (status == AuthStatus.unauthenticated) {
+        if (_isDeepIntent(loc)) PendingRedirect.set(loc);
         if (loc == '/login' || loc == '/forgot-password' || loc == '/signup') {
           return null;
         }
         return '/login';
       }
+
+      // Authenticated: if a deep-link target was captured before login/startup,
+      // return the user there now (identity comes from the session, not the URL).
+      final pending = PendingRedirect.consume();
+      if (pending != null && loc != pending) return pending;
 
       // ③ Pending account — employee not yet assigned to a team.
       // They can only see the pending screen until an admin/manager adds
@@ -265,6 +293,13 @@ GoRouter makeRouter(AuthNotifier auth) {
         path: '/attendance',
         builder: (_, _) => const AttendanceScreen(),
       ),
+      // NFC / deep-link attendance check-in landing page.
+      // The single shared NFC URL points here. Employee identity is resolved
+      // from the authenticated Supabase session — never from the URL.
+      GoRoute(
+        path: '/checkin',
+        builder: (_, _) => const NfcCheckInScreen(),
+      ),
       GoRoute(
         path: '/penalties',
         builder: (_, _) => const PenaltyManagementScreen(),
@@ -335,7 +370,7 @@ class _FinanceRouter extends StatelessWidget {
     final privs = context.watch<TeamPrivilegesNotifier>();
 
     if (profile?.isClient == true) {
-      return ClientFinanceScreen(clientId: profile!.id);
+      return ClientFinanceScreen(clientId: profile!.id, asClient: true);
     }
     // Manager blocked by team privileges
     if (profile?.isManager == true && !privs.canViewFinance) {

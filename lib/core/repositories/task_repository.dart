@@ -776,6 +776,7 @@ class TaskRepository {
           .from('tasks')
           .select(_taskSelect)
           .eq('client_id', profile.id)
+          .eq('hidden_from_client', false)
           .order('created_at', ascending: false);
       return (data as List).map((m) => TaskModel.fromMap(m)).toList();
     } catch (_) {
@@ -784,6 +785,7 @@ class TaskRepository {
             .from('tasks')
             .select('*')
             .eq('client_id', profile.id)
+            .eq('hidden_from_client', false)
             .order('created_at', ascending: false);
         return (data as List).map((m) => TaskModel.fromMap(m)).toList();
       } catch (_) {
@@ -1113,6 +1115,23 @@ class TaskRepository {
 
   /// Update task fields and optionally log the edit.
   /// Pass [editedBy] + [editSummary] to record who changed what.
+  /// Admin/manager toggle: show or hide a task from the client portal view.
+  /// Staff always keep seeing it; only the client's own list is filtered.
+  static Future<bool> setTaskClientVisibility(
+    String taskId,
+    bool hiddenFromClient,
+  ) async {
+    try {
+      await _adminClient
+          .from('tasks')
+          .update({'hidden_from_client': hiddenFromClient})
+          .eq('id', taskId);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> updateTask({
     required String id,
     required String title,
@@ -1125,6 +1144,7 @@ class TaskRepository {
     String? clientId,
     bool clearClient = false,
     String? teamId,
+    bool? hiddenFromClient,
     String? editedBy,
     String? editSummary,
   }) async {
@@ -1139,6 +1159,9 @@ class TaskRepository {
         if (clientId != null || clearClient) 'client_id': clientId,
         'team_id': teamId,
       };
+      if (hiddenFromClient != null) {
+        payload['hidden_from_client'] = hiddenFromClient;
+      }
       if (description != null) payload['description'] = description;
       if (cost != null) payload['cost'] = cost;
       if (cost == null) payload['cost'] = null;

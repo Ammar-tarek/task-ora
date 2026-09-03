@@ -77,6 +77,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   double _progress = 0.0;
   List<String> _selectedAssigneeIds = [];
   bool _commentIsInternal = true;
+  bool _hiddenFromClient = false;
   String? _clientId;
   List<ClientModel> _clients = [];
   String? _selectedTeamId;
@@ -151,6 +152,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       _selectedAssigneeIds = task.assignees.map((a) => a.profileId).toList();
       _clientId = task.clientId;
       _selectedTeamId = task.teamId;
+      _hiddenFromClient = task.hiddenFromClient;
 
       // Load clients for picker (admin/manager only)
       if (_perms.canEditFull) {
@@ -277,6 +279,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         clientId: _clientId,
         clearClient: _clientId == null,
         teamId: _selectedTeamId,
+        hiddenFromClient: _hiddenFromClient,
         editedBy: currentUid,
         editSummary: 'Task details updated',
       );
@@ -1045,6 +1048,42 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             ],
             onChanged: (val) => setState(() => _clientId = val),
           ),
+        if (_clientId != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.outlineVariant),
+            ),
+            child: SwitchListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              activeThumbColor: AppColors.gold,
+              value: _hiddenFromClient,
+              onChanged: (v) => setState(() => _hiddenFromClient = v),
+              title: Text(
+                'Hide from client',
+                style: AppTextStyles.bodyMd,
+              ),
+              subtitle: Text(
+                _hiddenFromClient
+                    ? 'The client will not see this task in their portal.'
+                    : 'The client can see this task in their portal.',
+                style: AppTextStyles.bodySm.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+              secondary: Icon(
+                _hiddenFromClient
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: _hiddenFromClient
+                    ? AppColors.error
+                    : AppColors.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
 
         // Assignees

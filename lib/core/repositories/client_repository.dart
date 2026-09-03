@@ -284,25 +284,35 @@ class ClientRepository {
     }
   }
 
-  static Future<List<TaskModel>> fetchClientTasks(String clientId) async {
+  /// Fetch a client's tasks.
+  ///
+  /// When [asClient] is true (the client viewing their own portal), tasks
+  /// flagged `hidden_from_client` are excluded. Staff/admin pass false and
+  /// see every task, including hidden ones.
+  static Future<List<TaskModel>> fetchClientTasks(
+    String clientId, {
+    bool asClient = false,
+  }) async {
     try {
-      final data = await _adminDb
+      var q = _adminDb
           .from('tasks')
           .select(
             '*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name)), task_comments(id, content, is_internal, created_at, author:profiles!task_comments_author_id_fkey(full_name))',
           )
-          .eq('client_id', clientId)
-          .order('created_at', ascending: false);
+          .eq('client_id', clientId);
+      if (asClient) q = q.eq('hidden_from_client', false);
+      final data = await q.order('created_at', ascending: false);
       return (data as List).map((m) => TaskModel.fromMap(m)).toList();
     } catch (_) {
       try {
-        final data = await _adminDb
+        var q = _adminDb
             .from('tasks')
             .select(
               '*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name))',
             )
-            .eq('client_id', clientId)
-            .order('created_at', ascending: false);
+            .eq('client_id', clientId);
+        if (asClient) q = q.eq('hidden_from_client', false);
+        final data = await q.order('created_at', ascending: false);
         return (data as List).map((m) => TaskModel.fromMap(m)).toList();
       } catch (_) {
         return [];
