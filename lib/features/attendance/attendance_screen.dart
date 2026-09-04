@@ -501,37 +501,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       ),
       // FAB for employee self-service or admin/manager manual entry
       floatingActionButton: isManager
-          ? Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FloatingActionButton.extended(
-                  heroTag: 'log_manual_fab',
-                  onPressed: () => _showManualEntryDialog(null),
-                  backgroundColor: AppColors.surfaceContainerLowest,
-                  icon: const Icon(
-                    Icons.edit_note_outlined,
-                    color: AppColors.gold,
-                  ),
-                  label: const Text(
-                    'Log Attendance',
-                    style: TextStyle(color: AppColors.gold),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                FloatingActionButton.extended(
-                  heroTag: 'admin_add_fab',
-                  onPressed: _showAdminAddAttendanceDialog,
-                  backgroundColor: AppColors.primary,
-                  icon: const Icon(
-                    Icons.person_add_alt_1_outlined,
-                    color: AppColors.gold,
-                  ),
-                  label: const Text(
-                    'Add / Override',
-                    style: TextStyle(color: AppColors.gold),
-                  ),
-                ),
-              ],
+          ? FloatingActionButton.extended(
+              heroTag: 'admin_add_fab',
+              onPressed: _showAdminAddAttendanceDialog,
+              backgroundColor: AppColors.primary,
+              icon: const Icon(
+                Icons.person_add_alt_1_outlined,
+                color: AppColors.gold,
+              ),
+              label: const Text(
+                'Add / Override',
+                style: TextStyle(color: AppColors.gold),
+              ),
             )
           : FloatingActionButton.extended(
               onPressed: () => _showManualEntryDialog(null),
@@ -653,48 +634,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                       style: AppTextStyles.labelMd.copyWith(
                                         color: AppColors.gold,
                                       ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  OutlinedButton.icon(
-                                    onPressed: () => _showManualEntryDialog(null),
-                                    icon: const Icon(
-                                      Icons.edit_note_outlined,
-                                      size: 16,
-                                      color: AppColors.gold,
-                                    ),
-                                    label: const Text(
-                                      'Log Attendance',
-                                      style: TextStyle(color: AppColors.gold),
-                                    ),
-                                    style: OutlinedButton.styleFrom(
-                                      side: const BorderSide(color: AppColors.gold),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      textStyle: AppTextStyles.labelMd,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ElevatedButton.icon(
-                                    onPressed: _showAdminAddAttendanceDialog,
-                                    icon: const Icon(
-                                      Icons.add,
-                                      size: 16,
-                                      color: AppColors.gold,
-                                    ),
-                                    label: const Text(
-                                      'Add / Override',
-                                      style: TextStyle(color: AppColors.gold),
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primary,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      textStyle: AppTextStyles.labelMd,
                                     ),
                                   ),
                                 ],
