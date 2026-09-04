@@ -85,8 +85,5 @@
 		<string>https</string>
 		<string>http</string>
 	</array>
-	<!-- Hand incoming Universal Link URLs to Flutter / GoRouter. -->
-	<key>FlutterDeepLinkingEnabled</key>
-	<true/>
 </dict>
 </plist>

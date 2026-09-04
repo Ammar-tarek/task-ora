@@ -1,7 +1,6 @@
 // lib/features/attendance/attendance_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
@@ -467,13 +466,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       appBar: AppBar(
         title: Text(S.t('attendance')),
         actions: [
-          // Admin/manager: show the shared check-in QR to print / display.
-          if (isManager)
-            IconButton(
-              icon: const Icon(Icons.qr_code_2_outlined),
-              tooltip: 'Check-in QR',
-              onPressed: () => context.push('/attendance/qr'),
-            ),
           // Admin/manager: switch between daily records and monthly summary.
           if (isManager)
             IconButton(

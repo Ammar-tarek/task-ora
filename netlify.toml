@@ -1,23 +1,6 @@
 [build]
   publish = "build/web"
 
-# Serve the Universal Link association file as JSON (it has no extension).
-[[headers]]
-  for = "/.well-known/apple-app-site-association"
-  [headers.values]
-    Content-Type = "application/json"
-
-[[headers]]
-  for = "/.well-known/assetlinks.json"
-  [headers.values]
-    Content-Type = "application/json"
-
-# Keep the deep-link association files reachable (static files win, but be explicit).
-[[redirects]]
-  from = "/.well-known/*"
-  to = "/.well-known/:splat"
-  status = 200
-
 [[redirects]]
   from = "/*"
   to = "/index.html"

@@ -42,6 +42,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   bool _loading = true;
   String? _error;
   String _filter = 'All';
+  String _search = '';
+  bool _showSearch = false;
+  final TextEditingController _searchController = TextEditingController();
   _Sort _sort = _Sort.newest;
   String? _clientId; // null = all clients
   String? _assigneeId; // null = all assignees
@@ -123,6 +126,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   @override
   void dispose() {
     _boardHorizontalController.dispose();
+    _searchController.dispose();
     RealtimeService.instance.unlisten(_onRealtime);
     _teamFilter?.removeListener(_onTeamChange);
     super.dispose();
@@ -188,6 +192,20 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
           .toList();
     }
 
+    // Search filter — title, client, assignee names, description
+    if (_search.trim().isNotEmpty) {
+      final q = _search.trim().toLowerCase();
+      list = list.where((t) {
+        final hay = <String>[
+          t.title,
+          t.clientName ?? '',
+          t.description ?? '',
+          ...t.assignees.map((a) => a.fullName),
+        ].join(' ').toLowerCase();
+        return hay.contains(q);
+      }).toList();
+    }
+
     // Sort
     switch (_sort) {
       case _Sort.newest:
@@ -247,6 +265,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       _filter != 'All' ||
       _clientId != null ||
       _assigneeId != null ||
+      _search.trim().isNotEmpty ||
       _sort != _Sort.newest;
 
   // ── Role-based columns ────────────────────────────────────────────────────
@@ -1054,6 +1073,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       _filter = 'All';
       _clientId = null;
       _assigneeId = null;
+      _search = '';
+      _searchController.clear();
       _sort = _Sort.newest;
     });
   }
@@ -1071,6 +1092,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       body: Column(
         children: [
           const TeamFilterChip(),
+          if (_showSearch) _buildSearchBar(),
           if (_isSelectionMode) _buildSelectionBanner(),
           Expanded(child: _buildBody()),
         ],
@@ -1079,6 +1101,48 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   }
 
   // ── Sub-build Layout Helpers ────────────────────────────────────────────────
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: TextField(
+        controller: _searchController,
+        autofocus: true,
+        onChanged: (v) => setState(() => _search = v),
+        textInputAction: TextInputAction.search,
+        style: AppTextStyles.bodyMd,
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: S.t('search_tasks'),
+          prefixIcon: const Icon(Icons.search, size: 20),
+          suffixIcon: _search.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _search = '');
+                  },
+                )
+              : null,
+          filled: true,
+          fillColor: AppColors.surfaceContainerLowest,
+          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.outlineVariant),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.outlineVariant),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.gold),
+          ),
+        ),
+      ),
+    );
+  }
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
@@ -1092,6 +1156,22 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         ),
       ),
       actions: [
+        IconButton(
+          icon: Icon(
+            _showSearch ? Icons.search_off : Icons.search,
+            color: _showSearch ? AppColors.gold : null,
+          ),
+          tooltip: _showSearch ? 'Hide search' : 'Search tasks',
+          onPressed: () {
+            setState(() {
+              _showSearch = !_showSearch;
+              if (!_showSearch) {
+                _search = '';
+                _searchController.clear();
+              }
+            });
+          },
+        ),
         if (_profile?.isAdmin == true ||
             _profile?.isSuperAdmin == true ||
             _profile?.isManager == true)

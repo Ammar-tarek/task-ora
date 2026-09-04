@@ -20,7 +20,6 @@ dependencies:
   intl: ^0.20.2
   flutter_local_notifications: ^22.2.0
   url_launcher: ^6.3.1
-  qr_flutter: ^4.1.0
 
   # Printing & PDF Export
   pdf: ^3.11.1

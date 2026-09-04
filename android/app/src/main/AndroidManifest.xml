@@ -40,27 +40,7 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-
-            <!-- ===== NFC / Android App Link: shared attendance URL ===== -->
-            <!-- Opens the app on the /checkin route when the verified HTTPS URL
-                 is tapped (from the NFC sticker or anywhere else). Requires
-                 https://operations.cashback.marketing/.well-known/assetlinks.json to
-                 list this package + the app's signing SHA-256 fingerprint.
-                 Replace the host if you deploy on a custom domain. -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="https"
-                      android:host="operations.cashback.marketing"
-                      android:path="/checkin"/>
-            </intent-filter>
         </activity>
-
-        <!-- Let the Flutter engine hand incoming App Link URLs to GoRouter. -->
-        <meta-data
-            android:name="flutter_deeplinking_enabled"
-            android:value="true" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
