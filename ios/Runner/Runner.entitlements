@@ -3,14 +3,14 @@
 <plist version="1.0">
 <dict>
 	<!-- iOS Universal Links: the app claims the shared attendance domain so
-	     tapping https://cashback-9be55.web.app/checkin opens the app.
-	     Requires https://cashback-9be55.web.app/.well-known/apple-app-site-association
+	     tapping https://operations.cashback.marketing/checkin opens the app.
+	     Requires https://operations.cashback.marketing/.well-known/apple-app-site-association
 	     to list this app's <TeamID>.com.example.taskOra appID.
 	     Add this file to the Runner target in Xcode (Signing & Capabilities →
 	     Associated Domains) and replace the host for a custom domain. -->
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:cashback-9be55.web.app</string>
+		<string>applinks:operations.cashback.marketing</string>
 	</array>
 </dict>
 </plist>

@@ -1,0 +1,7 @@
+# Cloudflare Pages headers.
+# Serve the deep-link association files as JSON so Android App Links and
+# iOS Universal Links verify against operations.cashback.marketing.
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+/.well-known/assetlinks.json
+  Content-Type: application/json

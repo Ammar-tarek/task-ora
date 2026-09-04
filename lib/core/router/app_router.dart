@@ -26,6 +26,7 @@ import '../../features/super_admin/archived_tasks_screen.dart';
 import '../../features/analytics/advanced_analytics_screen.dart';
 import '../../features/attendance/attendance_screen.dart';
 import '../../features/attendance/nfc_checkin_screen.dart';
+import '../../features/attendance/attendance_qr_screen.dart';
 import '../../features/penalties/penalty_management_screen.dart';
 import '../../features/users/user_management_screen.dart';
 import '../../features/users/user_privileges_screen.dart';
@@ -299,6 +300,11 @@ GoRouter makeRouter(AuthNotifier auth) {
       GoRoute(
         path: '/checkin',
         builder: (_, _) => const NfcCheckInScreen(),
+      ),
+      // Displays the shared check-in QR (for printing / showing at the door).
+      GoRoute(
+        path: '/attendance/qr',
+        builder: (_, _) => const AttendanceQrScreen(),
       ),
       GoRoute(
         path: '/penalties',
