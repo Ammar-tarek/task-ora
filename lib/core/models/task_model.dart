@@ -159,6 +159,24 @@ class TaskModel {
     }
   }
 
+  /// First day of the month this task belongs to in the monthly workspace.
+  /// Prefers the explicit due date; falls back to the creation date so legacy
+  /// tasks with no due date still land in a month. Returns null only when the
+  /// task has no usable date at all (handled safely by callers — never crashes).
+  /// This is a pure read of existing fields: it never mutates task data.
+  DateTime? get monthAnchor {
+    final raw = (dueDate != null && dueDate!.trim().isNotEmpty)
+        ? dueDate!
+        : createdAt;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return null;
+    // due_date is a plain calendar date (no timezone); created_at is a UTC
+    // timestamp that must be shifted to Egypt time to match displayed dates.
+    final usedDue = dueDate != null && dueDate!.trim().isNotEmpty;
+    final local = usedDue ? parsed : AppTime.cairo(parsed);
+    return DateTime(local.year, local.month);
+  }
+
   String get leadAssigneeName =>
       assignees.isEmpty ? '—' : assignees.first.fullName;
 

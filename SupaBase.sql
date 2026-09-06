@@ -77,6 +77,9 @@ CREATE TABLE public.events (
   is_client_visible boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  cost numeric,
+  shooting_hours numeric,
+  final_video_duration numeric,
   CONSTRAINT events_pkey PRIMARY KEY (id),
   CONSTRAINT events_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.client_profiles(id),
   CONSTRAINT events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)

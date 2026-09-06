@@ -30,6 +30,8 @@ class CalEvent {
     this.attendeeIds = const [],
     this.roomName,
     this.status = 'pending',
+    this.shootingHours,
+    this.finalVideoDuration,
   });
   final String id;
   final String title;
@@ -45,6 +47,10 @@ class CalEvent {
   final List<String> attendeeIds;
   final String? roomName;
   final String status;
+  // Actual hours spent shooting. Independent of scheduled time and finalVideoDuration.
+  final double? shootingHours;
+  // Duration in hours of the final delivered video. Independent of the others.
+  final double? finalVideoDuration;
 
   CalEvent copyWith({String? status}) => CalEvent(
         id: id,
@@ -61,6 +67,8 @@ class CalEvent {
         attendeeIds: attendeeIds,
         roomName: roomName,
         status: status ?? this.status,
+        shootingHours: shootingHours,
+        finalVideoDuration: finalVideoDuration,
       );
 }
 
@@ -71,6 +79,17 @@ const List<String> kEventStatuses = [
   'cancelled_by_client',
   'cancelled_by_us',
 ];
+
+/// Formats a decimal hours value for display, e.g. 2 -> "2 hours",
+/// 1.5 -> "1.5 hours", 1 -> "1 hour", 0.25 -> "0.25 hours".
+String _fmtHours(double h) {
+  final s = h == h.roundToDouble() ? h.toStringAsFixed(0) : h.toString();
+  return '$s ${h == 1 ? 'hour' : 'hours'}';
+}
+
+/// Bare number for prefilling an editable field (2, 1.5) with no trailing zeros.
+String _plainNum(double v) =>
+    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
 
 String eventStatusLabel(String status) {
   switch (status) {
@@ -228,6 +247,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
               cost: e.cost,
               roomName: e.roomName,
               status: e.status,
+              shootingHours: e.shootingHours,
+              finalVideoDuration: e.finalVideoDuration,
               attendeeNames: e.attendeeNames,
               attendeeIds: e.attendeeIds,
               assigneeInitials: e.attendeeNames.isNotEmpty
@@ -1640,6 +1661,17 @@ class _EventDetailSheetState extends State<_EventDetailSheet> {
               Align(alignment: Alignment.centerLeft, child: _statusChip(_status)),
               const SizedBox(height: 16),
               _DetailRow(icon: Icons.access_time_outlined, text: _timeLabel()),
+              if (_event.shootingHours != null)
+                _DetailRow(
+                  icon: Icons.videocam_outlined,
+                  text: 'Shooting Hours: ${_fmtHours(_event.shootingHours!)}',
+                ),
+              if (_event.finalVideoDuration != null)
+                _DetailRow(
+                  icon: Icons.movie_outlined,
+                  text:
+                      'Final Video Duration: ${_fmtHours(_event.finalVideoDuration!)}',
+                ),
               if (_event.roomName != null)
                 _DetailRow(
                   icon: Icons.meeting_room_outlined,
@@ -1801,6 +1833,8 @@ class _AddEventSheet extends StatefulWidget {
 class _AddEventSheetState extends State<_AddEventSheet> {
   final _titleCtrl = TextEditingController();
   final _costCtrl = TextEditingController();
+  final _shootingCtrl = TextEditingController();
+  final _finalVideoCtrl = TextEditingController();
 
   List<ClientModel> _clients = [];
   ClientModel? _selectedClient;
@@ -1854,6 +1888,8 @@ class _AddEventSheetState extends State<_AddEventSheet> {
   void dispose() {
     _titleCtrl.dispose();
     _costCtrl.dispose();
+    _shootingCtrl.dispose();
+    _finalVideoCtrl.dispose();
     super.dispose();
   }
 
@@ -1922,6 +1958,8 @@ class _AddEventSheetState extends State<_AddEventSheet> {
     setState(() => _saving = true);
 
     final cost = double.tryParse(_costCtrl.text.trim());
+    final shootingHours = double.tryParse(_shootingCtrl.text.trim());
+    final finalVideoDuration = double.tryParse(_finalVideoCtrl.text.trim());
     final attendeeIds = _selectedEmployeeIds.toList();
 
     await ClientRepository.createEvent(
@@ -1933,6 +1971,8 @@ class _AddEventSheetState extends State<_AddEventSheet> {
       createdBy: widget.createdBy,
       attendeeIds: attendeeIds,
       roomName: _selectedRoom,
+      shootingHours: shootingHours,
+      finalVideoDuration: finalVideoDuration,
     );
 
     final selectedNames = _employees
@@ -1952,6 +1992,8 @@ class _AddEventSheetState extends State<_AddEventSheet> {
       clientName: _selectedClient?.companyName,
       cost: cost,
       roomName: _selectedRoom,
+      shootingHours: shootingHours,
+      finalVideoDuration: finalVideoDuration,
       attendeeNames: selectedNames,
       attendeeIds: attendeeIds,
       assigneeInitials: selectedNames.isNotEmpty
@@ -2185,6 +2227,41 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                 ),
                 const SizedBox(height: 12),
 
+                // Shooting Hours and Final Video Duration are two independent
+                // decimal-hour fields, both distinct from the scheduled event
+                // time above. Neither is derived from the other.
+                TextField(
+                  controller: _shootingCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Shooting Hours (optional)',
+                    hintText: 'e.g. 2, 2.5, 6.5',
+                    prefixIcon: const Icon(Icons.videocam_outlined, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _finalVideoCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Final Video Duration (hours, optional)',
+                    hintText: 'e.g. 0.25, 0.5, 1.5',
+                    prefixIcon: const Icon(Icons.movie_outlined, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
                 if (_employees.isNotEmpty) ...[
                   Align(
                     alignment: Alignment.centerLeft,
@@ -2267,6 +2344,8 @@ class _EditEventSheet extends StatefulWidget {
 class _EditEventSheetState extends State<_EditEventSheet> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _costCtrl;
+  late final TextEditingController _shootingCtrl;
+  late final TextEditingController _finalVideoCtrl;
 
   List<ClientModel> _clients = [];
   ClientModel? _selectedClient;
@@ -2292,6 +2371,14 @@ class _EditEventSheetState extends State<_EditEventSheet> {
     _costCtrl = TextEditingController(
       text: e.cost != null ? e.cost!.toStringAsFixed(2) : '',
     );
+    _shootingCtrl = TextEditingController(
+      text: e.shootingHours != null ? _plainNum(e.shootingHours!) : '',
+    );
+    _finalVideoCtrl = TextEditingController(
+      text: e.finalVideoDuration != null
+          ? _plainNum(e.finalVideoDuration!)
+          : '',
+    );
     _startTime = e.start;
     _endTime = e.end;
     _selectedRoom = e.roomName;
@@ -2304,6 +2391,8 @@ class _EditEventSheetState extends State<_EditEventSheet> {
   void dispose() {
     _titleCtrl.dispose();
     _costCtrl.dispose();
+    _shootingCtrl.dispose();
+    _finalVideoCtrl.dispose();
     super.dispose();
   }
 
@@ -2401,6 +2490,8 @@ class _EditEventSheetState extends State<_EditEventSheet> {
     setState(() => _saving = true);
 
     final cost = double.tryParse(_costCtrl.text.trim());
+    final shootingHours = double.tryParse(_shootingCtrl.text.trim());
+    final finalVideoDuration = double.tryParse(_finalVideoCtrl.text.trim());
     final attendeeIds = _selectedEmployeeIds.toList();
 
     await ClientRepository.updateEvent(
@@ -2412,6 +2503,8 @@ class _EditEventSheetState extends State<_EditEventSheet> {
       cost: cost,
       roomName: _selectedRoom,
       attendeeIds: attendeeIds,
+      shootingHours: shootingHours,
+      finalVideoDuration: finalVideoDuration,
     );
 
     final selectedNames = _employees
@@ -2432,6 +2525,8 @@ class _EditEventSheetState extends State<_EditEventSheet> {
       cost: cost,
       roomName: _selectedRoom,
       status: widget.event.status,
+      shootingHours: shootingHours,
+      finalVideoDuration: finalVideoDuration,
       attendeeNames: selectedNames.isNotEmpty
           ? selectedNames
           : widget.event.attendeeNames,
@@ -2637,6 +2732,41 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                   decoration: InputDecoration(
                     labelText: 'Meeting cost (optional)',
                     prefixIcon: const Icon(Icons.attach_money_outlined, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Shooting Hours and Final Video Duration are two independent
+                // decimal-hour fields, both distinct from the scheduled event
+                // time above. Neither is derived from the other.
+                TextField(
+                  controller: _shootingCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Shooting Hours (optional)',
+                    hintText: 'e.g. 2, 2.5, 6.5',
+                    prefixIcon: const Icon(Icons.videocam_outlined, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _finalVideoCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Final Video Duration (hours, optional)',
+                    hintText: 'e.g. 0.25, 0.5, 1.5',
+                    prefixIcon: const Icon(Icons.movie_outlined, size: 20),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),

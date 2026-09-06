@@ -2,6 +2,7 @@
 // Role-aware task board: table view + kanban view.
 // Column set and available actions adapt to admin / manager / employee / client.
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
@@ -21,6 +22,7 @@ import '../../core/models/client_model.dart';
 import '../../core/models/task_status_option.dart';
 import 'status_options_manager_sheet.dart';
 import '../../core/utils/task_permissions.dart';
+import '../../core/utils/app_time.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/notion_table.dart';
 import '../../core/widgets/team_filter_chip.dart';
@@ -37,11 +39,27 @@ class TaskBoardScreen extends StatefulWidget {
 enum _Sort { newest, oldest, dueDate, priorityHigh, clientAZ, titleAZ, moved }
 
 class _TaskBoardScreenState extends State<TaskBoardScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   List<TaskModel> _tasks = [];
   bool _loading = true;
   String? _error;
   String _filter = 'All';
+
+  // ── Monthly workspace ──────────────────────────────────────────────────────
+  // The active month is a pure VIEW/FILTER context. Switching it (manually or
+  // via automatic calendar rollover) never mutates, moves, or deletes any task.
+  static DateTime _monthOf(DateTime d) => DateTime(d.year, d.month);
+  // The real current calendar month (Egypt time). Updated on rollover.
+  DateTime _liveMonth = _monthOf(AppTime.now());
+  // The month currently being viewed. Defaults to the real current month.
+  DateTime _activeMonth = _monthOf(AppTime.now());
+  Timer? _rolloverTimer;
+
+  static const _monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  String _monthLabel(DateTime m) => '${_monthNames[m.month - 1]} ${m.year}';
   String _search = '';
   bool _showSearch = false;
   final TextEditingController _searchController = TextEditingController();
@@ -106,6 +124,40 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       'tasks',
       'task_assignees',
     ], _onRealtime);
+    // Automatic month rollover: detect when the real calendar month changes
+    // while the app is open, and follow it if the user is on the live month.
+    WidgetsBinding.instance.addObserver(this);
+    _rolloverTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _checkMonthRollover(),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkMonthRollover();
+  }
+
+  /// Detect a real calendar-month change and, if the user is still viewing the
+  /// previously-live month, follow the calendar to the new month. Historical /
+  /// future months the user manually navigated to are left untouched. This only
+  /// changes the viewing context and reloads — it never modifies task data.
+  void _checkMonthRollover() {
+    if (!mounted) return;
+    final nowMonth = _monthOf(AppTime.now());
+    if (nowMonth == _liveMonth) return;
+    final wasOnLiveMonth = _activeMonth == _liveMonth;
+    setState(() {
+      _liveMonth = nowMonth;
+      if (wasOnLiveMonth) _activeMonth = nowMonth;
+    });
+    if (wasOnLiveMonth) _load(animate: false);
+  }
+
+  void _goToMonth(DateTime m) {
+    final target = _monthOf(m);
+    if (target == _activeMonth) return;
+    setState(() => _activeMonth = target);
   }
 
   @override
@@ -125,6 +177,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   @override
   void dispose() {
+    _rolloverTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _boardHorizontalController.dispose();
     _searchController.dispose();
     RealtimeService.instance.unlisten(_onRealtime);
@@ -173,6 +227,10 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     var list = List<TaskModel>.of(
       _tasks.where((t) => t.handoffToTeamId == null),
     );
+
+    // Month workspace — primary context. Show only tasks anchored to the
+    // active month (by due date, else creation date). Pure view filter.
+    list = list.where((t) => t.monthAnchor == _activeMonth).toList();
 
     // Status filter
     if (_filter != 'All') {
@@ -1091,6 +1149,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       floatingActionButton: _buildFab(),
       body: Column(
         children: [
+          _buildMonthBar(),
           const TeamFilterChip(),
           if (_showSearch) _buildSearchBar(),
           if (_isSelectionMode) _buildSelectionBanner(),
@@ -1101,6 +1160,105 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   }
 
   // ── Sub-build Layout Helpers ────────────────────────────────────────────────
+
+  static DateTime _addMonths(DateTime m, int delta) =>
+      DateTime(m.year, m.month + delta);
+
+  // Total tasks anchored to the active month (ignores status/client/assignee/
+  // search filters — the workspace's true size). Excludes pending handoffs.
+  int get _monthTaskCount => _tasks
+      .where((t) => t.handoffToTeamId == null && t.monthAnchor == _activeMonth)
+      .length;
+
+  // ── Monthly workspace navigation bar ────────────────────────────────────────
+  Widget _buildMonthBar() {
+    final prev = _addMonths(_activeMonth, -1);
+    final next = _addMonths(_activeMonth, 1);
+    final offCurrent = _activeMonth != _liveMonth;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border(
+          bottom: BorderSide(color: AppColors.outlineVariant, width: 0.6),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: 22,
+            icon: const Icon(Icons.chevron_left),
+            tooltip: 'Previous month',
+            onPressed: () => _goToMonth(prev),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: false,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _MonthPill(
+                    label: _monthLabel(prev),
+                    active: false,
+                    onTap: () => _goToMonth(prev),
+                  ),
+                  const SizedBox(width: 6),
+                  _MonthPill(
+                    label: _monthLabel(_activeMonth),
+                    active: true,
+                    isLive: _activeMonth == _liveMonth,
+                    onTap: () {},
+                  ),
+                  const SizedBox(width: 6),
+                  _MonthPill(
+                    label: _monthLabel(next),
+                    active: false,
+                    onTap: () => _goToMonth(next),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: 22,
+            icon: const Icon(Icons.chevron_right),
+            tooltip: 'Next month',
+            onPressed: () => _goToMonth(next),
+          ),
+          if (!_loading)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.outlineVariant),
+              ),
+              child: Text(
+                '$_monthTaskCount ${_monthTaskCount == 1 ? 'task' : 'tasks'}',
+                style: AppTextStyles.bodySm.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          if (offCurrent)
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              iconSize: 20,
+              icon: const Icon(Icons.today_outlined, color: AppColors.gold),
+              tooltip: 'Back to current month',
+              onPressed: () => _goToMonth(_liveMonth),
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSearchBar() {
     return Padding(
@@ -1673,7 +1831,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                 : null,
             emptyMessage: _hasActiveFilters
                 ? 'No tasks match these filters'
-                : 'No tasks yet',
+                : 'No tasks for ${_monthLabel(_activeMonth)}',
             emptyIcon: Icons.task_outlined,
           ),
           const SizedBox(height: 80),
@@ -1868,6 +2026,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => _CreateTaskSheet(
+        initialMonth: _activeMonth,
+        isLiveMonth: _activeMonth == _liveMonth,
         onCreated: () {
           Navigator.pop(context);
           _load(animate: false);
@@ -2081,6 +2241,63 @@ class _FilterChipBtn extends StatelessWidget {
               Icons.keyboard_arrow_down,
               size: 14,
               color: active ? color : AppColors.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MonthPill extends StatelessWidget {
+  const _MonthPill({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.isLive = false,
+  });
+  final String label;
+  final bool active;
+  final bool isLive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(
+          horizontal: active ? 16 : 12,
+          vertical: active ? 9 : 7,
+        ),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primary : AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active ? AppColors.primary : AppColors.outlineVariant,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (active)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Icon(
+                  isLive ? Icons.today : Icons.calendar_month,
+                  size: 15,
+                  color: AppColors.gold,
+                ),
+              ),
+            Text(
+              label,
+              style: AppTextStyles.bodySm.copyWith(
+                color: active ? Colors.white : AppColors.onSurfaceVariant,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                fontSize: active ? 13 : 12,
+              ),
             ),
           ],
         ),
@@ -2475,7 +2692,16 @@ class _KanbanCard extends StatelessWidget {
 
 class _CreateTaskSheet extends StatefulWidget {
   final VoidCallback onCreated;
-  const _CreateTaskSheet({required this.onCreated});
+  // The month workspace the user is currently viewing. A new task defaults its
+  // due date so it lands in this month. [isLiveMonth] is true when that is the
+  // real current calendar month.
+  final DateTime initialMonth;
+  final bool isLiveMonth;
+  const _CreateTaskSheet({
+    required this.onCreated,
+    required this.initialMonth,
+    required this.isLiveMonth,
+  });
 
   @override
   State<_CreateTaskSheet> createState() => _CreateTaskSheetState();
@@ -2508,6 +2734,18 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
   @override
   void initState() {
     super.initState();
+    // Default the due date so the new task belongs to the viewed month. For the
+    // live current month we leave it null (creation date already anchors it
+    // there, preserving prior behaviour); for a past/future workspace we seed
+    // the month's first day so the task appears in that month. The user can
+    // still change or clear it explicitly.
+    if (!widget.isLiveMonth) {
+      _dueDate = DateTime(
+        widget.initialMonth.year,
+        widget.initialMonth.month,
+        1,
+      );
+    }
     _loadInitial();
   }
 
@@ -2999,12 +3237,32 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
             InkWell(
               borderRadius: BorderRadius.circular(4),
               onTap: () async {
+                final today = DateTime.now();
+                final monthStart = DateTime(
+                  widget.initialMonth.year,
+                  widget.initialMonth.month,
+                  1,
+                );
+                final monthEnd = DateTime(
+                  widget.initialMonth.year,
+                  widget.initialMonth.month + 1,
+                  0,
+                );
+                // Allow the whole viewed month even if it is in the past/future.
+                final firstDate = monthStart.isBefore(today) ? monthStart : today;
+                final lastDate =
+                    monthEnd.isAfter(today.add(const Duration(days: 365)))
+                    ? monthEnd
+                    : today.add(const Duration(days: 365));
+                var initial =
+                    _dueDate ?? today.add(const Duration(days: 7));
+                if (initial.isBefore(firstDate)) initial = firstDate;
+                if (initial.isAfter(lastDate)) initial = lastDate;
                 final d = await showDatePicker(
                   context: context,
-                  initialDate:
-                      _dueDate ?? DateTime.now().add(const Duration(days: 7)),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                  initialDate: initial,
+                  firstDate: firstDate,
+                  lastDate: lastDate,
                 );
                 if (d != null) setState(() => _dueDate = d);
               },

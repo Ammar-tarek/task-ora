@@ -20,6 +20,8 @@ class CalEventData {
   final List<String> attendeeIds;
   final String? roomName;
   final String status;
+  final double? shootingHours;
+  final double? finalVideoDuration;
 
   const CalEventData({
     required this.id,
@@ -33,6 +35,8 @@ class CalEventData {
     this.attendeeIds = const [],
     this.roomName,
     this.status = 'pending',
+    this.shootingHours,
+    this.finalVideoDuration,
   });
 
   factory CalEventData.fromMap(Map<String, dynamic> m) {
@@ -49,6 +53,8 @@ class CalEventData {
       cost: (m['cost'] as num?)?.toDouble(),
       roomName: m['location'] as String?,
       status: m['status'] as String? ?? 'pending',
+      shootingHours: (m['shooting_hours'] as num?)?.toDouble(),
+      finalVideoDuration: (m['final_video_duration'] as num?)?.toDouble(),
       attendeeNames: attendees
           .map((a) {
             final p = a['profile'] as Map<String, dynamic>?;
@@ -412,6 +418,8 @@ class ClientRepository {
     required String createdBy,
     List<String> attendeeIds = const [],
     String? roomName,
+    double? shootingHours,
+    double? finalVideoDuration,
   }) async {
     try {
       final event = await _adminDb
@@ -424,6 +432,8 @@ class ClientRepository {
             'cost': cost,
             'created_by': createdBy,
             'location': roomName,
+            'shooting_hours': shootingHours,
+            'final_video_duration': finalVideoDuration,
           })
           .select('id')
           .single();
@@ -481,6 +491,8 @@ class ClientRepository {
     double? cost,
     String? roomName,
     List<String> attendeeIds = const [],
+    double? shootingHours,
+    double? finalVideoDuration,
   }) async {
     try {
       await _adminDb
@@ -492,6 +504,8 @@ class ClientRepository {
             'client_id': clientId,
             'cost': cost,
             'location': roomName,
+            'shooting_hours': shootingHours,
+            'final_video_duration': finalVideoDuration,
           })
           .eq('id', eventId);
 
