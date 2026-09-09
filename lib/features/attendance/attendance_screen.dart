@@ -1,6 +1,7 @@
 // lib/features/attendance/attendance_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
@@ -466,6 +467,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       appBar: AppBar(
         title: Text(S.t('attendance')),
         actions: [
+          // Admin/manager: reminder-response tracking screen.
+          if (isManager)
+            IconButton(
+              icon: const Icon(Icons.notifications_active_outlined),
+              tooltip: 'Reminder tracking',
+              onPressed: () => context.push('/attendance/reminders'),
+            ),
           // Admin/manager: switch between daily records and monthly summary.
           if (isManager)
             IconButton(

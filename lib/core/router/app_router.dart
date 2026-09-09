@@ -25,6 +25,7 @@ import '../../features/settings/settings_screen.dart';
 import '../../features/super_admin/archived_tasks_screen.dart';
 import '../../features/analytics/advanced_analytics_screen.dart';
 import '../../features/attendance/attendance_screen.dart';
+import '../../features/attendance/attendance_reminder_tracking_screen.dart';
 import '../../features/penalties/penalty_management_screen.dart';
 import '../../features/users/user_management_screen.dart';
 import '../../features/users/user_privileges_screen.dart';
@@ -264,6 +265,10 @@ GoRouter makeRouter(AuthNotifier auth) {
       GoRoute(
         path: '/attendance',
         builder: (_, _) => const AttendanceScreen(),
+      ),
+      GoRoute(
+        path: '/attendance/reminders',
+        builder: (_, _) => const AttendanceReminderTrackingScreen(),
       ),
       GoRoute(
         path: '/penalties',
