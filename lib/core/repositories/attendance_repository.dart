@@ -369,6 +369,59 @@ class AttendanceRepository {
     }
   }
 
+  /// Latest OPEN attendance session for an employee: check_in present,
+  /// check_out still null. This is the logical "current session", independent
+  /// of the calendar date — it is what lets a session that started yesterday be
+  /// closed today. Returns the raw row (id, attendance_date, check_in_time,
+  /// total_hours, is_approved) or null when there is no open session.
+  static Future<Map<String, dynamic>?> _openSessionRow(
+    String employeeId,
+  ) async {
+    return await _admin
+        .from('attendance')
+        .select('id, attendance_date, check_in_time, total_hours, is_approved')
+        .eq('employee_id', employeeId)
+        .not('check_in_time', 'is', null)
+        .isFilter('check_out_time', null)
+        .order('check_in_time', ascending: false)
+        .limit(1)
+        .maybeSingle();
+  }
+
+  /// The employee's current open session as an AttendanceRecord (for the
+  /// self check-in/out card), or null. Enriched with the profile join.
+  static Future<AttendanceRecord?> fetchOpenSessionForEmployee(
+    String employeeId,
+  ) async {
+    try {
+      final data = await _admin
+          .from('attendance')
+          .select(_select)
+          .eq('employee_id', employeeId)
+          .not('check_in_time', 'is', null)
+          .isFilter('check_out_time', null)
+          .order('check_in_time', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (data == null) return null;
+      return AttendanceRecord.fromMap(data);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The record the self-service card should act on: the open session if one
+  /// exists (possibly started on an earlier day), otherwise today's row. Keeps
+  /// the check-in/out buttons correct across midnight without changing how
+  /// today's attendance history is loaded elsewhere.
+  static Future<AttendanceRecord?> fetchActiveForEmployee(
+    String employeeId,
+  ) async {
+    final open = await fetchOpenSessionForEmployee(employeeId);
+    if (open != null) return open;
+    return fetchTodayForEmployee(employeeId);
+  }
+
   /// Check in for today. Returns null on success, error message string on failure.
   ///
   /// IMPORTANT: check_in_time is only set on the FIRST check-in of the day.
@@ -380,6 +433,15 @@ class AttendanceRepository {
       // Calendar day in Egypt; timestamps stored as UTC.
       final today = AppTime.now().toIso8601String().substring(0, 10);
       final now = DateTime.now().toUtc().toIso8601String();
+
+      // Never open a second concurrent session: if an OPEN session (check-in
+      // set, no check-out) started on an earlier day, the employee is still
+      // checked in. Keep the existing "already checked in" behavior (no-op),
+      // leaving that open session to be closed by check-out.
+      final open = await _openSessionRow(employeeId);
+      if (open != null && open['attendance_date'] != today) {
+        return null;
+      }
 
       final existing = await _admin
           .from('attendance')
@@ -409,11 +471,15 @@ class AttendanceRepository {
         }
       }
 
-      // First check-in of the day.
+      // First check-in of the day. Clear any stale check_out_time so a
+      // pre-existing checkout (e.g. an absent/manual row) can't sit before the
+      // new check-in and violate the att_checkout_after_checkin constraint.
       await _admin.from('attendance').upsert({
         'employee_id': employeeId,
         'attendance_date': today,
         'check_in_time': now,
+        'check_out_time': null,
+        'total_hours': null,
         'status': 'present',
       }, onConflict: 'employee_id, attendance_date');
 
@@ -453,19 +519,21 @@ class AttendanceRepository {
     String? dailyReport,
   }) async {
     try {
-      final today = AppTime.now().toIso8601String().substring(0, 10);
-      final checkIn = await _admin
-          .from('attendance')
-          .select('check_in_time')
-          .eq('employee_id', employeeId)
-          .eq('attendance_date', today)
-          .maybeSingle();
-
       final nowDt = DateTime.now().toUtc();
-      DateTime? inTime;
-      if (checkIn != null && checkIn['check_in_time'] != null) {
-        inTime = DateTime.tryParse(checkIn['check_in_time'] as String);
-      }
+
+      // Close the employee's OPEN session (check-in set, no check-out yet),
+      // located by session state — NOT by today's date — so a session that
+      // started yesterday is the one that gets closed.
+      final open = await _openSessionRow(employeeId);
+
+      // No open session → nothing to close. Never create or touch another row
+      // (e.g. today's absent row). Existing no-op behavior.
+      if (open == null) return null;
+
+      // Approved records are locked — never modify them automatically.
+      if (open['is_approved'] == true) return null;
+
+      final inTime = DateTime.tryParse(open['check_in_time'] as String);
 
       // Guard: never write a check-out before the check-in (constraint safety).
       if (inTime != null && !nowDt.isAfter(inTime)) {
@@ -478,6 +546,7 @@ class AttendanceRepository {
         if (hours < 0) hours = 0;
       }
 
+      // Update THAT exact row by id.
       await _admin
           .from('attendance')
           .update({
@@ -488,8 +557,7 @@ class AttendanceRepository {
               'daily_report': dailyReport.trim(),
             'updated_at': nowDt.toIso8601String(),
           })
-          .eq('employee_id', employeeId)
-          .eq('attendance_date', today);
+          .eq('id', open['id'] as String);
 
       try {
         final empProfile = await _admin
@@ -546,17 +614,14 @@ class AttendanceRepository {
     int accumulatedMinutes = 0,
   }) async {
     try {
-      final today = AppTime.now().toIso8601String().substring(0, 10);
       final nowDt = DateTime.now().toUtc();
 
-      final row = await _admin
-          .from('attendance')
-          .select('check_in_time, total_hours, is_approved')
-          .eq('employee_id', employeeId)
-          .eq('attendance_date', today)
-          .maybeSingle();
+      // Close the OPEN session (check-in set, no check-out), located by session
+      // state — NOT by today's date. This prevents writing a check-out onto an
+      // absent row (check_in NULL) and creating a corrupt row.
+      final row = await _openSessionRow(employeeId);
 
-      if (row == null) return;
+      if (row == null) return; // no open session → nothing to close
 
       // Approved records are locked — never modify them automatically.
       if (row['is_approved'] == true) return;
@@ -577,8 +642,7 @@ class AttendanceRepository {
             'total_hours': double.parse(newHours.toStringAsFixed(2)),
             'updated_at': nowDt.toIso8601String(),
           })
-          .eq('employee_id', employeeId)
-          .eq('attendance_date', today);
+          .eq('id', row['id'] as String);
 
       try {
         final empProfile = await _admin

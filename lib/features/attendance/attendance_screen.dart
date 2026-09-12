@@ -126,9 +126,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         _selectedDate,
         teamId: teamId,
       );
-      // Load own today record for the self-service check-in/out card.
+      // Load own current record for the self-service check-in/out card: the
+      // open session if one exists (may have started yesterday), else today's.
       AttendanceRecord? mine;
-      mine = await AttendanceRepository.fetchTodayForEmployee(profile.id);
+      mine = await AttendanceRepository.fetchActiveForEmployee(profile.id);
       if (mounted) {
         setState(() {
           _records = data;
@@ -139,7 +140,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     } else {
       final results = await Future.wait([
         AttendanceRepository.fetchForEmployee(profile?.id ?? ''),
-        AttendanceRepository.fetchTodayForEmployee(profile?.id ?? ''),
+        AttendanceRepository.fetchActiveForEmployee(profile?.id ?? ''),
       ]);
       if (mounted) {
         setState(() {
