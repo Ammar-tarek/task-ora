@@ -10,22 +10,20 @@ import '../../core/l10n/app_strings.dart';
 import '../../core/providers/locale_controller.dart';
 import '../../core/providers/team_filter_notifier.dart';
 import '../../core/providers/theme_controller.dart';
+import '../../core/providers/workspace_scope_notifier.dart';
+import '../../core/services/montage_task_filter.dart';
+import 'montage_monthly_progress.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/repositories/team_repository.dart';
-import '../../core/repositories/client_repository.dart';
-import '../../core/repositories/task_status_options_repository.dart';
 import '../../core/services/realtime_service.dart';
+import '../../core/services/task_create_scope.dart';
 import '../../core/models/task_model.dart';
 import '../../core/models/team_model.dart';
 import '../../core/models/profile_model.dart';
-import '../../core/models/client_model.dart';
-import '../../core/models/task_status_option.dart';
-import 'status_options_manager_sheet.dart';
 import '../../core/utils/task_permissions.dart';
 import '../../core/utils/app_time.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/notion_table.dart';
-import '../../core/widgets/team_filter_chip.dart';
 import 'task_detail_sheet.dart';
 
 class TaskBoardScreen extends StatefulWidget {
@@ -56,14 +54,27 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   Timer? _rolloverTimer;
 
   static const _monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   String _monthLabel(DateTime m) => '${_monthNames[m.month - 1]} ${m.year}';
   String _search = '';
   bool _showSearch = false;
   final TextEditingController _searchController = TextEditingController();
   _Sort _sort = _Sort.newest;
+  // Montage-only quick filter (null = All): 'paid' | 'not_paid' filter the
+  // payment_status field; 'done' | 'cancelled' filter the real task status.
+  String? _montageFilter;
   String? _clientId; // null = all clients
   String? _assigneeId; // null = all assignees
   bool _isTableView = true;
@@ -78,13 +89,15 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   final List<NotionColumn> _customColumns = [];
   TeamFilterNotifier? _teamFilter;
+  WorkspaceScopeNotifier? _scope;
   List<TeamModel> _teams = []; // for department handoff picker + names
 
   static const _statusFilters = [
     'All',
     'To Do',
     'In Progress',
-    'Employee Done',
+    'Pending Review',
+    'Changes Requested',
     'Client Approved',
     'Client Rejected',
     'Completed',
@@ -93,7 +106,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   static const _statusMap = <String, String>{
     'To Do': 'not_started',
     'In Progress': 'in_progress',
-    'Employee Done': 'employee_done',
+    'Pending Review': 'employee_done',
+    'Changes Requested': 'changes_requested',
     'Client Approved': 'client_approved',
     'Client Rejected': 'client_rejected',
     'Completed': 'completed',
@@ -114,6 +128,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       _filter = widget.initialFilter!;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scope = context.read<WorkspaceScopeNotifier>()..addListener(_onTeamChange);
       _teamFilter = context.read<TeamFilterNotifier>()
         ..loadTeams()
         ..addListener(_onTeamChange);
@@ -182,6 +197,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     _boardHorizontalController.dispose();
     _searchController.dispose();
     RealtimeService.instance.unlisten(_onRealtime);
+    _scope?.removeListener(_onTeamChange);
     _teamFilter?.removeListener(_onTeamChange);
     super.dispose();
   }
@@ -222,6 +238,15 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     return mine.where((t) => t.handoffToTeamId == myTeam).toList();
   }
 
+  /// Montage workspace in view (admin scoped to Montage, or a Montage
+  /// manager/employee). Montage-only features gate on this.
+  bool get _isMontageView {
+    final s = _scope;
+    if (s == null) return false;
+    if (_profile?.isAdmin == true) return s.isMontageTeam(s.taskScopeTeamId);
+    return s.isMontageTeam(_profile?.teamId);
+  }
+
   List<TaskModel> get _filtered {
     // Exclude pending-handoff tasks — they live in the Waiting List only.
     var list = List<TaskModel>.of(
@@ -236,6 +261,13 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     if (_filter != 'All') {
       final key = _statusMap[_filter] ?? '';
       list = list.where((t) => t.status == key).toList();
+    }
+
+    // Montage-only quick filter (payment or status). Other departments never
+    // set _montageFilter (the chips don't render), so this is a no-op for them.
+    if (_isMontageView && _montageFilter != null) {
+      list =
+          list.where((t) => MontageTaskFilter.matches(t, _montageFilter)).toList();
     }
 
     // Client filter
@@ -413,9 +445,13 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       _profile = profile;
       _perms = profile != null ? TaskPermissions(profile) : null;
 
+      // Admin scope comes from the authoritative workspace selection, NOT the
+      // possibly-stale team-filter. An active department never maps to null
+      // ("show all"); a teamless/unresolved department yields a sentinel that
+      // matches no task, so a department view can never leak other departments.
       String? overrideTeamId;
       if (profile?.isAdmin == true) {
-        overrideTeamId = context.read<TeamFilterNotifier>().selectedTeamId;
+        overrideTeamId = context.read<WorkspaceScopeNotifier>().taskScopeTeamId;
       }
 
       final data = profile != null
@@ -552,6 +588,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         return AppColors.statusInProgress;
       case 'employee_done':
         return AppColors.statusMedium;
+      case 'changes_requested':
+        return AppColors.statusHigh;
       case 'client_approved':
         return AppColors.statusDone;
       case 'client_rejected':
@@ -710,7 +748,11 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                     ),
                     title: Text(e.value, style: AppTextStyles.bodyMd),
                     trailing: _clientId == e.key
-                        ? const Icon(Icons.check, color: AppColors.gold, size: 18)
+                        ? const Icon(
+                            Icons.check,
+                            color: AppColors.gold,
+                            size: 18,
+                          )
                         : null,
                     onTap: () {
                       setState(() => _clientId = e.key);
@@ -795,7 +837,11 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                     leading: TAvatar(name: e.value, size: 24),
                     title: Text(e.value, style: AppTextStyles.bodyMd),
                     trailing: _assigneeId == e.key
-                        ? const Icon(Icons.check, color: AppColors.gold, size: 18)
+                        ? const Icon(
+                            Icons.check,
+                            color: AppColors.gold,
+                            size: 18,
+                          )
                         : null,
                     onTap: () {
                       setState(() => _assigneeId = e.key);
@@ -821,15 +867,15 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         _selectedTaskIds.remove(id);
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Task archived')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Task archived')));
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to archive task')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to archive task')));
         _load();
       }
     }
@@ -844,7 +890,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Archive Selected Tasks'),
-        content: Text('Are you sure you want to archive $count selected task(s)?'),
+        content: Text(
+          'Are you sure you want to archive $count selected task(s)?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -939,9 +987,17 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                 onTap: () => Navigator.pop(context, 'in_progress'),
               ),
               ListTile(
-                leading: const Icon(Icons.assignment_turned_in, color: Colors.orange),
-                title: const Text('Employee Done'),
+                leading: const Icon(
+                  Icons.assignment_turned_in,
+                  color: Colors.orange,
+                ),
+                title: const Text('Pending Review'),
                 onTap: () => Navigator.pop(context, 'employee_done'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.undo, color: Colors.orange),
+                title: const Text('Changes Requested'),
+                onTap: () => Navigator.pop(context, 'changes_requested'),
               ),
               ListTile(
                 leading: const Icon(Icons.verified, color: Colors.teal),
@@ -954,12 +1010,18 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                 onTap: () => Navigator.pop(context, 'client_rejected'),
               ),
               ListTile(
-                leading: const Icon(Icons.check_circle_outline, color: AppColors.statusDone),
+                leading: const Icon(
+                  Icons.check_circle_outline,
+                  color: AppColors.statusDone,
+                ),
                 title: const Text('Completed'),
                 onTap: () => Navigator.pop(context, 'completed'),
               ),
               ListTile(
-                leading: const Icon(Icons.pause_circle_outline, color: Colors.purple),
+                leading: const Icon(
+                  Icons.pause_circle_outline,
+                  color: Colors.purple,
+                ),
                 title: const Text('On Hold'),
                 onTap: () => Navigator.pop(context, 'on_hold'),
               ),
@@ -1076,7 +1138,10 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                     t.department ?? t.name,
                     style: AppTextStyles.labelMd,
                   ),
-                  subtitle: Text('Team: ${t.name}', style: AppTextStyles.bodySm),
+                  subtitle: Text(
+                    'Team: ${t.name}',
+                    style: AppTextStyles.bodySm,
+                  ),
                   onTap: () => Navigator.pop(context, t),
                 ),
               ),
@@ -1149,8 +1214,11 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       floatingActionButton: _buildFab(),
       body: Column(
         children: [
+          // Montage employees get a monthly task-progress bar at the very top.
+          if (_profile?.isEmployee == true && _isMontageView)
+            _buildMonthlyProgress(),
           _buildMonthBar(),
-          const TeamFilterChip(),
+          if (_isMontageView) _buildMontageFilterBar(),
           if (_showSearch) _buildSearchBar(),
           if (_isSelectionMode) _buildSelectionBanner(),
           Expanded(child: _buildBody()),
@@ -1171,6 +1239,102 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       .length;
 
   // ── Monthly workspace navigation bar ────────────────────────────────────────
+  // Montage employee monthly capacity (45 tasks). Counts the employee's own
+  // completed tasks anchored to the current calendar month. Current month only,
+  // so it resets naturally at month change.
+  Widget _buildMonthlyProgress() {
+    final progress = MontageMonthlyProgress.compute(
+      tasks: _tasks,
+      employeeId: _profile?.id ?? '',
+    );
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.movie_outlined, size: 16, color: AppColors.gold),
+              const SizedBox(width: 8),
+              Text(
+                '${progress.done} / ${progress.target} tasks completed',
+                style: AppTextStyles.labelMd,
+              ),
+              const Spacer(),
+              Text(
+                '${progress.percent}%',
+                style: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: progress.fraction,
+              minHeight: 8,
+              backgroundColor: AppColors.outlineVariant,
+              color: AppColors.gold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${progress.remaining} remaining',
+            style: AppTextStyles.bodySm.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Montage-only quick filters, shown directly below the month bar. Paid /
+  // Not Paid read payment_status; Done / Cancelled read the task status field.
+  Widget _buildMontageFilterBar() {
+    const options = MontageTaskFilter.options;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: AppColors.background,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: options.map((o) {
+            final selected = _montageFilter == o.$1;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ChoiceChip(
+                label: Text(o.$2),
+                selected: selected,
+                onSelected: (_) => setState(() => _montageFilter = o.$1),
+                selectedColor: AppColors.primary,
+                backgroundColor: AppColors.surfaceContainerLowest,
+                labelStyle: AppTextStyles.bodySm.copyWith(
+                  color: selected ? Colors.white : AppColors.onSurface,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(
+                    color: selected
+                        ? AppColors.primary
+                        : AppColors.outlineVariant,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMonthBar() {
     final prev = _addMonths(_activeMonth, -1);
     final next = _addMonths(_activeMonth, 1);
@@ -1335,9 +1499,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             _profile?.isManager == true)
           IconButton(
             icon: Icon(
-              _isSelectionMode
-                  ? Icons.check_box
-                  : Icons.check_box_outlined,
+              _isSelectionMode ? Icons.check_box : Icons.check_box_outlined,
               color: _isSelectionMode ? AppColors.gold : null,
             ),
             tooltip: _isSelectionMode
@@ -1438,11 +1600,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 40,
-            color: AppColors.outlineVariant,
-          ),
+          Icon(Icons.error_outline, size: 40, color: AppColors.outlineVariant),
           const SizedBox(height: 12),
           Text('Error loading tasks', style: AppTextStyles.labelMd),
           const SizedBox(height: 8),
@@ -1484,8 +1642,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                         if (_selectedTaskIds.length == _filtered.length) {
                           _selectedTaskIds.clear();
                         } else {
-                          _selectedTaskIds =
-                              _filtered.map((t) => t.id).toSet();
+                          _selectedTaskIds = _filtered.map((t) => t.id).toSet();
                         }
                       });
                     },
@@ -1519,8 +1676,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
-                    onPressed:
-                        count > 0 ? _moveSelectedTasksToDepartment : null,
+                    onPressed: count > 0
+                        ? _moveSelectedTasksToDepartment
+                        : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: AppColors.gold,
@@ -1615,7 +1773,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Task handoff rejected and returned to original department.'),
+          content: Text(
+            'Task handoff rejected and returned to original department.',
+          ),
           backgroundColor: AppColors.error,
         ),
       );
@@ -1680,7 +1840,10 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                     t.department ?? t.name,
                     style: AppTextStyles.labelMd,
                   ),
-                  subtitle: Text('Team: ${t.name}', style: AppTextStyles.bodySm),
+                  subtitle: Text(
+                    'Team: ${t.name}',
+                    style: AppTextStyles.bodySm,
+                  ),
                   onTap: () => Navigator.pop(context, t),
                 ),
               ),
@@ -1770,12 +1933,10 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FilterBar(
-            filters: _statusFilters,
-            selected: _filter,
-            onSelected: (f) => setState(() => _filter = f),
-          ),
-          if (_profile?.isAdmin == true) _buildSortFilterBar(),
+          // Tasks Table page: status filter chips, sort, client and assignee
+          // selectors are intentionally hidden here. The month navigation and
+          // the active department's authorization/scope (applied in _load via
+          // the workspace selection + RLS) still govern what is shown.
           NotionTable(
             columns: _columns,
             rows: _buildRows(),
@@ -1789,7 +1950,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             onRowDelete: _perms?.canDeleteTask == true
                 ? (id) => _deleteTaskRow(id)
                 : null,
-            onRowArchive: (_perms?.canEditFull == true ||
+            onRowArchive:
+                (_perms?.canEditFull == true ||
                     _profile?.isSuperAdmin == true ||
                     _profile?.isAdmin == true ||
                     _profile?.isManager == true)
@@ -1868,6 +2030,9 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       'not_started': base.where((t) => t.status == 'not_started').toList(),
       'in_progress': base.where((t) => t.status == 'in_progress').toList(),
       'employee_done': base.where((t) => t.status == 'employee_done').toList(),
+      'changes_requested': base
+          .where((t) => t.status == 'changes_requested')
+          .toList(),
       'client_approved': base
           .where((t) => t.status == 'client_approved')
           .toList(),
@@ -1890,8 +2055,13 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       ),
       _KanbanDef(
         key: 'employee_done',
-        label: 'EMPLOYEE DONE',
+        label: 'PENDING REVIEW',
         color: AppColors.statusMedium,
+      ),
+      _KanbanDef(
+        key: 'changes_requested',
+        label: 'CHANGES REQUESTED',
+        color: AppColors.statusHigh,
       ),
       _KanbanDef(
         key: 'client_approved',
@@ -1958,7 +2128,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
                     onTaskDelete: _perms?.canDeleteTask == true
                         ? (id) => _deleteTaskRow(id)
                         : null,
-                    onTaskArchive: (_perms?.canEditFull == true ||
+                    onTaskArchive:
+                        (_perms?.canEditFull == true ||
                             _profile?.isSuperAdmin == true ||
                             _profile?.isAdmin == true ||
                             _profile?.isManager == true)
@@ -2385,8 +2556,9 @@ class _KanbanColumn extends StatelessWidget {
                       child: Text(
                         'No tasks',
                         style: AppTextStyles.bodySm.copyWith(
-                          color:
-                              AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                          color: AppColors.onSurfaceVariant.withValues(
+                            alpha: 0.5,
+                          ),
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -2418,9 +2590,11 @@ class _KanbanColumn extends StatelessWidget {
                           showCost: showCost,
                           showProgress: showProgress,
                           isSelectionMode: isSelectionMode,
-                          isSelected: selectedTaskIds?.contains(task.id) ?? false,
+                          isSelected:
+                              selectedTaskIds?.contains(task.id) ?? false,
                           onSelectToggle: () {
-                            final curr = selectedTaskIds?.contains(task.id) ?? false;
+                            final curr =
+                                selectedTaskIds?.contains(task.id) ?? false;
                             onTaskSelect?.call(task.id, !curr);
                           },
                           onTap: onTaskTap != null
@@ -2496,7 +2670,9 @@ class _KanbanCard extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Task'),
-        content: const Text('Are you sure you want to delete this task permanently?'),
+        content: const Text(
+          'Are you sure you want to delete this task permanently?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -2518,111 +2694,117 @@ class _KanbanCard extends StatelessWidget {
     final dir = (onDelete != null && onArchive != null)
         ? DismissDirection.horizontal
         : (onArchive != null
-            ? DismissDirection.startToEnd
-            : (onDelete != null ? DismissDirection.endToStart : DismissDirection.none));
+              ? DismissDirection.startToEnd
+              : (onDelete != null
+                    ? DismissDirection.endToStart
+                    : DismissDirection.none));
 
     Widget cardContent = RepaintBoundary(
       child: GestureDetector(
         onTap: isSelectionMode ? onSelectToggle : onTap,
         child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.gold.withValues(alpha: 0.12)
-              : AppColors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? AppColors.gold : AppColors.outlineVariant,
-            width: isSelected ? 1.5 : 1.0,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.gold.withValues(alpha: 0.12)
+                : AppColors.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? AppColors.gold : AppColors.outlineVariant,
+              width: isSelected ? 1.5 : 1.0,
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (isSelectionMode) ...[
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: Checkbox(
-                      value: isSelected,
-                      activeColor: AppColors.gold,
-                      checkColor: Colors.black,
-                      onChanged: (_) => onSelectToggle?.call(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                TPriorityBadge(priority: task.priorityLabel),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              task.title,
-              style: AppTextStyles.bodyMd.copyWith(fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 10),
-            if (showProgress && task.completionPercentage > 0) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: task.completionPercentage / 100,
-                  minHeight: 4,
-                  backgroundColor: AppColors.outlineVariant,
-                  color: AppColors.gold,
-                ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
               ),
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '${task.completionPercentage}%',
-                  style: AppTextStyles.dataSm,
-                ),
-              ),
-              const SizedBox(height: 6),
             ],
-            Row(
-              children: [
-                if (task.assignees.isNotEmpty)
-                  TAvatar(name: task.leadAssigneeName, size: 24),
-                const Spacer(),
-                if (showCost && task.cost != null) ...[
-                  const Icon(
-                    Icons.monetization_on_outlined,
-                    size: 12,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (isSelectionMode) ...[
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Checkbox(
+                        value: isSelected,
+                        activeColor: AppColors.gold,
+                        checkColor: Colors.black,
+                        onChanged: (_) => onSelectToggle?.call(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  TPriorityBadge(priority: task.priorityLabel),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                task.title,
+                style: AppTextStyles.bodyMd.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (showProgress && task.completionPercentage > 0) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: task.completionPercentage / 100,
+                    minHeight: 4,
+                    backgroundColor: AppColors.outlineVariant,
                     color: AppColors.gold,
                   ),
-                  const SizedBox(width: 3),
-                  Text(
-                    'EGP ${task.cost!.toStringAsFixed(0)}',
-                    style: AppTextStyles.dataSm.copyWith(color: AppColors.gold),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Icon(
-                  Icons.calendar_today_outlined,
-                  size: 12,
-                  color: AppColors.onSurfaceVariant,
                 ),
-                const SizedBox(width: 4),
-                Text(task.dueDateDisplay, style: AppTextStyles.bodySm),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${task.completionPercentage}%',
+                    style: AppTextStyles.dataSm,
+                  ),
+                ),
+                const SizedBox(height: 6),
               ],
-            ),
-          ],
+              Row(
+                children: [
+                  if (task.assignees.isNotEmpty)
+                    TAvatar(name: task.leadAssigneeName, size: 24),
+                  const Spacer(),
+                  if (showCost && task.cost != null) ...[
+                    const Icon(
+                      Icons.monetization_on_outlined,
+                      size: 12,
+                      color: AppColors.gold,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      'EGP ${task.cost!.toStringAsFixed(0)}',
+                      style: AppTextStyles.dataSm.copyWith(
+                        color: AppColors.gold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Icon(
+                    Icons.calendar_today_outlined,
+                    size: 12,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(task.dueDateDisplay, style: AppTextStyles.bodySm),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
 
     if (dir != DismissDirection.none) {
       cardContent = Dismissible(
@@ -2638,11 +2820,18 @@ class _KanbanCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.archive_outlined, color: AppColors.gold, size: 20),
+              const Icon(
+                Icons.archive_outlined,
+                color: AppColors.gold,
+                size: 20,
+              ),
               const SizedBox(width: 6),
               Text(
                 'Archive',
-                style: AppTextStyles.labelMd.copyWith(color: AppColors.gold, fontWeight: FontWeight.bold),
+                style: AppTextStyles.labelMd.copyWith(
+                  color: AppColors.gold,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -2658,11 +2847,18 @@ class _KanbanCard extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+              const Icon(
+                Icons.delete_outline,
+                color: AppColors.error,
+                size: 20,
+              ),
               const SizedBox(width: 6),
               Text(
                 'Delete',
-                style: AppTextStyles.labelMd.copyWith(color: AppColors.error, fontWeight: FontWeight.bold),
+                style: AppTextStyles.labelMd.copyWith(
+                  color: AppColors.error,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -2710,22 +2906,17 @@ class _CreateTaskSheet extends StatefulWidget {
 class _CreateTaskSheetState extends State<_CreateTaskSheet> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _costCtrl = TextEditingController();
   final _commentCtrl = TextEditingController();
   bool _commentIsInternal = true;
-  String _priority = 'medium';
-  String _status = 'not_started';
   DateTime? _dueDate;
-  double _progress = 0.0;
   bool _creating = false;
 
-  List<TaskStatusOption> _statusOptions = [];
-
+  // The department this task belongs to. DERIVED from the active workspace
+  // (admins) or the user's verified team assignment (manager/employee) — never
+  // chosen manually in this simplified form. Priority, status, progress, cost
+  // and client are intentionally not collected here; they use the canonical
+  // defaults and are edited later in task details.
   String? _selectedTeamId;
-  List<TeamModel> _teams = [];
-
-  String? _clientId;
-  List<ClientModel> _clients = [];
 
   List<ProfileModel> _allEmployees = [];
   List<String> _selectedAssigneeIds = [];
@@ -2752,30 +2943,15 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
   Future<void> _loadInitial() async {
     final profile = context.read<AuthNotifier>().profile;
 
-    // Clients (admin/manager create tasks with a client attached)
-    ClientRepository.fetchClients().then((clients) {
-      if (mounted) setState(() => _clients = clients);
-    });
-
-    // Status options — admin bootstraps on first run; all roles fetch.
-    () async {
-      if (profile?.isAdmin == true) {
-        await TaskStatusOptionsRepository.init(profile!.id);
-      }
-      final opts = await TaskStatusOptionsRepository.fetchOptions();
-      if (mounted) setState(() => _statusOptions = opts);
-    }();
-
-    if (profile?.isAdmin == true) {
-      final teams = await TeamRepository.fetchAllAdmin(activeOnly: true);
-      if (!mounted) return;
-      setState(() {
-        _teams = teams;
-        if (teams.isNotEmpty) _selectedTeamId = teams.first.id;
-      });
-    } else {
-      _selectedTeamId = profile?.teamId;
-    }
+    // Derive the department: admins create inside the active workspace (the
+    // selected department); managers/employees are bound to their verified
+    // team. A client-supplied department is never trusted here.
+    _selectedTeamId = profile == null
+        ? null
+        : TaskCreateScope.departmentTeamIdFor(
+            profile,
+            activeTeamId: context.read<WorkspaceScopeNotifier>().activeDepartmentTeamId,
+          );
     await _loadMembers(_selectedTeamId);
   }
 
@@ -2811,26 +2987,24 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
     }
   }
 
-  void _onTeamChanged(String? val) {
-    setState(() => _selectedTeamId = val);
-    _loadMembers(val);
-  }
-
   Future<void> _create() async {
     if (_titleCtrl.text.trim().isEmpty) return;
     setState(() => _creating = true);
     final profile = context.read<AuthNotifier>().profile!;
+    // Department is derived from the active workspace / verified authorization.
+    // Client, priority, status, progress and cost are NOT collected here — the
+    // task is created in the canonical initial state (createTask defaults) and
+    // those fields are edited later in task details.
+    final String? teamId = TaskCreateScope.departmentTeamIdFor(
+      profile,
+      activeTeamId: context.read<WorkspaceScopeNotifier>().activeDepartmentTeamId,
+    );
     final taskId = await TaskRepository.createTask(
       title: _titleCtrl.text.trim(),
       description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
       createdBy: profile.id,
-      teamId: _selectedTeamId,
-      clientId: _clientId,
-      priority: _priority,
-      status: _status,
+      teamId: teamId,
       dueDate: _dueDate?.toIso8601String().split('T').first,
-      cost: double.tryParse(_costCtrl.text.trim()),
-      completionPercentage: _progress.round(),
     );
 
     if (taskId != null && _selectedAssigneeIds.isNotEmpty) {
@@ -2857,23 +3031,6 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
     }
 
     widget.onCreated();
-  }
-
-  Future<void> _showStatusOptionsManager() async {
-    final profile = context.read<AuthNotifier>().profile;
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => StatusOptionsManagerSheet(
-        isAdmin: profile?.isAdmin ?? false,
-        adminUserId: profile?.id,
-        onChanged: () async {
-          final opts = await TaskStatusOptionsRepository.fetchOptions();
-          if (mounted) setState(() => _statusOptions = opts);
-        },
-      ),
-    );
   }
 
   void _showInsertLinkDialog() {
@@ -3012,7 +3169,6 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
   void dispose() {
     _titleCtrl.dispose();
     _descCtrl.dispose();
-    _costCtrl.dispose();
     _commentCtrl.dispose();
     super.dispose();
   }
@@ -3030,488 +3186,285 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('New Task', style: AppTextStyles.headlineSm),
-            const SizedBox(height: 4),
-            Text('Fill in the details below', style: AppTextStyles.bodySm),
-            const Divider(height: 24),
-
-            TextField(
-              controller: _titleCtrl,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'TITLE',
-                hintText: 'Enter task title',
-                prefixIcon: Icon(Icons.title, color: AppColors.gold, size: 18),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            TextField(
-              controller: _descCtrl,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'DESCRIPTION',
-                hintText: 'Optional description…',
-                prefixIcon: Padding(
-                  padding: EdgeInsets.only(bottom: 36),
-                  child: Icon(Icons.notes, color: AppColors.gold, size: 18),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            ),
-            const SizedBox(height: 18),
+              const SizedBox(height: 16),
+              Text('New Task', style: AppTextStyles.headlineSm),
+              const SizedBox(height: 4),
+              Text('Fill in the details below', style: AppTextStyles.bodySm),
+              const Divider(height: 24),
 
-            if (context.read<AuthNotifier>().profile?.isAdmin == true &&
-                _teams.isNotEmpty) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text('DEPARTMENT', style: AppTextStyles.labelCaps),
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String?>(
-                initialValue: _selectedTeamId,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  hintText: 'Select department/team',
-                  prefixIcon: const Icon(
-                    Icons.group_outlined,
+              TextField(
+                controller: _titleCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'TITLE',
+                  hintText: 'Enter task title',
+                  prefixIcon: Icon(
+                    Icons.title,
                     color: AppColors.gold,
                     size: 18,
                   ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              TextField(
+                controller: _descCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'DESCRIPTION',
+                  hintText: 'Optional description…',
+                  prefixIcon: Padding(
+                    padding: EdgeInsets.only(bottom: 36),
+                    child: Icon(Icons.notes, color: AppColors.gold, size: 18),
                   ),
                 ),
-                items: _teams
-                    .map(
-                      (t) => DropdownMenuItem<String?>(
-                        value: t.id,
-                        child: Text(t.name, overflow: TextOverflow.ellipsis),
-                      ),
-                    )
-                    .toList(),
-                onChanged: _onTeamChanged,
               ),
               const SizedBox(height: 18),
-            ],
 
-            // Client
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('CLIENT', style: AppTextStyles.labelCaps),
-            ),
-            const SizedBox(height: 8),
-            if (_clients.isEmpty)
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  'No clients — create one in the Clients section.',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-              )
-            else
-              DropdownButtonFormField<String?>(
-                initialValue: _clientId,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  hintText: 'No client attached',
-                  prefixIcon: const Icon(
-                    Icons.business_outlined,
-                    color: AppColors.gold,
-                    size: 18,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
+                child: Text('DUE DATE', style: AppTextStyles.labelCaps),
+              ),
+              const SizedBox(height: 8),
+              InkWell(
+                borderRadius: BorderRadius.circular(4),
+                onTap: () async {
+                  final today = DateTime.now();
+                  final monthStart = DateTime(
+                    widget.initialMonth.year,
+                    widget.initialMonth.month,
+                    1,
+                  );
+                  final monthEnd = DateTime(
+                    widget.initialMonth.year,
+                    widget.initialMonth.month + 1,
+                    0,
+                  );
+                  // Allow the whole viewed month even if it is in the past/future.
+                  final firstDate = monthStart.isBefore(today)
+                      ? monthStart
+                      : today;
+                  final lastDate =
+                      monthEnd.isAfter(today.add(const Duration(days: 365)))
+                      ? monthEnd
+                      : today.add(const Duration(days: 365));
+                  var initial = _dueDate ?? today.add(const Duration(days: 7));
+                  if (initial.isBefore(firstDate)) initial = firstDate;
+                  if (initial.isAfter(lastDate)) initial = lastDate;
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: initial,
+                    firstDate: firstDate,
+                    lastDate: lastDate,
+                  );
+                  if (d != null) setState(() => _dueDate = d);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
                     vertical: 12,
                   ),
-                ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('— No client —'),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerLowest,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: AppColors.outlineVariant),
                   ),
-                  ..._clients.map(
-                    (c) => DropdownMenuItem<String?>(
-                      value: c.id,
-                      child: Text(
-                        c.companyName,
-                        overflow: TextOverflow.ellipsis,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_today_outlined,
+                        size: 16,
+                        color: AppColors.gold,
                       ),
+                      const SizedBox(width: 10),
+                      Text(
+                        _dueDate != null
+                            ? '${_dueDate!.year}-'
+                                  '${_dueDate!.month.toString().padLeft(2, '0')}-'
+                                  '${_dueDate!.day.toString().padLeft(2, '0')}'
+                            : 'Select date…',
+                        style: AppTextStyles.bodyMd.copyWith(
+                          color: _dueDate != null
+                              ? AppColors.onSurface
+                              : AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                      const Spacer(),
+                      Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // Assignees
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('ASSIGNEES', style: AppTextStyles.labelCaps),
+                  if (_loadingMembers)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.gold,
+                      ),
+                    )
+                  else
+                    IconButton(
+                      icon: const Icon(
+                        Icons.add_circle_outline,
+                        color: AppColors.gold,
+                      ),
+                      onPressed: _showAssigneePicker,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              if (_selectedAssigneeIds.isEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('No assignees', style: AppTextStyles.bodySm),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedAssigneeIds.map((uid) {
+                    final emp = _allEmployees.firstWhere(
+                      (e) => e.id == uid,
+                      orElse: () => ProfileModel(
+                        id: uid,
+                        role: 'employee',
+                        fullName: 'Unknown',
+                        status: 'active',
+                        timezone: 'UTC',
+                        preferredLanguage: 'en',
+                        createdAt: '',
+                      ),
+                    );
+                    return Chip(
+                      avatar: TAvatar(name: emp.fullName, size: 18),
+                      label: Text(emp.fullName.split(' ').first),
+                      onDeleted: () =>
+                          setState(() => _selectedAssigneeIds.remove(uid)),
+                      deleteIcon: const Icon(Icons.cancel, size: 16),
+                    );
+                  }).toList(),
+                ),
+              const SizedBox(height: 18),
+
+              // Initial comment (optional) — supports link insert + internal/public
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('COMMENT', style: AppTextStyles.labelCaps),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _commentCtrl,
+                      maxLines: 2,
+                      minLines: 1,
+                      decoration: InputDecoration(
+                        hintText: 'Add an initial comment… (optional)',
+                        hintStyle: AppTextStyles.bodySm,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: AppColors.outlineVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.link,
+                          color: AppColors.gold,
+                          size: 20,
+                        ),
+                        tooltip: 'Insert Link into Comment',
+                        onPressed: _showInsertLinkDialog,
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          _commentIsInternal
+                              ? Icons.lock_outline
+                              : Icons.public,
+                          color: _commentIsInternal
+                              ? AppColors.primary
+                              : AppColors.onSurfaceVariant,
+                          size: 18,
+                        ),
+                        tooltip: _commentIsInternal
+                            ? 'Internal comment'
+                            : 'Visible to client',
+                        onPressed: () => setState(
+                          () => _commentIsInternal = !_commentIsInternal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _creating
+                          ? null
+                          : () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: _creating ? null : _create,
+                      child: _creating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.gold,
+                              ),
+                            )
+                          : const Text('Create Task'),
                     ),
                   ),
                 ],
-                onChanged: (val) => setState(() => _clientId = val),
               ),
-            const SizedBox(height: 18),
-
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('PRIORITY', style: AppTextStyles.labelCaps),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                _buildPriorityChip('low', 'Low', AppColors.statusLow),
-                _buildPriorityChip('medium', 'Medium', AppColors.statusMedium),
-                _buildPriorityChip('high', 'High', AppColors.statusHigh),
-                _buildPriorityChip('critical', 'Critical', AppColors.error),
-              ],
-            ),
-            const SizedBox(height: 18),
-
-            Row(
-              children: [
-                Text('STATUS', style: AppTextStyles.labelCaps),
-                const Spacer(),
-                TextButton.icon(
-                  icon: const Icon(Icons.tune, size: 14, color: AppColors.gold),
-                  label: Text(
-                    context.read<AuthNotifier>().profile?.isAdmin == true
-                        ? 'Edit Options'
-                        : 'View Options',
-                    style: AppTextStyles.bodySm.copyWith(color: AppColors.gold),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                  ),
-                  onPressed: _showStatusOptionsManager,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: _statusOptions
-                  .map((opt) => _buildStatusChip(opt.label, opt.displayLabel))
-                  .toList(),
-            ),
-            const SizedBox(height: 18),
-
-            // Progress
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('PROGRESS', style: AppTextStyles.labelCaps),
-                Text(
-                  '${_progress.round()}%',
-                  style: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Slider(
-              value: _progress,
-              min: 0,
-              max: 100,
-              divisions: 20,
-              activeColor: AppColors.gold,
-              inactiveColor: AppColors.outlineVariant,
-              onChanged: (v) => setState(() => _progress = v),
-            ),
-            const SizedBox(height: 14),
-
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('DUE DATE', style: AppTextStyles.labelCaps),
-            ),
-            const SizedBox(height: 8),
-            InkWell(
-              borderRadius: BorderRadius.circular(4),
-              onTap: () async {
-                final today = DateTime.now();
-                final monthStart = DateTime(
-                  widget.initialMonth.year,
-                  widget.initialMonth.month,
-                  1,
-                );
-                final monthEnd = DateTime(
-                  widget.initialMonth.year,
-                  widget.initialMonth.month + 1,
-                  0,
-                );
-                // Allow the whole viewed month even if it is in the past/future.
-                final firstDate = monthStart.isBefore(today) ? monthStart : today;
-                final lastDate =
-                    monthEnd.isAfter(today.add(const Duration(days: 365)))
-                    ? monthEnd
-                    : today.add(const Duration(days: 365));
-                var initial =
-                    _dueDate ?? today.add(const Duration(days: 7));
-                if (initial.isBefore(firstDate)) initial = firstDate;
-                if (initial.isAfter(lastDate)) initial = lastDate;
-                final d = await showDatePicker(
-                  context: context,
-                  initialDate: initial,
-                  firstDate: firstDate,
-                  lastDate: lastDate,
-                );
-                if (d != null) setState(() => _dueDate = d);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: AppColors.outlineVariant),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.calendar_today_outlined,
-                      size: 16,
-                      color: AppColors.gold,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      _dueDate != null
-                          ? '${_dueDate!.year}-'
-                                '${_dueDate!.month.toString().padLeft(2, '0')}-'
-                                '${_dueDate!.day.toString().padLeft(2, '0')}'
-                          : 'Select date…',
-                      style: AppTextStyles.bodyMd.copyWith(
-                        color: _dueDate != null
-                            ? AppColors.onSurface
-                            : AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                    const Spacer(),
-                    Icon(
-                      Icons.chevron_right,
-                      size: 18,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-
-            // Cost
-            TextField(
-              controller: _costCtrl,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'COST',
-                hintText: 'e.g. 1500.00',
-                prefixIcon: Icon(
-                  Icons.monetization_on_outlined,
-                  color: AppColors.gold,
-                  size: 18,
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-
-            // Assignees
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('ASSIGNEES', style: AppTextStyles.labelCaps),
-                if (_loadingMembers)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.gold,
-                    ),
-                  )
-                else
-                  IconButton(
-                    icon: const Icon(
-                      Icons.add_circle_outline,
-                      color: AppColors.gold,
-                    ),
-                    onPressed: _showAssigneePicker,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            if (_selectedAssigneeIds.isEmpty)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text('No assignees', style: AppTextStyles.bodySm),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _selectedAssigneeIds.map((uid) {
-                  final emp = _allEmployees.firstWhere(
-                    (e) => e.id == uid,
-                    orElse: () => ProfileModel(
-                      id: uid,
-                      role: 'employee',
-                      fullName: 'Unknown',
-                      status: 'active',
-                      timezone: 'UTC',
-                      preferredLanguage: 'en',
-                      createdAt: '',
-                    ),
-                  );
-                  return Chip(
-                    avatar: TAvatar(name: emp.fullName, size: 18),
-                    label: Text(emp.fullName.split(' ').first),
-                    onDeleted: () =>
-                        setState(() => _selectedAssigneeIds.remove(uid)),
-                    deleteIcon: const Icon(Icons.cancel, size: 16),
-                  );
-                }).toList(),
-              ),
-            const SizedBox(height: 18),
-
-            // Initial comment (optional) — supports link insert + internal/public
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('COMMENT', style: AppTextStyles.labelCaps),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _commentCtrl,
-                    maxLines: 2,
-                    minLines: 1,
-                    decoration: InputDecoration(
-                      hintText: 'Add an initial comment… (optional)',
-                      hintStyle: AppTextStyles.bodySm,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: AppColors.outlineVariant),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.link, color: AppColors.gold, size: 20),
-                      tooltip: 'Insert Link into Comment',
-                      onPressed: _showInsertLinkDialog,
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        _commentIsInternal ? Icons.lock_outline : Icons.public,
-                        color: _commentIsInternal
-                            ? AppColors.primary
-                            : AppColors.onSurfaceVariant,
-                        size: 18,
-                      ),
-                      tooltip: _commentIsInternal
-                          ? 'Internal comment'
-                          : 'Visible to client',
-                      onPressed: () => setState(
-                        () => _commentIsInternal = !_commentIsInternal,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _creating ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: _creating ? null : _create,
-                    child: _creating
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.gold,
-                            ),
-                          )
-                        : const Text('Create Task'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-  Widget _buildPriorityChip(String key, String label, Color color) {
-    final sel = _priority == key;
-    return ChoiceChip(
-      label: Text(label),
-      selected: sel,
-      onSelected: (_) => setState(() => _priority = key),
-      selectedColor: color.withValues(alpha: 0.18),
-      backgroundColor: AppColors.surfaceContainerLowest,
-      labelStyle: AppTextStyles.bodySm.copyWith(
-        color: sel ? color : AppColors.onSurface,
-        fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: sel ? color : AppColors.outlineVariant),
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(String key, String label) {
-    final sel = _status == key;
-    return ChoiceChip(
-      label: Text(label),
-      selected: sel,
-      onSelected: (_) => setState(() => _status = key),
-      selectedColor: AppColors.primary,
-      backgroundColor: AppColors.surfaceContainerLowest,
-      labelStyle: AppTextStyles.bodySm.copyWith(
-        color: sel ? Colors.white : AppColors.onSurface,
-        fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color: sel ? AppColors.primary : AppColors.outlineVariant,
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );

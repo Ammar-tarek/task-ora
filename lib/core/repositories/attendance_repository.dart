@@ -106,7 +106,11 @@ class EmpAttendanceSummary {
 }
 
 class AttendanceRepository {
-  static final _admin = SupabaseService.adminClient;
+  // RLS-enforced client. B2: department-scoped LIST/summary reads go through
+  // this so the database (not Flutter) enforces who sees whose attendance —
+  // admin: all; manager: own team; employee: self. Writes and the check-in
+  // pre-write reads stay on [_client] (trusted / background context).
+  static final _client = SupabaseService.client;
 
   static const _select = '*, employee:profiles(full_name)';
 
@@ -114,7 +118,7 @@ class AttendanceRepository {
   /// employee's department manager (via NotificationRepository.notifyAction).
   static Future<String?> _teamIdForEmployee(String employeeId) async {
     try {
-      final p = await _admin
+      final p = await _client
           .from('profiles')
           .select('team_id')
           .eq('id', employeeId)
@@ -128,7 +132,7 @@ class AttendanceRepository {
   /// Resolve active staff (non-client) ids for a team, or all if [teamId] null.
   static Future<List<Map<String, String>>> _staff({String? teamId}) async {
     try {
-      var q = _admin
+      var q = _client
           .from('profiles')
           .select('id, full_name')
           .neq('role', 'client');
@@ -177,7 +181,7 @@ class AttendanceRepository {
     };
 
     try {
-      var q = _admin
+      var q = _client
           .from('attendance')
           .select('employee_id, status')
           .gte('attendance_date', first)
@@ -223,7 +227,7 @@ class AttendanceRepository {
   ) async {
     if (rows.isEmpty) return rows;
     final ids = rows.map((r) => r['employee_id'] as String).toSet().toList();
-    final profiles = await _admin
+    final profiles = await _client
         .from('profiles')
         .select('id, full_name')
         .inFilter('id', ids);
@@ -274,7 +278,7 @@ class AttendanceRepository {
     List<String>? memberIds;
     if (teamId != null) {
       try {
-        final members = await _admin
+        final members = await _client
             .from('profiles')
             .select('id')
             .eq('team_id', teamId);
@@ -286,8 +290,13 @@ class AttendanceRepository {
         return [];
       }
     }
+    // RLS floor (admin: all · manager: own team · employee: self); the optional
+    // [teamId] narrows an admin's view to the selected department.
     return _queryAttendanceList((sel) {
-      var q = _admin.from('attendance').select(sel).eq('attendance_date', date);
+      var q = _client
+          .from('attendance')
+          .select(sel)
+          .eq('attendance_date', date);
       if (memberIds != null) q = q.inFilter('employee_id', memberIds);
       return q.order('created_at');
     });
@@ -309,7 +318,7 @@ class AttendanceRepository {
         '${nextM.toString().padLeft(2, '0')}-01';
 
     return _queryAttendanceList(
-      (sel) => _admin
+      (sel) => _client
           .from('attendance')
           .select(sel)
           .eq('employee_id', employeeId)
@@ -328,7 +337,7 @@ class AttendanceRepository {
         .toIso8601String()
         .substring(0, 10);
     return _queryAttendanceList(
-      (sel) => _admin
+      (sel) => _client
           .from('attendance')
           .select(sel)
           .eq('employee_id', employeeId)
@@ -344,7 +353,7 @@ class AttendanceRepository {
     final today = AppTime.now().toIso8601String().substring(0, 10);
     // Pass 1: FK join
     try {
-      final data = await _admin
+      final data = await _client
           .from('attendance')
           .select(_select)
           .eq('employee_id', employeeId)
@@ -355,7 +364,7 @@ class AttendanceRepository {
     } catch (_) {}
     // Pass 2: plain select + enrich
     try {
-      final data = await _admin
+      final data = await _client
           .from('attendance')
           .select('*')
           .eq('employee_id', employeeId)
@@ -377,7 +386,7 @@ class AttendanceRepository {
   static Future<Map<String, dynamic>?> _openSessionRow(
     String employeeId,
   ) async {
-    return await _admin
+    return await _client
         .from('attendance')
         .select('id, attendance_date, check_in_time, total_hours, is_approved')
         .eq('employee_id', employeeId)
@@ -394,7 +403,7 @@ class AttendanceRepository {
     String employeeId,
   ) async {
     try {
-      final data = await _admin
+      final data = await _client
           .from('attendance')
           .select(_select)
           .eq('employee_id', employeeId)
@@ -443,7 +452,7 @@ class AttendanceRepository {
         return null;
       }
 
-      final existing = await _admin
+      final existing = await _client
           .from('attendance')
           .select('check_in_time, is_approved')
           .eq('employee_id', employeeId)
@@ -458,7 +467,7 @@ class AttendanceRepository {
           // Already checked in today — keep the original check-in time.
           // Reconnecting means they're back on-site: reopen the session by
           // clearing check_out so the next disconnect records fresh hours.
-          await _admin
+          await _client
               .from('attendance')
               .update({
                 'check_out_time': null,
@@ -474,7 +483,7 @@ class AttendanceRepository {
       // First check-in of the day. Clear any stale check_out_time so a
       // pre-existing checkout (e.g. an absent/manual row) can't sit before the
       // new check-in and violate the att_checkout_after_checkin constraint.
-      await _admin.from('attendance').upsert({
+      await _client.from('attendance').upsert({
         'employee_id': employeeId,
         'attendance_date': today,
         'check_in_time': now,
@@ -484,7 +493,7 @@ class AttendanceRepository {
       }, onConflict: 'employee_id, attendance_date');
 
       try {
-        final empProfile = await _admin
+        final empProfile = await _client
             .from('profiles')
             .select('full_name, team_id')
             .eq('id', employeeId)
@@ -547,7 +556,7 @@ class AttendanceRepository {
       }
 
       // Update THAT exact row by id.
-      await _admin
+      await _client
           .from('attendance')
           .update({
             'check_out_time': nowDt.toIso8601String(),
@@ -560,7 +569,7 @@ class AttendanceRepository {
           .eq('id', open['id'] as String);
 
       try {
-        final empProfile = await _admin
+        final empProfile = await _client
             .from('profiles')
             .select('full_name, team_id')
             .eq('id', employeeId)
@@ -594,7 +603,7 @@ class AttendanceRepository {
     required String report,
   }) async {
     try {
-      await _admin
+      await _client
           .from('attendance')
           .update({
             'daily_report': report.trim(),
@@ -635,7 +644,7 @@ class AttendanceRepository {
       double newHours = existing + (accumulatedMinutes / 60.0);
       if (newHours < 0) newHours = 0;
 
-      await _admin
+      await _client
           .from('attendance')
           .update({
             'check_out_time': nowDt.toIso8601String(),
@@ -645,7 +654,7 @@ class AttendanceRepository {
           .eq('id', row['id'] as String);
 
       try {
-        final empProfile = await _admin
+        final empProfile = await _client
             .from('profiles')
             .select('full_name, team_id')
             .eq('id', employeeId)
@@ -692,14 +701,16 @@ class AttendanceRepository {
     }
 
     final String? inIso = isAbsent ? null : checkInTime;
-    final String? outIso = (isAbsent || checkOutTime == null) ? null : checkOutTime;
+    final String? outIso = (isAbsent || checkOutTime == null)
+        ? null
+        : checkOutTime;
     final rep = (dailyReport != null && dailyReport.trim().isNotEmpty)
         ? dailyReport.trim()
         : null;
 
     // Try with full new-column payload first; fall back if columns missing
     try {
-      await _admin.from('attendance').upsert({
+      await _client.from('attendance').upsert({
         'employee_id': employeeId,
         'attendance_date': date,
         'check_in_time': inIso,
@@ -718,7 +729,7 @@ class AttendanceRepository {
     } catch (_) {}
 
     try {
-      await _admin.from('attendance').upsert({
+      await _client.from('attendance').upsert({
         'employee_id': employeeId,
         'attendance_date': date,
         'check_in_time': inIso,
@@ -741,7 +752,7 @@ class AttendanceRepository {
     required String approvedBy,
   }) async {
     try {
-      await _admin
+      await _client
           .from('attendance')
           .update({
             'is_approved': true,
@@ -751,7 +762,7 @@ class AttendanceRepository {
           .eq('id', attendanceId);
 
       try {
-        final row = await _admin
+        final row = await _client
             .from('attendance')
             .select('employee_id, attendance_date')
             .eq('id', attendanceId)
@@ -783,7 +794,7 @@ class AttendanceRepository {
     required String rejectedBy,
   }) async {
     try {
-      await _admin
+      await _client
           .from('attendance')
           .update({
             'status': 'rejected',
@@ -793,7 +804,7 @@ class AttendanceRepository {
           .eq('id', attendanceId);
 
       try {
-        final row = await _admin
+        final row = await _client
             .from('attendance')
             .select('employee_id, attendance_date')
             .eq('id', attendanceId)
@@ -825,7 +836,7 @@ class AttendanceRepository {
     required String updatedBy,
   }) async {
     try {
-      await _admin
+      await _client
           .from('attendance')
           .update({
             'status': 'late',
@@ -834,7 +845,7 @@ class AttendanceRepository {
           .eq('id', attendanceId);
 
       try {
-        final row = await _admin
+        final row = await _client
             .from('attendance')
             .select('employee_id, attendance_date')
             .eq('id', attendanceId)
@@ -892,7 +903,7 @@ class AttendanceRepository {
         : null;
 
     try {
-      await _admin.from('attendance').upsert({
+      await _client.from('attendance').upsert({
         'employee_id': employeeId,
         'attendance_date': date,
         'check_in_time': inIso,

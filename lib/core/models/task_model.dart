@@ -16,6 +16,9 @@ class TaskModel {
   final String createdBy;
   final String
   status; // 'not_started' | 'in_progress' | 'employee_done' | 'client_approved' | 'client_rejected' | 'completed' | 'on_hold'
+  /// Montage-only reel payment status: 'paid' | 'not_paid' | 'done'. Null for
+  /// non-Montage tasks and legacy rows. Distinct from [status] (completion).
+  final String? paymentStatus;
   final String priority; // 'low' | 'medium' | 'high' | 'critical'
   final String? dueDate;
   final double? cost;
@@ -43,6 +46,7 @@ class TaskModel {
     this.parentTaskId,
     required this.createdBy,
     required this.status,
+    this.paymentStatus,
     required this.priority,
     this.dueDate,
     this.cost,
@@ -76,6 +80,7 @@ class TaskModel {
       parentTaskId: m['parent_task_id'] as String?,
       createdBy: m['created_by'] as String? ?? '',
       status: m['status'] as String? ?? 'not_started',
+      paymentStatus: m['payment_status'] as String?,
       priority: m['priority'] as String? ?? 'medium',
       dueDate: m['due_date'] as String?,
       cost: (m['cost'] as num?)?.toDouble(),
@@ -106,7 +111,9 @@ class TaskModel {
       case 'in_progress':
         return 'In Progress';
       case 'employee_done':
-        return 'Employee Done';
+        return 'Pending Review';
+      case 'changes_requested':
+        return 'Changes Requested';
       case 'client_approved':
         return 'Client Approved';
       case 'client_rejected':
@@ -119,6 +126,31 @@ class TaskModel {
         return status;
     }
   }
+
+  /// True while the task is submitted and waiting for a manager/admin review.
+  bool get isPendingReview => status == 'employee_done';
+
+  /// True when a reviewer sent the task back to the employee for changes.
+  bool get needsChanges => status == 'changes_requested';
+
+  /// Montage reel payment selector label. '—' when unset. Payment is only
+  /// Paid / Not Paid — it is NOT task completion ('done' is a task status).
+  String get paymentStatusLabel {
+    switch (paymentStatus) {
+      case 'paid':
+        return 'Paid';
+      case 'not_paid':
+        return 'Not Paid';
+      default:
+        return '—';
+    }
+  }
+
+  /// The Montage payment options, in display order: (value, label).
+  static const List<(String, String)> montagePaymentOptions = [
+    ('paid', 'Paid'),
+    ('not_paid', 'Not Paid'),
+  ];
 
   String get priorityLabel {
     switch (priority) {
@@ -182,6 +214,7 @@ class TaskModel {
 
   TaskModel copyWith({
     String? status,
+    String? paymentStatus,
     int? completionPercentage,
     bool? hiddenFromClient,
     List<TaskComment>? comments,
@@ -199,6 +232,7 @@ class TaskModel {
       parentTaskId: parentTaskId,
       createdBy: createdBy,
       status: status ?? this.status,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
       priority: priority,
       dueDate: dueDate,
       cost: cost,

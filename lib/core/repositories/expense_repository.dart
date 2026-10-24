@@ -44,13 +44,16 @@ class ExpenseItem {
 }
 
 class ExpenseRepository {
-  static final _admin = SupabaseService.adminClient;
+  // RLS-enforced client. B2: expense reads go through this. `expenses` RLS is
+  // admin-only, so managers/employees get zero rows — the agreed "managers see
+  // no company-wide expenses" behavior, enforced by the database.
+  static final _client = SupabaseService.client;
 
   /// Team id of a profile — used so expense decisions reach the recorder's
   /// department manager (via NotificationRepository.notifyAction).
   static Future<String?> _teamIdForProfile(String profileId) async {
     try {
-      final p = await _admin
+      final p = await _client
           .from('profiles')
           .select('team_id')
           .eq('id', profileId)
@@ -73,13 +76,13 @@ class ExpenseRepository {
       const sel =
           '*, category:expense_categories(name), recorder:profiles!expenses_recorded_by_fkey(full_name)';
       if (teamId != null) {
-        final members = await _admin
+        final members = await _client
             .from('profiles')
             .select('id')
             .eq('team_id', teamId);
         final ids = (members as List).map((m) => m['id'] as String).toList();
         if (ids.isEmpty) return [];
-        final data = await _admin
+        final data = await _client
             .from('expenses')
             .select(sel)
             .inFilter('recorded_by', ids)
@@ -87,7 +90,7 @@ class ExpenseRepository {
             .limit(limit);
         return (data as List).map((m) => ExpenseItem.fromMap(m)).toList();
       }
-      final data = await _admin
+      final data = await _client
           .from('expenses')
           .select(sel)
           .order('expense_date', ascending: false)
@@ -106,24 +109,28 @@ class ExpenseRepository {
     required String date,
     String? paidTo,
   }) async {
-    // adminClient: expenses RLS is admin-only, so managers/employees would be
-    // blocked on the regular client. UI gates who can reach this.
+    // RLS: admins write any expense; managers write their own team's
+    // (manager_team_expenses policy, scoped by recorded_by). UI also gates this.
     try {
-      final res = await _admin.from('expenses').insert({
-        'category_id': categoryId,
-        'amount': amount,
-        'description': description,
-        'recorded_by': recordedBy,
-        'expense_date': date,
-        'paid_to': paidTo,
-        'status': 'pending',
-      }).select('id').maybeSingle();
+      final res = await _client
+          .from('expenses')
+          .insert({
+            'category_id': categoryId,
+            'amount': amount,
+            'description': description,
+            'recorded_by': recordedBy,
+            'expense_date': date,
+            'paid_to': paidTo,
+            'status': 'pending',
+          })
+          .select('id')
+          .maybeSingle();
 
       final expId = res?['id'] as String?;
 
       await NotificationRepository.notifyAction(
         title: 'New Expense Logged',
-        body: 'Expense of \$$amount ($description) was logged.',
+        body: 'Expense of $amount EGP ($description) was logged.',
         type: 'expense_created',
         referenceType: 'expense',
         referenceId: expId,
@@ -138,13 +145,13 @@ class ExpenseRepository {
     String approvedById,
   ) async {
     try {
-      await _admin
+      await _client
           .from('expenses')
           .update({'status': 'approved', 'approved_by': approvedById})
           .eq('id', expenseId);
 
       try {
-        final exp = await _admin
+        final exp = await _client
             .from('expenses')
             .select('recorded_by, amount, description')
             .eq('id', expenseId)
@@ -157,7 +164,7 @@ class ExpenseRepository {
             final teamId = await _teamIdForProfile(recorderId);
             await NotificationRepository.notifyAction(
               title: 'Expense Approved',
-              body: 'Your expense of \$$amt ($desc) was approved.',
+              body: 'Your expense of $amt EGP ($desc) was approved.',
               type: 'expense_approved',
               referenceType: 'expense',
               referenceId: expenseId,
@@ -177,13 +184,13 @@ class ExpenseRepository {
     String rejectedById,
   ) async {
     try {
-      await _admin
+      await _client
           .from('expenses')
           .update({'status': 'rejected', 'approved_by': rejectedById})
           .eq('id', expenseId);
 
       try {
-        final exp = await _admin
+        final exp = await _client
             .from('expenses')
             .select('recorded_by, amount, description')
             .eq('id', expenseId)
@@ -196,7 +203,7 @@ class ExpenseRepository {
             final teamId = await _teamIdForProfile(recorderId);
             await NotificationRepository.notifyAction(
               title: 'Expense Rejected',
-              body: 'Your expense of \$$amt ($desc) was rejected.',
+              body: 'Your expense of $amt EGP ($desc) was rejected.',
               type: 'expense_rejected',
               referenceType: 'expense',
               referenceId: expenseId,
@@ -213,7 +220,7 @@ class ExpenseRepository {
   /// Admin / manager deletes an expense.
   static Future<void> deleteExpense(String expenseId) async {
     try {
-      await _admin.from('expenses').delete().eq('id', expenseId);
+      await _client.from('expenses').delete().eq('id', expenseId);
     } catch (_) {}
   }
 
@@ -221,7 +228,7 @@ class ExpenseRepository {
 
   static Future<List<Map<String, dynamic>>> fetchCategories() async {
     try {
-      final data = await _admin
+      final data = await _client
           .from('expense_categories')
           .select()
           .eq('is_active', true)
@@ -241,14 +248,14 @@ class ExpenseRepository {
       ];
       for (final name in defaults) {
         try {
-          await _admin.from('expense_categories').insert({
+          await _client.from('expense_categories').insert({
             'name': name,
             'is_active': true,
           });
         } catch (_) {}
       }
 
-      final seeded = await _admin
+      final seeded = await _client
           .from('expense_categories')
           .select()
           .eq('is_active', true)
@@ -262,7 +269,7 @@ class ExpenseRepository {
   /// Admin / manager creates a new expense category.
   static Future<bool> createCategory({required String name}) async {
     try {
-      await _admin.from('expense_categories').insert({
+      await _client.from('expense_categories').insert({
         'name': name,
         'is_active': true,
       });
@@ -278,7 +285,7 @@ class ExpenseRepository {
     required String name,
   }) async {
     try {
-      await _admin
+      await _client
           .from('expense_categories')
           .update({'name': name})
           .eq('id', id);
@@ -291,7 +298,7 @@ class ExpenseRepository {
   /// Admin / manager soft-deletes a category (sets is_active = false).
   static Future<bool> deleteCategory(String id) async {
     try {
-      await _admin
+      await _client
           .from('expense_categories')
           .update({'is_active': false})
           .eq('id', id);

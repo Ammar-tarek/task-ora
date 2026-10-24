@@ -11,6 +11,7 @@ import '../../core/l10n/app_strings.dart';
 import '../../core/providers/locale_controller.dart';
 import '../../core/repositories/notification_repository.dart';
 import '../../core/repositories/task_repository.dart';
+import '../../core/services/notification_route.dart';
 import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_time.dart';
@@ -72,7 +73,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       final normalizedTitle = n.title.trim().toLowerCase();
       final normalizedBody = n.body.trim().toLowerCase();
-      final key = '$normalizedTitle|$normalizedBody|${n.referenceType}|${n.referenceId}';
+      final key =
+          '$normalizedTitle|$normalizedBody|${n.referenceType}|${n.referenceId}';
 
       if (!seenKeys.contains(key)) {
         seenKeys.add(key);
@@ -171,46 +173,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _navigateToReference(n);
   }
 
-  /// Maps [referenceType] (or falls back to [type]) to an in-app route.
+  /// Maps [referenceType] (or falls back to [type]) to an in-app route via the
+  /// pure [notificationRouteFor] helper (unit-tested separately). Event and
+  /// meeting-reminder notifications ('calendar' or 'event') route to /calendar.
   void _navigateToReference(AppNotification n) {
-    final refType = n.referenceType;
-    final refId = n.referenceId;
-
-    String? route;
-
-    // 1) Explicit routing via referenceType stored in DB
-    if (refType != null) {
-      switch (refType) {
-        case 'task':
-          route = refId != null ? '/tasks/detail/$refId' : '/tasks';
-        case 'penalty':
-          route = '/penalties';
-        case 'expense':
-          route = '/expenses';
-        case 'attendance':
-          route = '/attendance';
-        case 'payment':
-          route = '/finance';
-      }
-    }
-
-    // 2) Fallback: derive route from the notification type
-    if (route == null) {
-      switch (n.type) {
-        case 'task_assigned':
-        case 'task_done':
-        case 'task_handoff':
-          route = refId != null ? '/tasks/detail/$refId' : '/tasks';
-        case 'penalty_issued':
-        case 'penalty_applied':
-          route = '/penalties';
-        case 'payment_due':
-          route = '/finance';
-        case 'attendance_alert':
-          route = '/attendance';
-      }
-    }
-
+    final route = notificationRouteFor(
+      referenceType: n.referenceType,
+      type: n.type,
+      referenceId: n.referenceId,
+    );
     if (route != null && mounted) {
       context.go(route);
     }

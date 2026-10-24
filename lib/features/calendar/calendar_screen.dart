@@ -2,16 +2,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/constants/departments.dart';
 import '../../core/providers/locale_controller.dart';
 import '../../core/models/client_model.dart';
 import '../../core/models/profile_model.dart';
-import '../../core/providers/team_filter_notifier.dart';
+import '../../core/providers/workspace_scope_notifier.dart';
+import 'calendar_attendee_scope.dart';
 import '../../core/repositories/client_repository.dart';
-import '../../core/repositories/team_repository.dart';
+import '../../core/services/calendar_event_scope.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_time.dart';
-import '../../core/widgets/team_filter_chip.dart';
 
 // ── Model ──────────────────────────────────────────────────────────────────────
 class CalEvent {
@@ -32,6 +33,7 @@ class CalEvent {
     this.status = 'pending',
     this.shootingHours,
     this.finalVideoDuration,
+    this.teamId,
   });
   final String id;
   final String title;
@@ -47,29 +49,33 @@ class CalEvent {
   final List<String> attendeeIds;
   final String? roomName;
   final String status;
+
+  /// Owning department team (events.team_id). Null for unassigned/legacy events.
+  final String? teamId;
   // Actual hours spent shooting. Independent of scheduled time and finalVideoDuration.
   final double? shootingHours;
   // Duration in hours of the final delivered video. Independent of the others.
   final double? finalVideoDuration;
 
   CalEvent copyWith({String? status}) => CalEvent(
-        id: id,
-        title: title,
-        start: start,
-        end: end,
-        color: color,
-        isAllDay: isAllDay,
-        assigneeInitials: assigneeInitials,
-        clientName: clientName,
-        clientId: clientId,
-        cost: cost,
-        attendeeNames: attendeeNames,
-        attendeeIds: attendeeIds,
-        roomName: roomName,
-        status: status ?? this.status,
-        shootingHours: shootingHours,
-        finalVideoDuration: finalVideoDuration,
-      );
+    id: id,
+    title: title,
+    start: start,
+    end: end,
+    color: color,
+    isAllDay: isAllDay,
+    assigneeInitials: assigneeInitials,
+    clientName: clientName,
+    clientId: clientId,
+    cost: cost,
+    attendeeNames: attendeeNames,
+    attendeeIds: attendeeIds,
+    roomName: roomName,
+    status: status ?? this.status,
+    shootingHours: shootingHours,
+    finalVideoDuration: finalVideoDuration,
+    teamId: teamId,
+  );
 }
 
 /// The event statuses the UI lets you pick, in display order.
@@ -176,60 +182,60 @@ class _CalendarScreenState extends State<CalendarScreen> {
   final _today = DateTime.now();
   List<CalEvent> _events = [];
 
-  TeamFilterNotifier? _teamFilter;
-  List<String> _teamMemberNames = []; // empty = no team filter active
+  // Admin "view by department" scope comes from the workspace department
+  // selector (WorkspaceScopeNotifier). No in-calendar TEAM chips — the active
+  // department drives the fetch, and RLS is the real isolation boundary.
+  WorkspaceScopeNotifier? _scope;
 
   @override
   void initState() {
     super.initState();
     _loadEvents();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final profile = context.read<AuthNotifier>().profile;
-      if (profile?.isAdmin == true) {
-        _teamFilter = context.read<TeamFilterNotifier>()
-          ..loadTeams()
-          ..addListener(_onTeamChange);
-      }
-    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final sc = context.read<WorkspaceScopeNotifier>();
+    if (!identical(sc, _scope)) {
+      _scope?.removeListener(_onScopeChanged);
+      _scope = sc..addListener(_onScopeChanged);
+    }
   }
 
   @override
   void dispose() {
-    _teamFilter?.removeListener(_onTeamChange);
+    _scope?.removeListener(_onScopeChanged);
     super.dispose();
   }
 
-  void _onTeamChange() => _updateTeamFilter();
-
-  Future<void> _updateTeamFilter() async {
-    final teamId = _teamFilter?.selectedTeamId;
-    if (teamId == null) {
-      if (mounted) setState(() => _teamMemberNames = []);
-      return;
-    }
-    final members = await TeamRepository.fetchMembersAdmin(teamId);
-    if (mounted) {
-      setState(
-        () => _teamMemberNames = members.map((m) => m.fullName).toList(),
-      );
-    }
+  void _onScopeChanged() {
+    if (mounted) _loadEvents();
   }
 
-  /// Events visible for the current team filter (all events when no filter set).
-  List<CalEvent> get _displayEvents {
-    if (_teamMemberNames.isEmpty) return _events;
-    return _events
-        .where((e) => e.attendeeNames.any((n) => _teamMemberNames.contains(n)))
-        .toList();
-  }
+  /// Events to render. Department/role filtering is enforced by the database
+  /// RLS at fetch time, so no client-side security filtering happens here.
+  List<CalEvent> get _displayEvents => _events;
 
   Future<void> _loadEvents() async {
     final profile = context.read<AuthNotifier>().profile;
-    // Admins / super admins see every event. Employees and managers only see
-    // events they are assigned to (as attendees).
-    final data = (profile != null && profile.isAdmin)
-        ? await ClientRepository.fetchAllEvents()
-        : await ClientRepository.fetchMyEvents(profile?.id ?? '');
+    final List<CalEventData> data;
+    if (profile?.isClient == true) {
+      // Clients keep their existing client-specific visibility (events linked to
+      // them, RLS-filtered to is_client_visible). They are never routed through
+      // the department-wide fetch.
+      data = await ClientRepository.fetchClientEvents(profile!.id);
+    } else {
+      // Department scope is an ADMIN-only narrowing to the active workspace
+      // (null = All Departments). Managers/employees pass null; RLS restricts
+      // them to their department's shared events plus events they own/attend.
+      final scopeTeamId = profile?.isAdmin == true
+          ? context.read<WorkspaceScopeNotifier>().taskScopeTeamId
+          : null;
+      data = await ClientRepository.fetchDepartmentEvents(
+        scopedTeamId: scopeTeamId,
+      );
+    }
     if (!mounted) return;
     setState(() {
       _events = data
@@ -247,6 +253,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               cost: e.cost,
               roomName: e.roomName,
               status: e.status,
+              teamId: e.teamId,
               shootingHours: e.shootingHours,
               finalVideoDuration: e.finalVideoDuration,
               attendeeNames: e.attendeeNames,
@@ -297,7 +304,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     context.select<LocaleController, Locale>((l) => l.locale);
-    final profile = context.select<AuthNotifier, ProfileModel?>((a) => a.profile);
+    final profile = context.select<AuthNotifier, ProfileModel?>(
+      (a) => a.profile,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -305,7 +314,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
       floatingActionButton: _buildFab(profile),
       body: Column(
         children: [
-          const TeamFilterChip(),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
@@ -539,8 +547,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
       ),
       builder: (_) => _AddEventSheet(
         initialDate: _selectedDate,
-        createdBy: profile?.id ?? '',
-        onCreated: (event) => setState(() => _events.add(event)),
+        profile: profile,
+        onCreated: () => _loadEvents(),
       ),
     );
   }
@@ -1610,189 +1618,241 @@ class _EventDetailSheetState extends State<_EventDetailSheet> {
       ),
       child: SafeArea(
         child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Container(
-                    width: 14,
-                    height: 14,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
-                      color: _event.color,
-                      shape: BoxShape.circle,
+                      color: AppColors.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(_event.title, style: AppTextStyles.headlineSm),
-                  ),
-                  if (_event.assigneeInitials != null)
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
                     Container(
-                      width: 34,
-                      height: 34,
+                      width: 14,
+                      height: 14,
                       decoration: BoxDecoration(
-                        color: _event.color.withValues(alpha: 0.15),
+                        color: _event.color,
                         shape: BoxShape.circle,
                       ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        _event.assigneeInitials!,
-                        style: AppTextStyles.labelMd.copyWith(color: _event.color),
-                      ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Align(alignment: Alignment.centerLeft, child: _statusChip(_status)),
-              const SizedBox(height: 16),
-              _DetailRow(icon: Icons.access_time_outlined, text: _timeLabel()),
-              if (_event.shootingHours != null)
-                _DetailRow(
-                  icon: Icons.videocam_outlined,
-                  text: 'Shooting Hours: ${_fmtHours(_event.shootingHours!)}',
-                ),
-              if (_event.finalVideoDuration != null)
-                _DetailRow(
-                  icon: Icons.movie_outlined,
-                  text:
-                      'Final Video Duration: ${_fmtHours(_event.finalVideoDuration!)}',
-                ),
-              if (_event.roomName != null)
-                _DetailRow(
-                  icon: Icons.meeting_room_outlined,
-                  text: 'Room: ${_event.roomName}',
-                ),
-              if (_event.clientName != null)
-                _DetailRow(
-                  icon: Icons.business_outlined,
-                  text: _event.clientName!,
-                ),
-              if (_event.cost != null && _event.cost! > 0)
-                _DetailRow(
-                  icon: Icons.attach_money_outlined,
-                  text: 'Cost: \$${_event.cost!.toStringAsFixed(2)}',
-                ),
-              if (_event.attendeeNames.isNotEmpty)
-                _DetailRow(
-                  icon: Icons.group_outlined,
-                  text: _event.attendeeNames.join(', '),
-                ),
-              if (_event.assigneeInitials != null && _event.attendeeNames.isEmpty)
-                _DetailRow(
-                  icon: Icons.person_outline,
-                  text: 'Assigned to ${_event.assigneeInitials}',
-                ),
-
-              // Status selector (staff only).
-              if (canManage) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Status',
-                  style: AppTextStyles.labelCaps.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                    fontSize: 10,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final s in kEventStatuses)
-                      ChoiceChip(
-                        label: Text(eventStatusLabel(s)),
-                        selected: _status == s,
-                        onSelected:
-                            _busy ? null : (_) => _changeStatus(s),
-                        labelStyle: AppTextStyles.labelMd.copyWith(
-                          fontSize: 11,
-                          color: _status == s
-                              ? eventStatusColor(s)
-                              : AppColors.onSurfaceVariant,
-                        ),
-                        selectedColor:
-                            eventStatusColor(s).withValues(alpha: 0.15),
-                        backgroundColor: AppColors.surface,
-                        side: BorderSide(
-                          color: _status == s
-                              ? eventStatusColor(s).withValues(alpha: 0.5)
-                              : AppColors.outlineVariant,
-                        ),
-                        showCheckmark: false,
-                      ),
-                  ],
-                ),
-              ],
-
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  if (canEdit) ...[
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _busy
-                            ? null
-                            : () {
-                                Navigator.pop(context);
-                                widget.onEdit?.call();
-                              },
-                        icon: const Icon(Icons.edit_outlined, size: 16),
-                        label: const Text('Edit'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.onSurface,
-                        ),
+                      child: Text(
+                        _event.title,
+                        style: AppTextStyles.headlineSm,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    if (_event.assigneeInitials != null)
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: _event.color.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          _event.assigneeInitials!,
+                          style: AppTextStyles.labelMd.copyWith(
+                            color: _event.color,
+                          ),
+                        ),
+                      ),
                   ],
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close, size: 16),
-                      label: const Text('Close'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _statusChip(_status),
+                ),
+                // Legacy/unassigned events (no owning department) are visible only
+                // to admins in the All-Departments view — never to department
+                // users. Flag them so an admin can reassign them.
+                if (_profile?.isAdmin == true && _event.teamId == null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.statusHigh.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.statusHigh.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.help_outline,
+                            size: 13,
+                            color: AppColors.statusHigh,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'No department — not shown in any department calendar',
+                            style: AppTextStyles.labelMd.copyWith(
+                              color: AppColors.statusHigh,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ],
-              ),
-              // Delete (staff only) — destructive, kept separate below.
-              if (canManage) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton.icon(
-                    onPressed: _busy ? null : _confirmDelete,
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: const Text('Delete event'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.error,
+                const SizedBox(height: 16),
+                _DetailRow(
+                  icon: Icons.access_time_outlined,
+                  text: _timeLabel(),
+                ),
+                if (_event.shootingHours != null)
+                  _DetailRow(
+                    icon: Icons.videocam_outlined,
+                    text: 'Shooting Hours: ${_fmtHours(_event.shootingHours!)}',
+                  ),
+                if (_event.finalVideoDuration != null)
+                  _DetailRow(
+                    icon: Icons.movie_outlined,
+                    text:
+                        'Final Video Duration: ${_fmtHours(_event.finalVideoDuration!)}',
+                  ),
+                if (_event.roomName != null)
+                  _DetailRow(
+                    icon: Icons.meeting_room_outlined,
+                    text: 'Room: ${_event.roomName}',
+                  ),
+                if (_event.clientName != null)
+                  _DetailRow(
+                    icon: Icons.business_outlined,
+                    text: _event.clientName!,
+                  ),
+                if (_event.cost != null && _event.cost! > 0)
+                  _DetailRow(
+                    icon: Icons.attach_money_outlined,
+                    text: 'Cost: ${_event.cost!.toStringAsFixed(2)} EGP',
+                  ),
+                if (_event.attendeeNames.isNotEmpty)
+                  _DetailRow(
+                    icon: Icons.group_outlined,
+                    text: _event.attendeeNames.join(', '),
+                  ),
+                if (_event.assigneeInitials != null &&
+                    _event.attendeeNames.isEmpty)
+                  _DetailRow(
+                    icon: Icons.person_outline,
+                    text: 'Assigned to ${_event.assigneeInitials}',
+                  ),
+
+                // Status selector (staff only).
+                if (canManage) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Status',
+                    style: AppTextStyles.labelCaps.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                      fontSize: 10,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final s in kEventStatuses)
+                        ChoiceChip(
+                          label: Text(eventStatusLabel(s)),
+                          selected: _status == s,
+                          onSelected: _busy ? null : (_) => _changeStatus(s),
+                          labelStyle: AppTextStyles.labelMd.copyWith(
+                            fontSize: 11,
+                            color: _status == s
+                                ? eventStatusColor(s)
+                                : AppColors.onSurfaceVariant,
+                          ),
+                          selectedColor: eventStatusColor(
+                            s,
+                          ).withValues(alpha: 0.15),
+                          backgroundColor: AppColors.surface,
+                          side: BorderSide(
+                            color: _status == s
+                                ? eventStatusColor(s).withValues(alpha: 0.5)
+                                : AppColors.outlineVariant,
+                          ),
+                          showCheckmark: false,
+                        ),
+                    ],
+                  ),
+                ],
+
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    if (canEdit) ...[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () {
+                                  Navigator.pop(context);
+                                  widget.onEdit?.call();
+                                },
+                          icon: const Icon(Icons.edit_outlined, size: 16),
+                          label: const Text('Edit'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.onSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, size: 16),
+                        label: const Text('Close'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+                // Delete (staff only) — destructive, kept separate below.
+                if (canManage) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      onPressed: _busy ? null : _confirmDelete,
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Delete event'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                      ),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 }
 
@@ -1819,12 +1879,12 @@ class _DetailRow extends StatelessWidget {
 class _AddEventSheet extends StatefulWidget {
   const _AddEventSheet({
     required this.initialDate,
-    required this.createdBy,
+    required this.profile,
     required this.onCreated,
   });
   final DateTime initialDate;
-  final String createdBy;
-  final ValueChanged<CalEvent> onCreated;
+  final ProfileModel? profile;
+  final VoidCallback onCreated;
 
   @override
   State<_AddEventSheet> createState() => _AddEventSheetState();
@@ -1835,6 +1895,15 @@ class _AddEventSheetState extends State<_AddEventSheet> {
   final _costCtrl = TextEditingController();
   final _shootingCtrl = TextEditingController();
   final _finalVideoCtrl = TextEditingController();
+
+  // Department ownership (events.team_id) is DERIVED from the active workspace —
+  // no in-form picker. Admins switch department via the WorkspaceHeaderBar
+  // before opening this form; managers/employees are bound to their own team.
+  // A Studio event is created as a `room_booking` so the DB overlap constraint
+  // protects the studio slot. Attendees are scoped to [_teamId].
+  String? _teamId; // owning department team; null = no active department
+  Department? _dept;
+  bool _isAdmin = false;
 
   List<ClientModel> _clients = [];
   ClientModel? _selectedClient;
@@ -1858,14 +1927,31 @@ class _AddEventSheetState extends State<_AddEventSheet> {
     final d = widget.initialDate;
     _startTime = DateTime(d.year, d.month, d.day, 10);
     _endTime = DateTime(d.year, d.month, d.day, 11);
+    _resolveTeam();
     _fetchClients();
     _fetchEmployees();
     _fetchRooms();
   }
 
+  /// Derive the owning department/team from the ACTIVE workspace (never an
+  /// in-form picker). Admins get the active department (null = All Departments,
+  /// which blocks save); managers/employees get their own verified team. RLS is
+  /// the real boundary: a scoped user cannot push another team_id.
+  void _resolveTeam() {
+    final profile = widget.profile;
+    _isAdmin = profile?.isAdmin == true;
+    final scope = context.read<WorkspaceScopeNotifier>();
+    _teamId = CalendarAttendeeScope.ownerTeamId(
+      isAdmin: _isAdmin,
+      activeDeptTeamId: scope.activeDepartmentTeamId,
+      profileTeamId: profile?.teamId,
+    );
+    _dept = _teamId == null ? null : scope.state.departmentForTeamId(_teamId);
+  }
+
   Future<void> _fetchRooms() async {
     try {
-      final data = await SupabaseService.adminClient
+      final data = await SupabaseService.client
           .from('rooms')
           .select('name')
           .order('name');
@@ -1903,27 +1989,40 @@ class _AddEventSheetState extends State<_AddEventSheet> {
     }
   }
 
+  /// Attendees = active, non-client members of the owning department team only
+  /// (profiles.team_id = [_teamId]). Other departments are excluded. RLS also
+  /// restricts the read, so this is not a UI-only boundary.
   Future<void> _fetchEmployees() async {
+    if (_teamId == null) {
+      if (mounted) setState(() => _employees = []);
+      return;
+    }
     try {
-      final data = await SupabaseService.adminClient
+      final data = await SupabaseService.client
           .from('profiles')
           .select('id, full_name')
+          .eq('team_id', _teamId!)
           .neq('role', 'client')
           .eq('status', 'active')
           .order('full_name');
+      final members = (data as List)
+          .map(
+            (m) => {
+              'id': m['id'] as String,
+              'name': m['full_name'] as String? ?? '',
+            },
+          )
+          .toList();
       if (mounted) {
         setState(() {
-          _employees = (data as List)
-              .map(
-                (m) => {
-                  'id': m['id'] as String,
-                  'name': m['full_name'] as String? ?? '',
-                },
-              )
-              .toList();
+          _employees = members;
+          final eligible = members.map((e) => e['id']).toSet();
+          _selectedEmployeeIds.removeWhere((id) => !eligible.contains(id));
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _employees = []);
+    }
   }
 
   Future<void> _pickTime(bool isStart) async {
@@ -1955,6 +2054,36 @@ class _AddEventSheetState extends State<_AddEventSheet> {
 
   Future<void> _save() async {
     if (_titleCtrl.text.trim().isEmpty) return;
+
+    // Resolve the owning department (team_id). Admins use the picked
+    // department; managers/employees are bound to their own verified team.
+    final profile = widget.profile;
+    // Department/team is derived from the active workspace (see [_resolveTeam]).
+    final String? teamId = _teamId;
+    final Department? dept = _dept;
+
+    // A specific department is required — never create an orphaned team_id=null
+    // event. Admins in "All Departments" must pick one in the top bar first.
+    if (teamId == null) {
+      _showMessage(
+        _isAdmin
+            ? 'Pick a department in the top bar before creating an event.'
+            : 'Your account has no department, so you cannot create events.',
+      );
+      return;
+    }
+
+    // Studio events are room bookings: tag the type so the DB overlap
+    // constraint can protect the studio slot. These require a valid range.
+    final eventType = CalendarEventScope.eventTypeForDepartment(dept);
+    if (CalendarEventScope.isBookingDepartment(dept) &&
+        !_endTime.isAfter(_startTime)) {
+      _showMessage(
+        'End time must be after the start time for a Studio booking.',
+      );
+      return;
+    }
+
     setState(() => _saving = true);
 
     final cost = double.tryParse(_costCtrl.text.trim());
@@ -1962,49 +2091,39 @@ class _AddEventSheetState extends State<_AddEventSheet> {
     final finalVideoDuration = double.tryParse(_finalVideoCtrl.text.trim());
     final attendeeIds = _selectedEmployeeIds.toList();
 
-    await ClientRepository.createEvent(
-      title: _titleCtrl.text.trim(),
-      start: _startTime,
-      end: _endTime,
-      clientId: _selectedClient?.id,
-      cost: cost,
-      createdBy: widget.createdBy,
-      attendeeIds: attendeeIds,
-      roomName: _selectedRoom,
-      shootingHours: shootingHours,
-      finalVideoDuration: finalVideoDuration,
-    );
-
-    final selectedNames = _employees
-        .where((e) => _selectedEmployeeIds.contains(e['id']))
-        .map((e) => e['name']!)
-        .toList();
-
-    final newEvent = CalEvent(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: _titleCtrl.text.trim(),
-      start: _startTime,
-      end: _endTime,
-      color: _selectedClient != null
-          ? const Color(0xFFBA1A1A)
-          : AppColors.primary,
-      clientId: _selectedClient?.id,
-      clientName: _selectedClient?.companyName,
-      cost: cost,
-      roomName: _selectedRoom,
-      shootingHours: shootingHours,
-      finalVideoDuration: finalVideoDuration,
-      attendeeNames: selectedNames,
-      attendeeIds: attendeeIds,
-      assigneeInitials: selectedNames.isNotEmpty
-          ? selectedNames.first.substring(0, 1).toUpperCase()
-          : null,
-    );
+    try {
+      await ClientRepository.createEvent(
+        title: _titleCtrl.text.trim(),
+        start: _startTime,
+        end: _endTime,
+        clientId: _selectedClient?.id,
+        cost: cost,
+        createdBy: profile?.id ?? '',
+        attendeeIds: attendeeIds,
+        roomName: _selectedRoom,
+        shootingHours: shootingHours,
+        finalVideoDuration: finalVideoDuration,
+        teamId: teamId,
+        eventType: eventType,
+      );
+    } on BookingConflictException catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        _showMessage(e.message);
+      }
+      return;
+    }
 
     if (mounted) {
       Navigator.pop(context);
-      widget.onCreated(newEvent);
+      widget.onCreated();
     }
+  }
+
+  void _showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), backgroundColor: AppColors.error),
+    );
   }
 
   @override
@@ -2051,6 +2170,16 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                 ),
                 const SizedBox(height: 12),
 
+                // Read-only department context (derived from the active
+                // workspace). No picker — admins switch department in the top
+                // bar before opening this form.
+                _DeptContextChip(
+                  label: _dept?.label,
+                  isAdmin: _isAdmin,
+                  isStudio: _dept == Department.studio,
+                ),
+                const SizedBox(height: 12),
+
                 Row(
                   children: [
                     Expanded(
@@ -2094,7 +2223,10 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                               vertical: 10,
                             ),
                           ),
-                          child: Text(_fmt(_endTime), style: AppTextStyles.bodyMd),
+                          child: Text(
+                            _fmt(_endTime),
+                            style: AppTextStyles.bodyMd,
+                          ),
                         ),
                       ),
                     ),
@@ -2143,12 +2275,18 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                     items: [
                       DropdownMenuItem(
                         value: null,
-                        child: Text('— No client —', style: AppTextStyles.bodyMd),
+                        child: Text(
+                          '— No client —',
+                          style: AppTextStyles.bodyMd,
+                        ),
                       ),
                       ..._clients.map(
                         (c) => DropdownMenuItem(
                           value: c,
-                          child: Text(c.companyName, style: AppTextStyles.bodyMd),
+                          child: Text(
+                            c.companyName,
+                            style: AppTextStyles.bodyMd,
+                          ),
                         ),
                       ),
                     ],
@@ -2191,7 +2329,10 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                     dropdownColor: AppColors.surfaceContainerLowest,
                     decoration: InputDecoration(
                       labelText: 'Meeting room (optional)',
-                      prefixIcon: const Icon(Icons.meeting_room_outlined, size: 20),
+                      prefixIcon: const Icon(
+                        Icons.meeting_room_outlined,
+                        size: 20,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -2219,7 +2360,10 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                   ),
                   decoration: InputDecoration(
                     labelText: 'Meeting cost (optional)',
-                    prefixIcon: const Icon(Icons.attach_money_outlined, size: 20),
+                    prefixIcon: const Icon(
+                      Icons.attach_money_outlined,
+                      size: 20,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -2262,12 +2406,24 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                 ),
                 const SizedBox(height: 12),
 
-                if (_employees.isNotEmpty) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Attendees', style: AppTextStyles.labelMd),
+                ),
+                const SizedBox(height: 8),
+                if (_employees.isEmpty)
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('Attendees', style: AppTextStyles.labelMd),
-                  ),
-                  const SizedBox(height: 8),
+                    child: Text(
+                      _teamId == null
+                          ? 'Pick a department first to choose attendees.'
+                          : 'No members in this department yet.',
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                else
                   Wrap(
                     spacing: 8,
                     runSpacing: 6,
@@ -2288,10 +2444,8 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 12),
-                ],
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
@@ -2382,6 +2536,9 @@ class _EditEventSheetState extends State<_EditEventSheet> {
     _startTime = e.start;
     _endTime = e.end;
     _selectedRoom = e.roomName;
+    // Preselect the event's current attendees (kept even if an attendee is no
+    // longer in the team pool, e.g. a legacy cross-department attendee).
+    _selectedEmployeeIds.addAll(e.attendeeIds);
     _fetchClients();
     _fetchEmployees();
     _fetchRooms();
@@ -2414,11 +2571,21 @@ class _EditEventSheetState extends State<_EditEventSheet> {
     });
   }
 
+  /// Edit pool = members of THIS EVENT's department team (events.team_id) only,
+  /// so a new attendee can never be added from another department. The event's
+  /// team is NOT changed by the active workspace. A legacy null team_id yields
+  /// an empty pool (existing attendees are preserved, no cross-dept adds).
   Future<void> _fetchEmployees() async {
+    final teamId = widget.event.teamId;
+    if (teamId == null) {
+      if (mounted) setState(() => _employees = []);
+      return;
+    }
     try {
-      final data = await SupabaseService.adminClient
+      final data = await SupabaseService.client
           .from('profiles')
           .select('id, full_name')
+          .eq('team_id', teamId)
           .neq('role', 'client')
           .eq('status', 'active')
           .order('full_name');
@@ -2434,12 +2601,14 @@ class _EditEventSheetState extends State<_EditEventSheet> {
               .toList();
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _employees = []);
+    }
   }
 
   Future<void> _fetchRooms() async {
     try {
-      final data = await SupabaseService.adminClient
+      final data = await SupabaseService.client
           .from('rooms')
           .select('name')
           .order('name');
@@ -2494,18 +2663,28 @@ class _EditEventSheetState extends State<_EditEventSheet> {
     final finalVideoDuration = double.tryParse(_finalVideoCtrl.text.trim());
     final attendeeIds = _selectedEmployeeIds.toList();
 
-    await ClientRepository.updateEvent(
-      eventId: widget.event.id,
-      title: _titleCtrl.text.trim(),
-      start: _startTime,
-      end: _endTime,
-      clientId: _selectedClient?.id,
-      cost: cost,
-      roomName: _selectedRoom,
-      attendeeIds: attendeeIds,
-      shootingHours: shootingHours,
-      finalVideoDuration: finalVideoDuration,
-    );
+    try {
+      await ClientRepository.updateEvent(
+        eventId: widget.event.id,
+        title: _titleCtrl.text.trim(),
+        start: _startTime,
+        end: _endTime,
+        clientId: _selectedClient?.id,
+        cost: cost,
+        roomName: _selectedRoom,
+        attendeeIds: attendeeIds,
+        shootingHours: shootingHours,
+        finalVideoDuration: finalVideoDuration,
+      );
+    } on BookingConflictException catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: AppColors.error),
+        );
+      }
+      return;
+    }
 
     final selectedNames = _employees
         .where((e) => _selectedEmployeeIds.contains(e['id']))
@@ -2525,6 +2704,7 @@ class _EditEventSheetState extends State<_EditEventSheet> {
       cost: cost,
       roomName: _selectedRoom,
       status: widget.event.status,
+      teamId: widget.event.teamId,
       shootingHours: shootingHours,
       finalVideoDuration: finalVideoDuration,
       attendeeNames: selectedNames.isNotEmpty
@@ -2631,7 +2811,10 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                               vertical: 10,
                             ),
                           ),
-                          child: Text(_fmt(_endTime), style: AppTextStyles.bodyMd),
+                          child: Text(
+                            _fmt(_endTime),
+                            style: AppTextStyles.bodyMd,
+                          ),
                         ),
                       ),
                     ),
@@ -2655,12 +2838,18 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                     items: [
                       DropdownMenuItem(
                         value: null,
-                        child: Text('— No client —', style: AppTextStyles.bodyMd),
+                        child: Text(
+                          '— No client —',
+                          style: AppTextStyles.bodyMd,
+                        ),
                       ),
                       ..._clients.map(
                         (c) => DropdownMenuItem(
                           value: c,
-                          child: Text(c.companyName, style: AppTextStyles.bodyMd),
+                          child: Text(
+                            c.companyName,
+                            style: AppTextStyles.bodyMd,
+                          ),
                         ),
                       ),
                     ],
@@ -2703,7 +2892,10 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                     dropdownColor: AppColors.surfaceContainerLowest,
                     decoration: InputDecoration(
                       labelText: 'Meeting room (optional)',
-                      prefixIcon: const Icon(Icons.meeting_room_outlined, size: 20),
+                      prefixIcon: const Icon(
+                        Icons.meeting_room_outlined,
+                        size: 20,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -2731,7 +2923,10 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                   ),
                   decoration: InputDecoration(
                     labelText: 'Meeting cost (optional)',
-                    prefixIcon: const Icon(Icons.attach_money_outlined, size: 20),
+                    prefixIcon: const Icon(
+                      Icons.attach_money_outlined,
+                      size: 20,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -2774,12 +2969,24 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                 ),
                 const SizedBox(height: 12),
 
-                if (_employees.isNotEmpty) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Attendees', style: AppTextStyles.labelMd),
+                ),
+                const SizedBox(height: 8),
+                if (_employees.isEmpty)
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('Attendees', style: AppTextStyles.labelMd),
-                  ),
-                  const SizedBox(height: 8),
+                    child: Text(
+                      widget.event.teamId == null
+                          ? 'This event has no department — assign one to manage attendees.'
+                          : 'No members in this department yet.',
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                else
                   Wrap(
                     spacing: 8,
                     runSpacing: 6,
@@ -2800,8 +3007,7 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 12),
-                ],
+                const SizedBox(height: 12),
 
                 const SizedBox(height: 12),
                 SizedBox(
@@ -2836,8 +3042,15 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                         Navigator.pop(context);
                         widget.onDelete?.call();
                       },
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-                      label: const Text('Delete Event', style: TextStyle(color: AppColors.error)),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 18,
+                        color: AppColors.error,
+                      ),
+                      label: const Text(
+                        'Delete Event',
+                        style: TextStyle(color: AppColors.error),
+                      ),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.error),
                         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -2889,7 +3102,7 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
       _error = null;
     });
     try {
-      final data = await SupabaseService.adminClient
+      final data = await SupabaseService.client
           .from('rooms')
           .select('id, name')
           .order('name');
@@ -2925,7 +3138,7 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
     }
     setState(() => _saving = true);
     try {
-      await SupabaseService.adminClient.from('rooms').insert({
+      await SupabaseService.client.from('rooms').insert({
         'name': name,
         'capacity': capacity,
       });
@@ -2946,7 +3159,7 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
 
   Future<void> _deleteRoom(String id) async {
     try {
-      await SupabaseService.adminClient.from('rooms').delete().eq('id', id);
+      await SupabaseService.client.from('rooms').delete().eq('id', id);
       await _fetchRooms();
     } catch (_) {
       if (mounted) setState(() => _error = 'Failed to delete room.');
@@ -2960,161 +3173,242 @@ class _ManageRoomsSheetState extends State<_ManageRoomsSheet> {
         maxHeight: MediaQuery.of(context).size.height * 0.72,
       ),
       child: Padding(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Icon(Icons.meeting_room_outlined, size: 20),
-              const SizedBox(width: 10),
-              Text('Manage Meeting Rooms', style: AppTextStyles.headlineSm),
-            ],
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Icon(Icons.meeting_room_outlined, size: 20),
+                const SizedBox(width: 10),
+                Text('Manage Meeting Rooms', style: AppTextStyles.headlineSm),
+              ],
+            ),
+            const SizedBox(height: 16),
 
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _nameCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Room name',
-                    hintText: 'e.g. Board Room',
-                    prefixIcon: const Icon(Icons.add_circle_outline, size: 20),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                  ),
-                  onSubmitted: (_) => _addRoom(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 90,
-                child: TextField(
-                  controller: _capacityCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Capacity',
-                    hintText: '10',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                  ),
-                  onSubmitted: (_) => _addRoom(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _saving ? null : _addRoom,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.gold,
-                        ),
-                      )
-                    : const Text(
-                        'Add',
-                        style: TextStyle(color: AppColors.gold),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Room name',
+                      hintText: 'e.g. Board Room',
+                      prefixIcon: const Icon(
+                        Icons.add_circle_outline,
+                        size: 20,
                       ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
+                    onSubmitted: (_) => _addRoom(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 90,
+                  child: TextField(
+                    controller: _capacityCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Capacity',
+                      hintText: '10',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
+                    onSubmitted: (_) => _addRoom(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _saving ? null : _addRoom,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.gold,
+                          ),
+                        )
+                      : const Text(
+                          'Add',
+                          style: TextStyle(color: AppColors.gold),
+                        ),
+                ),
+              ],
+            ),
+
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: AppTextStyles.bodySm.copyWith(color: AppColors.error),
               ),
             ],
-          ),
 
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: AppTextStyles.bodySm.copyWith(color: AppColors.error),
+            const SizedBox(height: 16),
+
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: CircularProgressIndicator(),
+              )
+            else if (_rooms.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'No rooms yet. Add one above.',
+                  style: AppTextStyles.bodyMd.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: ListView.separated(
+                  // ignore: deprecated_member_use
+                  cacheExtent: 200.0,
+                  addRepaintBoundaries: true,
+                  itemCount: _rooms.length,
+                  separatorBuilder: (_, _) =>
+                      Divider(height: 1, color: AppColors.outlineVariant),
+                  itemBuilder: (_, i) {
+                    final room = _rooms[i];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        Icons.meeting_room_outlined,
+                        size: 20,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                      title: Text(room['name']!, style: AppTextStyles.bodyMd),
+                      trailing: IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          size: 20,
+                          color: AppColors.error,
+                        ),
+                        tooltip: 'Delete room',
+                        onPressed: () => _deleteRoom(room['id']!),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Read-only department context shown in the event form (replaces the old
+/// Department dropdown). The owning department comes from the active workspace.
+class _DeptContextChip extends StatelessWidget {
+  const _DeptContextChip({
+    required this.label,
+    required this.isAdmin,
+    required this.isStudio,
+  });
+  final String? label;
+  final bool isAdmin;
+  final bool isStudio;
+
+  @override
+  Widget build(BuildContext context) {
+    if (label == null) {
+      // No active department. Admins must pick one in the top bar first.
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.error.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, size: 16, color: AppColors.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isAdmin
+                    ? 'Pick a department in the top bar before creating an event.'
+                    : 'Your account has no department.',
+                style: AppTextStyles.bodySm.copyWith(color: AppColors.error),
+              ),
             ),
           ],
-
-          const SizedBox(height: 16),
-
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: CircularProgressIndicator(),
-            )
-          else if (_rooms.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                'No rooms yet. Add one above.',
-                style: AppTextStyles.bodyMd.copyWith(
-                  color: AppColors.onSurfaceVariant,
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.workspaces_outline, size: 18, color: AppColors.gold),
+              const SizedBox(width: 8),
+              Text('Department: ', style: AppTextStyles.bodySm),
+              Text(
+                label!,
+                style: AppTextStyles.labelMd.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            )
-          else
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
-              child: ListView.separated(
-                // ignore: deprecated_member_use
-                cacheExtent: 200.0,
-                addRepaintBoundaries: true,
-                itemCount: _rooms.length,
-                separatorBuilder: (_, _) =>
-                    Divider(height: 1, color: AppColors.outlineVariant),
-                itemBuilder: (_, i) {
-                  final room = _rooms[i];
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      Icons.meeting_room_outlined,
-                      size: 20,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                    title: Text(room['name']!, style: AppTextStyles.bodyMd),
-                    trailing: IconButton(
-                      icon: const Icon(
-                        Icons.delete_outline,
-                        size: 20,
-                        color: AppColors.error,
-                      ),
-                      tooltip: 'Delete room',
-                      onPressed: () => _deleteRoom(room['id']!),
-                    ),
-                  );
-                },
+            ],
+          ),
+        ),
+        if (isStudio)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Studio events are room bookings and cannot overlap another booking.',
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.onSurfaceVariant,
               ),
             ),
-        ],
-      ),
-    ),
-  );
+          ),
+      ],
+    );
   }
 }

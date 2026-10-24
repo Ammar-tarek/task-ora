@@ -13,6 +13,7 @@ import 'core/auth/auth_notifier.dart';
 import 'core/providers/locale_controller.dart';
 import 'core/providers/team_filter_notifier.dart';
 import 'core/providers/team_privileges_notifier.dart';
+import 'core/providers/workspace_scope_notifier.dart';
 import 'core/providers/theme_controller.dart';
 import 'core/services/push_notification_service.dart';
 import 'package:go_router/go_router.dart';
@@ -33,6 +34,7 @@ void main() async {
 
   final auth = AuthNotifier();
   final teamPrivs = TeamPrivilegesNotifier(auth);
+  final workspaceScope = WorkspaceScopeNotifier(auth);
 
   // Create the router exactly once — must live outside the widget tree
   // to avoid duplicate-navigator-key assertions on rebuilds.
@@ -45,6 +47,7 @@ void main() async {
         ChangeNotifierProvider.value(value: auth),
         ChangeNotifierProvider(create: (_) => TeamFilterNotifier()),
         ChangeNotifierProvider.value(value: teamPrivs),
+        ChangeNotifierProvider.value(value: workspaceScope),
         ChangeNotifierProvider(create: (_) => ThemeController()),
         ChangeNotifierProvider(create: (_) => LocaleController()),
       ],

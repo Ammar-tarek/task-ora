@@ -1,4 +1,8 @@
 // lib/core/repositories/notification_repository.dart
+// All reads/writes run on the authenticated client under RLS:
+//   employee → own rows; manager → own team; admin/super admin → all.
+// Fan-out and single inserts go through SECURITY DEFINER RPCs (notify_action /
+// create_notification) so no service-role key is needed on the client.
 
 import '../services/supabase_service.dart';
 
@@ -40,29 +44,6 @@ class AppNotification {
 
 class NotificationRepository {
   static final _client = SupabaseService.client;
-  static final _admin = SupabaseService.adminClient;
-
-  /// The single super admin. DB `user_role` has no 'super_admin' value, so we
-  /// identify them by email via the service-role auth admin API and cache the
-  /// resolved profile id. They ALWAYS receive every notification.
-  static const _superAdminEmail = 'ammar@cashback.com';
-  static String? _cachedSuperAdminId;
-  static bool _superAdminResolved = false;
-
-  static Future<String?> _superAdminId() async {
-    if (_superAdminResolved) return _cachedSuperAdminId;
-    try {
-      final users = await _admin.auth.admin.listUsers();
-      for (final u in users) {
-        if ((u.email ?? '').toLowerCase() == _superAdminEmail) {
-          _cachedSuperAdminId = u.id;
-          break;
-        }
-      }
-    } catch (_) {}
-    _superAdminResolved = true;
-    return _cachedSuperAdminId;
-  }
 
   // ── Employee: own notifications only ───────────────────────────────────────
 
@@ -80,11 +61,11 @@ class NotificationRepository {
     }
   }
 
-  // ── Admin: ALL notifications ───────────────────────────────────────────────
+  // ── Admin: ALL notifications (RLS: admin_all_notifications) ─────────────────
 
   static Future<List<AppNotification>> fetchAll() async {
     try {
-      final data = await _admin
+      final data = await _client
           .from('notifications')
           .select()
           .order('created_at', ascending: false)
@@ -95,20 +76,18 @@ class NotificationRepository {
     }
   }
 
-  // ── Manager: own + team employees' notifications ───────────────────────────
+  // ── Manager: team members' notifications (RLS: manager_team_notifications) ──
 
   static Future<List<AppNotification>> fetchForTeam(String teamId) async {
     try {
-      // 1) Get all member IDs in this team
-      final members = await _admin
+      final members = await _client
           .from('profiles')
           .select('id')
           .eq('team_id', teamId);
       final ids = (members as List).map((m) => m['id'] as String).toList();
       if (ids.isEmpty) return [];
 
-      // 2) Fetch notifications for all team members
-      final data = await _admin
+      final data = await _client
           .from('notifications')
           .select()
           .inFilter('recipient_id', ids)
@@ -124,7 +103,7 @@ class NotificationRepository {
 
   static Future<void> markRead(String notificationId) async {
     try {
-      await _admin
+      await _client
           .from('notifications')
           .update({
             'is_read': true,
@@ -138,7 +117,7 @@ class NotificationRepository {
 
   static Future<void> markAllRead(String userId) async {
     try {
-      await _admin
+      await _client
           .from('notifications')
           .update({
             'is_read': true,
@@ -155,28 +134,29 @@ class NotificationRepository {
     try {
       final now = DateTime.now().toIso8601String();
       if (profile != null && profile.isAdmin == true) {
-        await _admin
+        // RLS admin_all_notifications permits updating every row.
+        await _client
             .from('notifications')
             .update({'is_read': true, 'read_at': now})
             .eq('is_read', false);
       } else if (profile != null &&
           profile.isManager == true &&
           profile.teamId != null) {
-        final members = await _admin
+        final members = await _client
             .from('profiles')
             .select('id')
             .eq('team_id', profile.teamId!);
         final ids = (members as List).map((m) => m['id'] as String).toList();
         if (!ids.contains(profile.id)) ids.add(profile.id);
         if (ids.isNotEmpty) {
-          await _admin
+          await _client
               .from('notifications')
               .update({'is_read': true, 'read_at': now})
               .inFilter('recipient_id', ids)
               .eq('is_read', false);
         }
       } else if (profile != null) {
-        await _admin
+        await _client
             .from('notifications')
             .update({'is_read': true, 'read_at': now})
             .eq('recipient_id', profile.id)
@@ -185,6 +165,8 @@ class NotificationRepository {
     } catch (_) {}
   }
 
+  /// Insert one notification for a recipient (SECURITY DEFINER RPC validates
+  /// the caller is authenticated; no service-role key needed).
   static Future<void> createNotification({
     required String recipientId,
     required String type,
@@ -194,24 +176,22 @@ class NotificationRepository {
     String? referenceId,
   }) async {
     try {
-      await _admin.from('notifications').insert({
-        'recipient_id': recipientId,
-        'type': type,
-        'title': title,
-        'body': body,
-        'reference_type': referenceType,
-        'reference_id': referenceId,
-        'is_read': false,
-        'channel': 'in_app',
+      await _client.rpc('create_notification', params: {
+        'p_recipient_id': recipientId,
+        'p_type': type,
+        'p_title': title,
+        'p_body': body,
+        'p_reference_type': referenceType,
+        'p_reference_id': referenceId,
       });
     } catch (_) {}
   }
 
-  /// Broadcast a notification for any system/task action to:
-  /// 1. Target assigned employees / users ([targetUserIds])
-  /// 2. Team Manager / Team Lead of the team ([teamId])
-  /// 3. ALL Admins and Super Admins
-  /// Excludes [actorId] so the performing user does not receive their own action alert.
+  /// Broadcast for any system/task action. Recipients are derived server-side
+  /// by the notify_action RPC: [targetUserIds] + the [teamId] lead/managers +
+  /// all admins/super admins. The acting user (auth.uid()) is excluded unless
+  /// explicitly targeted or a super admin. [actorId] is accepted for call-site
+  /// compatibility but no longer used (the server identifies the actor).
   static Future<void> notifyAction({
     required String title,
     required String body,
@@ -223,111 +203,19 @@ class NotificationRepository {
     String? actorId,
   }) async {
     try {
-      final recipients = <String>{};
-
-      // 1) Target Users / Assignees
-      if (targetUserIds != null) {
-        recipients.addAll(targetUserIds.where((id) => id.isNotEmpty));
-      }
-
-      // 2) Team Lead + ALL managers of the team (the employee's/department's
-      //    manager must always be notified for that team's events).
-      if (teamId != null && teamId.isNotEmpty) {
-        try {
-          final teamData = await _admin
-              .from('teams')
-              .select('team_lead_id')
-              .eq('id', teamId)
-              .maybeSingle();
-          if (teamData != null && teamData['team_lead_id'] != null) {
-            recipients.add(teamData['team_lead_id'] as String);
-          }
-        } catch (_) {}
-        try {
-          final managerRows = await _admin
-              .from('profiles')
-              .select('id')
-              .eq('team_id', teamId)
-              .eq('role', 'manager');
-          for (final r in (managerRows as List)) {
-            final id = r['id'] as String?;
-            if (id != null && id.isNotEmpty) recipients.add(id);
-          }
-        } catch (_) {}
-      }
-
-      // 3) ALL Admins (DB user_role has no 'super_admin' value — filtering on
-      //    it would 400; admins are the top DB role).
-      final superAdminIds = <String>{};
-      try {
-        final adminRows = await _admin
-            .from('profiles')
-            .select('id, role')
-            .eq('role', 'admin');
-        for (final r in (adminRows as List)) {
-          final id = r['id'] as String?;
-          final role = r['role'] as String? ?? '';
-          if (id != null && id.isNotEmpty) {
-            recipients.add(id);
-            if (role == 'super_admin') {
-              superAdminIds.add(id);
-            }
-          }
-        }
-      } catch (_) {
-        try {
-          final allProfiles = await _admin.from('profiles').select('id, role');
-          for (final r in (allProfiles as List)) {
-            final role = r['role'] as String? ?? '';
-            final id = r['id'] as String?;
-            if (id != null && (role == 'admin' || role == 'super_admin')) {
-              recipients.add(id);
-              if (role == 'super_admin') {
-                superAdminIds.add(id);
-              }
-            }
-          }
-        } catch (_) {}
-      }
-
-      // 3b) The super admin (ammar@cashback.com) ALWAYS receives every
-      //     notification and is retained even when they are the actor.
-      final superId = await _superAdminId();
-      if (superId != null && superId.isNotEmpty) {
-        recipients.add(superId);
-        superAdminIds.add(superId);
-      }
-
-      // 4) Remove actorId for standard users/managers UNLESS explicitly targeted
-      //    in targetUserIds (the super admin is always retained).
-      if (actorId != null && actorId.isNotEmpty) {
-        final explicitlyTargeted = targetUserIds?.contains(actorId) ?? false;
-        if (!explicitlyTargeted) {
-          recipients.removeWhere((id) => id == actorId && !superAdminIds.contains(id));
-        }
-      }
-
-      if (recipients.isEmpty) return;
-
-      // 5) Insert rows into notifications table
-      final inserts = recipients.map((rId) => {
-        'recipient_id': rId,
-        'type': type,
-        'title': title,
-        'body': body,
-        'reference_type': referenceType,
-        'reference_id': referenceId,
-        'is_read': false,
-        'channel': 'in_app',
-      }).toList();
-
-      await _admin.from('notifications').insert(inserts);
+      await _client.rpc('notify_action', params: {
+        'p_title': title,
+        'p_body': body,
+        'p_type': type,
+        'p_reference_type': referenceType,
+        'p_reference_id': referenceId,
+        'p_team_id': teamId,
+        'p_target_user_ids': targetUserIds,
+      });
     } catch (_) {}
   }
 
   /// Subscribe to new notifications in real-time.
-  /// Returns a stream of raw notification maps.
-  /// Returns an empty stream if the table doesn't exist.
   static Stream<List<Map<String, dynamic>>> streamForUser(String userId) {
     try {
       return _client

@@ -3,6 +3,7 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_model.dart';
+import '../services/privileged_ops.dart';
 import '../services/supabase_service.dart';
 import 'notification_repository.dart';
 
@@ -121,30 +122,18 @@ class ProfileRepository {
     String? phone,
   }) async {
     try {
-      // Step 1: Create auth user with full_name in metadata.
-      final response = await SupabaseService.adminClient.auth.admin.createUser(
-        AdminUserAttributes(
-          email: email.trim(),
-          password: password,
-          emailConfirm: true,
-          userMetadata: {'full_name': fullName.trim()},
-        ),
+      // Auth user + profile row are created server-side (admin-user-ops Edge
+      // Function). The service-role key lives only in the function runtime.
+      final userId = await PrivilegedOps.createUser(
+        email: email.trim(),
+        password: password,
+        fullName: fullName.trim(),
+        role: role,
+        teamId: (teamId != null && teamId.isNotEmpty) ? teamId : null,
       );
-
-      final userId = response.user?.id;
       if (userId == null) return 'Failed to create account.';
 
-      // Step 2: Wait for trigger to insert the profile row, then update role
-      await Future.delayed(const Duration(milliseconds: 800));
-      await SupabaseService.adminClient.from('profiles').upsert({
-        'id': userId,
-        'full_name': fullName.trim(),
-        'role': role,
-        'status': 'active',
-        if (teamId != null && teamId.isNotEmpty) 'team_id': teamId,
-      });
-
-      // Step 3: If role is client, ensure client_profiles row exists
+      // If role is client, ensure client_profiles row exists (RLS: admin write).
       if (role == 'client') {
         final compName = (companyName != null && companyName.trim().isNotEmpty)
             ? companyName.trim()
@@ -153,7 +142,7 @@ class ProfileRepository {
             ? contactPerson.trim()
             : fullName.trim();
 
-        await SupabaseService.adminClient.from('client_profiles').upsert({
+        await _client.from('client_profiles').upsert({
           'id': userId,
           'company_name': compName,
           'contact_person': contactP,
@@ -186,7 +175,7 @@ class ProfileRepository {
   /// Fetch active employees that can be promoted (role == 'employee').
   static Future<List<ProfileModel>> fetchPromotable() async {
     try {
-      final data = await SupabaseService.adminClient
+      final data = await _client
           .from('profiles')
           .select()
           .eq('role', 'employee')
@@ -202,10 +191,8 @@ class ProfileRepository {
   /// Returns null on success, or a user-readable error message on failure.
   static Future<String?> updateRole(String userId, String role) async {
     try {
-      await SupabaseService.adminClient
-          .from('profiles')
-          .update({'role': role})
-          .eq('id', userId);
+      // Role change is privileged (super_admin grants gated server-side).
+      await PrivilegedOps.updateUser(userId: userId, role: role);
 
       try {
         await NotificationRepository.notifyAction(
@@ -231,13 +218,10 @@ class ProfileRepository {
     }
   }
 
-  /// Fetch the auth email for a user (requires admin client).
+  /// Fetch the auth email for a user (server-side, behind the admin gate).
   static Future<String?> fetchEmail(String userId) async {
     try {
-      final res = await SupabaseService.adminClient.auth.admin.getUserById(
-        userId,
-      );
-      return res.user?.email;
+      return await PrivilegedOps.fetchEmail(userId);
     } catch (_) {
       return null;
     }
@@ -255,32 +239,19 @@ class ProfileRepository {
     String? status,
   }) async {
     try {
-      // 1. Update auth user if email or password changed
-      final attrs = AdminUserAttributes(
+      // Auth change (email/password) + privileged profile fields (role/status)
+      // + name/phone all happen server-side in one admin-gated call.
+      await PrivilegedOps.updateUser(
+        userId: userId,
         email: (email != null && email.isNotEmpty) ? email : null,
         password: (newPassword != null && newPassword.isNotEmpty)
             ? newPassword
             : null,
+        fullName: fullName,
+        role: role,
+        status: status,
+        phone: phone?.isEmpty == true ? null : phone,
       );
-      if (attrs.email != null || attrs.password != null) {
-        await SupabaseService.adminClient.auth.admin.updateUserById(
-          userId,
-          attributes: attrs,
-        );
-      }
-
-      // 2. Update profile row
-      final updates = <String, dynamic>{
-        'full_name': fullName,
-        'phone': phone?.isEmpty == true ? null : phone,
-        'updated_at': DateTime.now().toIso8601String(),
-        'role': ?role,
-        'status': ?status,
-      };
-      await SupabaseService.adminClient
-          .from('profiles')
-          .update(updates)
-          .eq('id', userId);
 
       if (role != null || status != null) {
         try {

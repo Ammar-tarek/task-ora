@@ -14,7 +14,6 @@ import 'app_settings_repository.dart';
 
 class TaskRepository {
   static final _client = SupabaseService.client;
-  static final _adminClient = SupabaseService.adminClient;
 
   // ── Task select fragment (reused across methods) ────────────────────────────
   static const _taskSelect =
@@ -57,7 +56,9 @@ class TaskRepository {
         if (cutoffDt != null) {
           tasks.removeWhere((t) {
             final dtStr = t.createdAt;
-            final dt = DateTime.tryParse(dtStr.length >= 10 ? dtStr.substring(0, 10) : dtStr);
+            final dt = DateTime.tryParse(
+              dtStr.length >= 10 ? dtStr.substring(0, 10) : dtStr,
+            );
             if (dt == null) return false;
             return dt.isBefore(cutoffDt);
           });
@@ -79,7 +80,7 @@ class TaskRepository {
 
     try {
       // 1. Fetch unarchived completed tasks
-      final unarchivedRes = await _adminClient
+      final unarchivedRes = await _client
           .from('tasks')
           .select('id')
           .eq('status', 'completed')
@@ -89,7 +90,7 @@ class TaskRepository {
       final totalToArchive = unarchivedList.length;
 
       // 2. Fetch already archived completed tasks (for summary count)
-      final alreadyArchivedRes = await _adminClient
+      final alreadyArchivedRes = await _client
           .from('tasks')
           .select('id')
           .eq('status', 'completed')
@@ -98,9 +99,10 @@ class TaskRepository {
       final skippedCount = (alreadyArchivedRes as List<dynamic>? ?? []).length;
 
       if (totalToArchive > 0) {
-        final idsToArchive =
-            unarchivedList.map((t) => t['id'] as String).toList();
-        await _adminClient
+        final idsToArchive = unarchivedList
+            .map((t) => t['id'] as String)
+            .toList();
+        await _client
             .from('tasks')
             .update({
               'is_archived': true,
@@ -128,10 +130,14 @@ class TaskRepository {
   }
 
   /// Selective archive a single task regardless of status.
-  static Future<bool> archiveTask(String taskId, {required String profileId}) async {
+  static Future<bool> archiveTask(
+    String taskId, {
+    required String profileId,
+  }) async {
     final now = DateTime.now().toIso8601String();
     try {
-      await _adminClient
+      // RLS client: a manager can archive only their own team's task; admin any.
+      await _client
           .from('tasks')
           .update({
             'is_archived': true,
@@ -160,7 +166,7 @@ class TaskRepository {
           i,
           (i + 500 > taskIds.length) ? taskIds.length : i + 500,
         );
-        await _adminClient
+        await _client
             .from('tasks')
             .update({
               'is_archived': true,
@@ -190,7 +196,7 @@ class TaskRepository {
           i,
           (i + 500 > taskIds.length) ? taskIds.length : i + 500,
         );
-        await _adminClient
+        await _client
             .from('tasks')
             .update({
               'status': 'completed',
@@ -231,10 +237,7 @@ class TaskRepository {
           i,
           (i + 500 > taskIds.length) ? taskIds.length : i + 500,
         );
-        await _adminClient
-            .from('tasks')
-            .update(updatePayload)
-            .inFilter('id', chunk);
+        await _client.from('tasks').update(updatePayload).inFilter('id', chunk);
       }
       return null;
     } catch (e, stack) {
@@ -250,7 +253,7 @@ class TaskRepository {
     String? statusFilter,
   }) async {
     try {
-      dynamic query = _adminClient
+      dynamic query = _client
           .from('tasks')
           .select('id')
           .or('is_archived.is.null,is_archived.eq.false');
@@ -260,12 +263,26 @@ class TaskRepository {
       }
 
       if (startDate != null) {
-        final startIso = DateTime(startDate.year, startDate.month, startDate.day, 0, 0, 0).toIso8601String();
+        final startIso = DateTime(
+          startDate.year,
+          startDate.month,
+          startDate.day,
+          0,
+          0,
+          0,
+        ).toIso8601String();
         query = query.gte('created_at', startIso);
       }
 
       if (endDate != null) {
-        final endIso = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59).toIso8601String();
+        final endIso = DateTime(
+          endDate.year,
+          endDate.month,
+          endDate.day,
+          23,
+          59,
+          59,
+        ).toIso8601String();
         query = query.lte('created_at', endIso);
       }
 
@@ -286,7 +303,7 @@ class TaskRepository {
     final now = DateTime.now().toIso8601String();
 
     try {
-      dynamic query = _adminClient
+      dynamic query = _client
           .from('tasks')
           .select('id')
           .or('is_archived.is.null,is_archived.eq.false');
@@ -296,12 +313,26 @@ class TaskRepository {
       }
 
       if (startDate != null) {
-        final startIso = DateTime(startDate.year, startDate.month, startDate.day, 0, 0, 0).toIso8601String();
+        final startIso = DateTime(
+          startDate.year,
+          startDate.month,
+          startDate.day,
+          0,
+          0,
+          0,
+        ).toIso8601String();
         query = query.gte('created_at', startIso);
       }
 
       if (endDate != null) {
-        final endIso = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59).toIso8601String();
+        final endIso = DateTime(
+          endDate.year,
+          endDate.month,
+          endDate.day,
+          23,
+          59,
+          59,
+        ).toIso8601String();
         query = query.lte('created_at', endIso);
       }
 
@@ -310,14 +341,15 @@ class TaskRepository {
       final totalToArchive = unarchivedList.length;
 
       if (totalToArchive > 0) {
-        final idsToArchive =
-            unarchivedList.map((t) => t['id'] as String).toList();
+        final idsToArchive = unarchivedList
+            .map((t) => t['id'] as String)
+            .toList();
         for (var i = 0; i < idsToArchive.length; i += 500) {
           final chunk = idsToArchive.sublist(
             i,
             (i + 500 > idsToArchive.length) ? idsToArchive.length : i + 500,
           );
-          await _adminClient
+          await _client
               .from('tasks')
               .update({
                 'is_archived': true,
@@ -329,17 +361,9 @@ class TaskRepository {
         }
       }
 
-      return {
-        'archivedCount': totalToArchive,
-        'timestamp': now,
-        'error': null,
-      };
+      return {'archivedCount': totalToArchive, 'timestamp': now, 'error': null};
     } catch (e) {
-      return {
-        'archivedCount': 0,
-        'timestamp': now,
-        'error': e.toString(),
-      };
+      return {'archivedCount': 0, 'timestamp': now, 'error': e.toString()};
     }
   }
 
@@ -348,7 +372,7 @@ class TaskRepository {
     if (taskIds.isEmpty) return true;
     final now = DateTime.now().toIso8601String();
     try {
-      await _adminClient
+      await _client
           .from('tasks')
           .update({
             'is_archived': false,
@@ -366,7 +390,7 @@ class TaskRepository {
   /// Fetch all archived tasks (where is_archived = true).
   static Future<List<TaskModel>> fetchArchivedTasks() async {
     try {
-      final data = await _adminClient
+      final data = await _client
           .from('tasks')
           .select(_taskSelect)
           .eq('is_archived', true)
@@ -374,7 +398,7 @@ class TaskRepository {
       return (data as List).map((m) => TaskModel.fromMap(m)).toList();
     } catch (_) {
       try {
-        final data = await _adminClient
+        final data = await _client
             .from('tasks')
             .select('*')
             .eq('is_archived', true)
@@ -425,19 +449,15 @@ class TaskRepository {
     required String byProfileId,
     String? note,
   }) async {
-    await _adminClient
-        .from('tasks')
-        .update({
-          'team_id': null,
-          'handoff_from_team_id': fromTeamId,
-          'handoff_to_team_id': toTeamId,
-          'handoff_by': byProfileId,
-          'handoff_note': note,
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', taskId);
-    // Remove old assignees — new department will reassign.
-    await _adminClient.from('task_assignees').delete().eq('task_id', taskId);
+    // Secure handoff via SECURITY DEFINER RPC: validates caller, source team,
+    // destination (exists+active), handoff state and concurrency; clears
+    // assignees; writes audit. NO service-role fallback — if the RPC is not
+    // deployed this throws and no insecure write happens.
+    // DEPLOYMENT DEPENDENCY: apply PROPOSED_handoff_rpcs.sql.
+    await _client.rpc(
+      'handoff_task',
+      params: {'p_task_id': taskId, 'p_to_team_id': toTeamId, 'p_note': note},
+    );
 
     // Send notifications to target & source team leads, managers, and admins
     try {
@@ -450,7 +470,7 @@ class TaskRepository {
         recipients.add(toTeam!.teamLeadId!);
       }
 
-      final targetManagers = await _adminClient
+      final targetManagers = await _client
           .from('profiles')
           .select('id')
           .eq('team_id', toTeamId)
@@ -463,7 +483,7 @@ class TaskRepository {
       if (fromTeam?.teamLeadId != null) {
         recipients.add(fromTeam!.teamLeadId!);
       }
-      final sourceManagers = await _adminClient
+      final sourceManagers = await _client
           .from('profiles')
           .select('id')
           .eq('team_id', fromTeamId)
@@ -472,7 +492,7 @@ class TaskRepository {
         recipients.add(row['id'] as String);
       }
 
-      final adminRows = await _adminClient
+      final adminRows = await _client
           .from('profiles')
           .select('id')
           .eq('role', 'admin');
@@ -505,38 +525,17 @@ class TaskRepository {
   }) async {
     if (tasks.isEmpty) return null;
     try {
-      final now = DateTime.now().toIso8601String();
-      final taskIds = tasks.map((t) => t.id).toList();
-
+      // Secure per-task handoff via RPC (no service-role fallback). Each call
+      // validates authority and clears assignees + writes audit server-side.
       for (final task in tasks) {
-        final sourceTeam = task.teamId ?? defaultFromTeamId;
-        final updatePayload = <String, dynamic>{
-          'team_id': null,
-          'handoff_to_team_id': toTeamId,
-          'handoff_by': byProfileId,
-          'handoff_note': note,
-          'updated_at': now,
-        };
-        if (sourceTeam != null && sourceTeam.isNotEmpty) {
-          updatePayload['handoff_from_team_id'] = sourceTeam;
-        }
-
-        await _adminClient
-            .from('tasks')
-            .update(updatePayload)
-            .eq('id', task.id);
-      }
-
-      // Remove old assignees for all moved tasks
-      for (var i = 0; i < taskIds.length; i += 500) {
-        final chunk = taskIds.sublist(
-          i,
-          (i + 500 > taskIds.length) ? taskIds.length : i + 500,
+        await _client.rpc(
+          'handoff_task',
+          params: {
+            'p_task_id': task.id,
+            'p_to_team_id': toTeamId,
+            'p_note': note,
+          },
         );
-        await _adminClient
-            .from('task_assignees')
-            .delete()
-            .inFilter('task_id', chunk);
       }
 
       // Send notifications (best effort)
@@ -548,7 +547,7 @@ class TaskRepository {
           recipients.add(toTeam!.teamLeadId!);
         }
 
-        final targetManagers = await _adminClient
+        final targetManagers = await _client
             .from('profiles')
             .select('id')
             .eq('team_id', toTeamId)
@@ -557,7 +556,7 @@ class TaskRepository {
           recipients.add(row['id'] as String);
         }
 
-        final adminRows = await _adminClient
+        final adminRows = await _client
             .from('profiles')
             .select('id')
             .eq('role', 'admin');
@@ -574,7 +573,7 @@ class TaskRepository {
             body:
                 '$count task(s) have been moved to ${toTeam?.name ?? "another department"}.',
             referenceType: 'task',
-            referenceId: taskIds.first,
+            referenceId: tasks.first.id,
           );
         }
       } catch (err) {
@@ -599,14 +598,9 @@ class TaskRepository {
     final title = taskData?['title'] as String? ?? 'Task';
     final fromTeamId = taskData?['handoff_from_team_id'] as String?;
 
-    await _adminClient
-        .from('tasks')
-        .update({
-          'team_id': teamId,
-          'handoff_to_team_id': null,
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', taskId);
+    // Secure accept via RPC: validates caller is dest-team manager/admin,
+    // handoff state and concurrency; writes audit. No service-role fallback.
+    await _client.rpc('accept_handoff', params: {'p_task_id': taskId});
 
     // 2. Notify source & target managers, leads, and admins that handoff was accepted
     try {
@@ -617,7 +611,7 @@ class TaskRepository {
         recipients.add(toTeam!.teamLeadId!);
       }
 
-      final targetManagers = await _adminClient
+      final targetManagers = await _client
           .from('profiles')
           .select('id')
           .eq('team_id', teamId)
@@ -631,7 +625,7 @@ class TaskRepository {
         if (fromTeam?.teamLeadId != null) {
           recipients.add(fromTeam!.teamLeadId!);
         }
-        final sourceManagers = await _adminClient
+        final sourceManagers = await _client
             .from('profiles')
             .select('id')
             .eq('team_id', fromTeamId)
@@ -641,7 +635,7 @@ class TaskRepository {
         }
       }
 
-      final adminRows = await _adminClient
+      final adminRows = await _client
           .from('profiles')
           .select('id')
           .eq('role', 'admin');
@@ -664,39 +658,29 @@ class TaskRepository {
   }
 
   /// Target manager or admin rejects a handoff. The task turns back to the original department.
-  static Future<void> rejectHandoff({
-    required String taskId,
-  }) async {
+  static Future<void> rejectHandoff({required String taskId}) async {
     // 1. Fetch task details BEFORE clearing handoff fields
     final taskData = await fetchTaskDetail(taskId);
     final title = taskData?['title'] as String? ?? 'Task';
     final fromTeamId = taskData?['handoff_from_team_id'] as String?;
     final toTeamId = taskData?['handoff_to_team_id'] as String?;
 
-    final updatePayload = <String, dynamic>{
-      'handoff_to_team_id': null,
-      'handoff_from_team_id': null,
-      'updated_at': DateTime.now().toIso8601String(),
-    };
-    if (fromTeamId != null) {
-      updatePayload['team_id'] = fromTeamId;
-    }
-
-    await _adminClient
-        .from('tasks')
-        .update(updatePayload)
-        .eq('id', taskId);
+    // Secure reject via RPC: validates caller is dest-team manager/admin,
+    // handoff state and concurrency; returns task to source; writes audit.
+    await _client.rpc('reject_handoff', params: {'p_task_id': taskId});
 
     // 2. Notify source & target managers, leads, and admins that handoff was rejected
     try {
-      final fromTeam = fromTeamId != null ? await TeamRepository.fetchById(fromTeamId) : null;
+      final fromTeam = fromTeamId != null
+          ? await TeamRepository.fetchById(fromTeamId)
+          : null;
       final recipients = <String>{};
 
       if (fromTeamId != null) {
         if (fromTeam?.teamLeadId != null) {
           recipients.add(fromTeam!.teamLeadId!);
         }
-        final sourceManagers = await _adminClient
+        final sourceManagers = await _client
             .from('profiles')
             .select('id')
             .eq('team_id', fromTeamId)
@@ -711,7 +695,7 @@ class TaskRepository {
         if (toTeam?.teamLeadId != null) {
           recipients.add(toTeam!.teamLeadId!);
         }
-        final targetManagers = await _adminClient
+        final targetManagers = await _client
             .from('profiles')
             .select('id')
             .eq('team_id', toTeamId)
@@ -721,7 +705,7 @@ class TaskRepository {
         }
       }
 
-      final adminRows = await _adminClient
+      final adminRows = await _client
           .from('profiles')
           .select('id')
           .eq('role', 'admin');
@@ -749,7 +733,7 @@ class TaskRepository {
     // Employees see ONLY tasks explicitly assigned to them — never all team
     // tasks. A moved task stays hidden until the manager assigns them.
     try {
-      final assigneeRows = await _adminClient
+      final assigneeRows = await _client
           .from('task_assignees')
           .select('task_id')
           .eq('profile_id', profile.id);
@@ -759,7 +743,7 @@ class TaskRepository {
           .toList();
       if (ids.isEmpty) return [];
 
-      final data = await _adminClient
+      final data = await _client
           .from('tasks')
           .select(_taskSelect)
           .inFilter('id', ids)
@@ -772,7 +756,7 @@ class TaskRepository {
 
   static Future<List<TaskModel>> _fetchClientTasks(ProfileModel profile) async {
     try {
-      final data = await _adminClient
+      final data = await _client
           .from('tasks')
           .select(_taskSelect)
           .eq('client_id', profile.id)
@@ -781,7 +765,7 @@ class TaskRepository {
       return (data as List).map((m) => TaskModel.fromMap(m)).toList();
     } catch (_) {
       try {
-        final data = await _adminClient
+        final data = await _client
             .from('tasks')
             .select('*')
             .eq('client_id', profile.id)
@@ -875,7 +859,7 @@ class TaskRepository {
             task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url)),
             task_comments(id, content, is_internal, created_at, author:profiles(full_name)),
             task_attachments(id, file_name, file_url, file_type, is_client_visible),
-            task_approvals(id, employee_done_at, client_decision, client_reviewed_at)
+            task_approvals(id, employee_done_at, client_decision, client_reviewed_at, review_decision, review_reason, reviewed_at, reviewer_id)
           ''')
           .eq('id', taskId)
           .single();
@@ -947,14 +931,26 @@ class TaskRepository {
     String summary,
   ) async {
     try {
-      await _client.from('task_audit_log').insert({
-        'task_id': taskId,
-        'actor_id': editedBy,
-        'action': 'edit',
-        'notes': summary,
-      });
+      await _client
+          .from('task_audit_log')
+          .insert(buildAuditInsert(taskId: taskId, actorId: editedBy, notes: summary));
     } catch (_) {}
   }
+
+  /// Build the audit-log insert payload. [actorId] is always the acting user,
+  /// so the row can never be forged for someone else — matching the RLS CHECK
+  /// (actor_id = auth.uid()). Pure + testable.
+  static Map<String, dynamic> buildAuditInsert({
+    required String taskId,
+    required String actorId,
+    required String notes,
+    String action = 'edit',
+  }) => {
+        'task_id': taskId,
+        'actor_id': actorId,
+        'action': action,
+        'notes': notes,
+      };
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Comments
@@ -997,7 +993,9 @@ class TaskRepository {
           final title = taskData['title'] as String? ?? 'Task';
           final teamId = taskData['team_id'] as String?;
           final assignees = taskData['task_assignees'] as List? ?? [];
-          final assigneeIds = assignees.map((a) => a['profile_id'] as String).toList();
+          final assigneeIds = assignees
+              .map((a) => a['profile_id'] as String)
+              .toList();
 
           final authorData = await _client
               .from('profiles')
@@ -1005,7 +1003,9 @@ class TaskRepository {
               .eq('id', authorId)
               .maybeSingle();
           final authorName = authorData?['full_name'] as String? ?? 'A user';
-          final preview = content.length > 50 ? '${content.substring(0, 50)}…' : content;
+          final preview = content.length > 50
+              ? '${content.substring(0, 50)}…'
+              : content;
 
           await NotificationRepository.notifyAction(
             title: 'New Comment on "$title"',
@@ -1030,11 +1030,94 @@ class TaskRepository {
   // CRUD helpers
   // ═══════════════════════════════════════════════════════════════════════════
 
-  static Future<void> updateTaskStatus(String taskId, String newStatus, {String? updatedBy}) async {
+  static Future<void> updateTaskStatus(
+    String taskId,
+    String newStatus, {
+    String? updatedBy,
+  }) async {
     try {
       await _client
           .from('tasks')
           .update({'status': newStatus})
+          .eq('id', taskId);
+      // Status-change notifications are sent by the DB trigger notify_task_status
+      // (single authoritative path). Do NOT notify here or recipients double up.
+    } on PostgrestException catch (e) {
+      throw Exception('Status update failed [${e.code}]: ${e.message}');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Approval workflow (internal review — no client gate)
+  //   employee_done → manager/admin approve → completed
+  //   employee_done → manager/admin reject  → changes_requested (+reason)
+  // Status + task_approvals + audit are written atomically server-side by the
+  // SECURITY DEFINER RPCs. Notifications are sent by the notify_task_status
+  // trigger (NOT from here) so there is a single source and no duplicates.
+  // DEPLOYMENT DEPENDENCY: apply PROPOSED_task_approval_workflow.sql first.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Full name for a profile id (used to show the reviewer). Null on miss.
+  static Future<String?> fetchProfileName(String profileId) async {
+    try {
+      final r = await _client
+          .from('profiles')
+          .select('full_name')
+          .eq('id', profileId)
+          .maybeSingle();
+      return r?['full_name'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Employee submits an assigned task for review (→ 'employee_done').
+  /// Returns null on success, or an error message string on failure.
+  static Future<String?> submitForReview(String taskId) async {
+    try {
+      await _client.rpc('submit_task_for_review', params: {'p_task_id': taskId});
+      return null;
+    } on PostgrestException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Manager (own team) or admin approves or requests changes on a submitted
+  /// task. [approved] true → 'completed'; false → 'changes_requested' and
+  /// [reason] is required. Returns null on success, else an error message.
+  static Future<String?> reviewTask(
+    String taskId, {
+    required bool approved,
+    String? reason,
+  }) async {
+    try {
+      await _client.rpc('review_task', params: {
+        'p_task_id': taskId,
+        'p_decision': approved ? 'approved' : 'changes_requested',
+        'p_reason': reason,
+      });
+      return null;
+    } on PostgrestException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Montage-only: set the reel payment status ('paid' | 'not_paid' | 'done').
+  /// RLS + the payment-guard trigger enforce who may change it (admin or the
+  /// task's team manager); this call just writes and notifies.
+  static Future<void> updatePaymentStatus(
+    String taskId,
+    String paymentStatus, {
+    String? updatedBy,
+  }) async {
+    try {
+      await _client
+          .from('tasks')
+          .update({'payment_status': paymentStatus})
           .eq('id', taskId);
 
       try {
@@ -1043,11 +1126,16 @@ class TaskRepository {
           final title = taskData['title'] as String? ?? 'Task';
           final teamId = taskData['team_id'] as String?;
           final assignees = taskData['task_assignees'] as List? ?? [];
-          final assigneeIds = assignees.map((a) => a['profile_id'] as String).toList();
-
+          final assigneeIds =
+              assignees.map((a) => a['profile_id'] as String).toList();
+          final label = paymentStatus == 'not_paid'
+              ? 'Not Paid'
+              : paymentStatus == 'paid'
+                  ? 'Paid'
+                  : 'Done';
           await NotificationRepository.notifyAction(
-            title: 'Task Status Updated',
-            body: 'Task "$title" status changed to "$newStatus".',
+            title: 'Payment Status Updated',
+            body: 'Task "$title" payment status changed to "$label".',
             type: 'task_status_changed',
             referenceType: 'task',
             referenceId: taskId,
@@ -1058,7 +1146,7 @@ class TaskRepository {
         }
       } catch (_) {}
     } on PostgrestException catch (e) {
-      throw Exception('Status update failed [${e.code}]: ${e.message}');
+      throw Exception('Payment status update failed [${e.code}]: ${e.message}');
     }
   }
 
@@ -1182,7 +1270,7 @@ class TaskRepository {
     bool hiddenFromClient,
   ) async {
     try {
-      await _adminClient
+      await _client
           .from('tasks')
           .update({'hidden_from_client': hiddenFromClient})
           .eq('id', taskId);
@@ -1237,7 +1325,9 @@ class TaskRepository {
         final taskData = await fetchTaskDetail(id);
         if (taskData != null) {
           final assignees = taskData['task_assignees'] as List? ?? [];
-          final assigneeIds = assignees.map((a) => a['profile_id'] as String).toList();
+          final assigneeIds = assignees
+              .map((a) => a['profile_id'] as String)
+              .toList();
           await NotificationRepository.notifyAction(
             title: 'Task Updated',
             body: 'Task "$title" details were updated.',
@@ -1278,27 +1368,8 @@ class TaskRepository {
       if (editedBy != null) {
         await logTaskEdit(id, editedBy, 'Status / progress updated');
       }
-
-      try {
-        final taskData = await fetchTaskDetail(id);
-        if (taskData != null) {
-          final title = taskData['title'] as String? ?? 'Task';
-          final teamId = taskData['team_id'] as String?;
-          final assignees = taskData['task_assignees'] as List? ?? [];
-          final assigneeIds = assignees.map((a) => a['profile_id'] as String).toList();
-
-          await NotificationRepository.notifyAction(
-            title: 'Task Progress Updated',
-            body: 'Task "$title" progress updated to $completionPercentage% ($status).',
-            type: 'task_status_changed',
-            referenceType: 'task',
-            referenceId: id,
-            teamId: teamId,
-            targetUserIds: assigneeIds,
-            actorId: editedBy,
-          );
-        }
-      } catch (_) {}
+      // Status-change notifications come from the DB trigger notify_task_status
+      // (single authoritative path) — no app-side notify here (avoids duplicates).
 
       return true;
     } on PostgrestException catch (e) {
@@ -1319,7 +1390,9 @@ class TaskRepository {
           title = taskData['title'] as String?;
           teamId = taskData['team_id'] as String?;
           final assignees = taskData['task_assignees'] as List? ?? [];
-          assigneeIds = assignees.map((a) => a['profile_id'] as String).toList();
+          assigneeIds = assignees
+              .map((a) => a['profile_id'] as String)
+              .toList();
         }
       } catch (_) {}
 

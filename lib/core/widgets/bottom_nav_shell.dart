@@ -9,6 +9,7 @@ import '../providers/locale_controller.dart';
 import '../providers/theme_controller.dart';
 import '../services/local_notification_service.dart';
 import '../theme/app_theme.dart';
+import 'workspace_header_bar.dart';
 
 class BottomNavShell extends StatefulWidget {
   const BottomNavShell({super.key, required this.shell});
@@ -101,35 +102,36 @@ class _BottomNavShellState extends State<BottomNavShell> {
 
   // All 5 items in branch order (matches StatefulShellRoute branches 0-4).
   static List<BottomNavigationBarItem> get _allItems => [
-        BottomNavigationBarItem(
-          icon: const Icon(Icons.dashboard_outlined),
-          activeIcon: const Icon(Icons.dashboard_rounded),
-          label: S.t('dashboard'),
-        ),
-        BottomNavigationBarItem(
-          icon: const Icon(Icons.check_box_outlined),
-          activeIcon: const Icon(Icons.check_box_rounded),
-          label: S.t('tasks'),
-        ),
-        BottomNavigationBarItem(
-          icon: const Icon(Icons.calendar_month_outlined),
-          activeIcon: const Icon(Icons.calendar_month_rounded),
-          label: S.t('calendar'),
-        ),
-        BottomNavigationBarItem(
-          icon: const Icon(Icons.account_balance_wallet_outlined),
-          activeIcon: const Icon(Icons.account_balance_wallet_rounded),
-          label: S.t('finance'),
-        ),
-        BottomNavigationBarItem(
-          icon: const Icon(Icons.settings_outlined),
-          activeIcon: const Icon(Icons.settings_rounded),
-          label: S.t('settings'),
-        ),
-      ];
+    BottomNavigationBarItem(
+      icon: const Icon(Icons.dashboard_outlined),
+      activeIcon: const Icon(Icons.dashboard_rounded),
+      label: S.t('dashboard'),
+    ),
+    BottomNavigationBarItem(
+      icon: const Icon(Icons.check_box_outlined),
+      activeIcon: const Icon(Icons.check_box_rounded),
+      label: S.t('tasks'),
+    ),
+    BottomNavigationBarItem(
+      icon: const Icon(Icons.calendar_month_outlined),
+      activeIcon: const Icon(Icons.calendar_month_rounded),
+      label: S.t('calendar'),
+    ),
+    BottomNavigationBarItem(
+      icon: const Icon(Icons.account_balance_wallet_outlined),
+      activeIcon: const Icon(Icons.account_balance_wallet_rounded),
+      label: S.t('finance'),
+    ),
+    BottomNavigationBarItem(
+      icon: const Icon(Icons.settings_outlined),
+      activeIcon: const Icon(Icons.settings_rounded),
+      label: S.t('settings'),
+    ),
+  ];
 
   // Branch indices per role (indices map to branches 0-4 in StatefulShellRoute).
   static const _employeeBranchIndices = [0, 1, 2, 4]; // no Finance
+  static const _managerBranchIndices = [0, 1, 2, 4]; // no internal Finance
   static const _clientBranchIndices = [1, 2, 3, 4]; // no Dashboard
 
   @override
@@ -138,6 +140,7 @@ class _BottomNavShellState extends State<BottomNavShell> {
     context.select<LocaleController, Locale>((l) => l.locale);
     final profile = context.select<AuthNotifier, dynamic>((a) => a.profile);
     final isEmployee = profile?.isEmployee ?? false;
+    final isManager = profile?.isManager ?? false;
     final isClient = profile?.isClient ?? false;
     final isDark = AppColors.isDark;
 
@@ -147,6 +150,9 @@ class _BottomNavShellState extends State<BottomNavShell> {
 
     if (isEmployee) {
       branchIndices = _employeeBranchIndices;
+      visibleItems = branchIndices.map((i) => _allItems[i]).toList();
+    } else if (isManager) {
+      branchIndices = _managerBranchIndices;
       visibleItems = branchIndices.map((i) => _allItems[i]).toList();
     } else if (isClient) {
       branchIndices = _clientBranchIndices;
@@ -165,7 +171,14 @@ class _BottomNavShellState extends State<BottomNavShell> {
     final inactiveColor = AppColors.onSurfaceVariant.withValues(alpha: 0.7);
 
     return Scaffold(
-      body: widget.shell,
+      body: Column(
+        children: [
+          // Persistent "return to department selection" control — only renders
+          // for users authorized to switch departments (admins / super admins).
+          const WorkspaceHeaderBar(),
+          Expanded(child: widget.shell),
+        ],
+      ),
       bottomNavigationBar: SafeArea(
         top: false,
         child: RepaintBoundary(

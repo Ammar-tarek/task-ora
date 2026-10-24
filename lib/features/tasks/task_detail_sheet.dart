@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/l10n/app_strings.dart';
 import '../../core/providers/locale_controller.dart';
+import '../../core/providers/workspace_scope_notifier.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/repositories/team_repository.dart';
@@ -24,6 +25,7 @@ import '../../core/utils/task_permissions.dart';
 import '../../core/services/n8n_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'status_options_manager_sheet.dart';
+import 'employee_status_workflow.dart';
 
 class TaskDetailSheet extends StatefulWidget {
   final String taskId;
@@ -83,20 +85,24 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   String? _selectedTeamId;
   List<TeamModel> _teams = [];
 
+  // Montage-only reel payment status: 'paid' | 'not_paid' | 'done'.
+  String? _paymentStatus;
+  String? _initialPaymentStatus;
+  bool _isMontageTask = false;
+
   // Live comment list — built from task + optionally refetched
   List<TaskComment> _comments = [];
+
+  // Review info (from task_approvals): last decision, reason, reviewer name.
+  bool _reviewing = false;
+  String? _reviewDecision; // 'approved' | 'changes_requested'
+  String? _reviewReason;
+  String? _reviewerName;
 
   // Status options loaded from column_status_options
   List<TaskStatusOption> _statusOptions = [];
 
   // Built-in statuses employees are allowed to set
-  static const _employeeAllowed = {
-    'not_started',
-    'in_progress',
-    'employee_done',
-    'on_hold',
-  };
-
   @override
   void initState() {
     super.initState();
@@ -130,6 +136,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       _loading = true;
       _error = null;
     });
+    // Capture scope before any await (avoids using context across async gaps).
+    final scope = context.read<WorkspaceScopeNotifier>();
     try {
       final taskData = await TaskRepository.fetchTaskDetail(widget.taskId);
       if (taskData == null) {
@@ -153,6 +161,28 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       _clientId = task.clientId;
       _selectedTeamId = task.teamId;
       _hiddenFromClient = task.hiddenFromClient;
+      _paymentStatus = task.paymentStatus;
+      _initialPaymentStatus = task.paymentStatus;
+      _isMontageTask = scope.isMontageTeam(task.teamId);
+
+      // Review info from task_approvals (reviewer / decision / reason).
+      final rawAp = taskData['task_approvals'];
+      Map<String, dynamic>? ap;
+      if (rawAp is List && rawAp.isNotEmpty) {
+        ap = rawAp.first as Map<String, dynamic>;
+      } else if (rawAp is Map) {
+        ap = rawAp.cast<String, dynamic>();
+      }
+      _reviewDecision = ap?['review_decision'] as String?;
+      _reviewReason = ap?['review_reason'] as String?;
+      _reviewerName = null;
+      final reviewerId = ap?['reviewer_id'] as String?;
+      if (reviewerId != null) {
+        try {
+          final r = await TaskRepository.fetchProfileName(reviewerId);
+          _reviewerName = r;
+        } catch (_) {}
+      }
 
       // Load clients for picker (admin/manager only)
       if (_perms.canEditFull) {
@@ -290,6 +320,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         assignedBy: currentUid,
       );
 
+      await _persistPaymentIfChanged(currentUid);
+
       // Notify client via n8n → Telegram (fire-and-forget)
       if (_clientId != null) {
         try {
@@ -323,6 +355,95 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     }
   }
 
+  /// Employee submits an assigned task for internal review (→ 'employee_done').
+  /// Writes the submission to task_approvals via the secure RPC.
+  Future<void> _submitForReview() async {
+    setState(() => _reviewing = true);
+    try {
+      final err = await TaskRepository.submitForReview(widget.taskId);
+      if (err != null) {
+        _showSnack(err, isError: true);
+        return;
+      }
+      _showSnack('Submitted for review');
+      widget.onUpdated?.call();
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _reviewing = false);
+    }
+  }
+
+  /// Manager/admin approves an employee-done task → 'completed'.
+  Future<void> _approve() async {
+    setState(() => _reviewing = true);
+    try {
+      final err = await TaskRepository.reviewTask(widget.taskId, approved: true);
+      if (err != null) {
+        _showSnack(err, isError: true);
+        return;
+      }
+      _showSnack('Task approved');
+      widget.onUpdated?.call();
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _reviewing = false);
+    }
+  }
+
+  /// Manager/admin returns an employee-done task for changes (reason required).
+  Future<void> _requestChanges() async {
+    final reasonCtrl = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: const Text('Request Changes'),
+        content: TextField(
+          controller: reasonCtrl,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Reason *',
+            hintText: 'What needs to change before approval?',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, reasonCtrl.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Send Back', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (reason == null) return; // cancelled
+    if (reason.isEmpty) {
+      _showSnack('A reason is required', isError: true);
+      return;
+    }
+    setState(() => _reviewing = true);
+    try {
+      final err = await TaskRepository.reviewTask(
+        widget.taskId,
+        approved: false,
+        reason: reason,
+      );
+      if (err != null) {
+        _showSnack(err, isError: true);
+        return;
+      }
+      _showSnack('Sent back for changes');
+      widget.onUpdated?.call();
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _reviewing = false);
+    }
+  }
+
   Future<void> _saveStatusAndProgress() async {
     setState(() => _saving = true);
     try {
@@ -333,6 +454,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         completionPercentage: _progress.round(),
         editedBy: currentUid,
       );
+      await _persistPaymentIfChanged(currentUid);
       _showSnack('Task updated');
       widget.onUpdated?.call();
       if (mounted) Navigator.pop(context);
@@ -341,6 +463,19 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Montage-only: persist the reel payment status when it changed. The server
+  /// trigger rejects it if the caller is not an admin/team manager.
+  Future<void> _persistPaymentIfChanged(String uid) async {
+    if (!_isMontageTask) return;
+    if (_paymentStatus == null || _paymentStatus == _initialPaymentStatus) return;
+    await TaskRepository.updatePaymentStatus(
+      widget.taskId,
+      _paymentStatus!,
+      updatedBy: uid,
+    );
+    _initialPaymentStatus = _paymentStatus;
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────
@@ -715,6 +850,50 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     );
   }
 
+  /// Banner showing the last review outcome (reviewer, decision, reason).
+  /// Empty when there is nothing to show.
+  List<Widget> _reviewBanner() {
+    final isChanges =
+        _task?.status == 'changes_requested' || _reviewDecision == 'changes_requested';
+    if (_reviewDecision == null && _task?.status != 'changes_requested') {
+      return const [];
+    }
+    final color = isChanges ? AppColors.error : AppColors.statusDone;
+    final title = isChanges ? 'Changes requested' : 'Approved';
+    final who = _reviewerName != null ? ' by $_reviewerName' : '';
+    return [
+      Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(isChanges ? Icons.undo : Icons.verified, size: 16, color: color),
+                const SizedBox(width: 8),
+                Text(
+                  '$title$who',
+                  style: AppTextStyles.labelMd.copyWith(color: color),
+                ),
+              ],
+            ),
+            if (isChanges && (_reviewReason ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(_reviewReason!, style: AppTextStyles.bodySm),
+            ],
+          ],
+        ),
+      ),
+    ];
+  }
+
   Color _statusColor(String s) {
     if (_statusOptions.isNotEmpty) {
       for (final opt in _statusOptions) {
@@ -916,6 +1095,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         ),
         const Divider(height: 24),
 
+        ..._reviewBanner(),
+
         // Title
         TextField(
           controller: _titleCtrl,
@@ -1014,6 +1195,31 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               .toList(),
         ),
         const SizedBox(height: 18),
+
+        // Montage-only reel PAYMENT STATUS selector (Paid / Not Paid / Done).
+        // Distinct from completion status above. Editable by admin/manager;
+        // employees see it read-only (server trigger also enforces this).
+        if (_isMontageTask) ...[
+          _SectionLabel('PAYMENT STATUS'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: TaskModel.montagePaymentOptions
+                .map(
+                  (opt) => _StatusChip(
+                    opt.$1,
+                    opt.$2,
+                    _paymentStatus ?? '',
+                    _perms.canEditFull
+                        ? (v) => setState(() => _paymentStatus = v)
+                        : (_) {},
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 18),
+        ],
 
         // Due date
         _SectionLabel('DUE DATE'),
@@ -1142,6 +1348,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         if (_clientId != null) ...[
           const SizedBox(height: 8),
           Container(
+            // Clip the tile's ink/overlay to the rounded box so the Material
+            // layer and the white background don't overlap at the corners.
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: AppColors.surfaceContainerLowest,
               borderRadius: BorderRadius.circular(8),
@@ -1279,6 +1488,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         ),
         const Divider(height: 24),
 
+        ..._reviewBanner(),
+
         // Description (read-only)
         if ((_task!.description ?? '').isNotEmpty) ...[
           _SectionLabel('DESCRIPTION'),
@@ -1347,8 +1558,15 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         Wrap(
           spacing: 8,
           runSpacing: 6,
-          children: _statusOptions
-              .where((o) => !o.isDefault || _employeeAllowed.contains(o.label))
+          children: (_isMontageTask
+                  // Montage employee: only the built-in allowed workflow states
+                  // (no custom options, no manager/admin states, never
+                  // 'completed' — completion is manager-confirmed).
+                  ? EmployeeStatusWorkflow.montageEmployeeOptions(_statusOptions)
+                  : _statusOptions
+                      .where((o) =>
+                          !o.isDefault ||
+                          EmployeeStatusWorkflow.employeeCanSet(o.label)))
               .map(
                 (opt) => _StatusChip(
                   opt.label,
@@ -1557,7 +1775,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   // ── Action buttons ────────────────────────────────────────────────────────
 
   Widget _buildActions() {
-    final busy = _saving || _deleting || _incrementing;
+    final busy = _saving || _deleting || _incrementing || _reviewing;
 
     // Client — close only
     if (_perms.profile.isClient) {
@@ -1573,25 +1791,52 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       );
     }
 
-    // Employee — cancel + save (status/progress only)
+    // Employee — submit for review + cancel + save (status/progress only)
     if (!_perms.canEditFull) {
+      final canSubmit = _task != null &&
+          const {'not_started', 'in_progress', 'changes_requested', 'on_hold'}
+              .contains(_task!.status);
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        child: Row(
+        child: Column(
           children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: busy ? null : () => Navigator.pop(context),
-                child: const Text('Cancel'),
+            if (canSubmit) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: busy ? null : _submitForReview,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.statusDone,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: _reviewing
+                      ? _Spinner()
+                      : const Icon(Icons.task_alt, size: 18, color: Colors.white),
+                  label: const Text(
+                    'Submit for Review',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton(
-                onPressed: busy ? null : _save,
-                child: _saving ? _Spinner() : const Text('Save Changes'),
-              ),
+              const SizedBox(height: 10),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: busy ? null : () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: busy ? null : _save,
+                    child: _saving ? _Spinner() : const Text('Save Changes'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1603,6 +1848,45 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       child: Column(
         children: [
+          // Internal review: a manager/admin approves a submitted task into
+          // 'completed', or sends it back for changes (reason required). Shown
+          // for any Pending Review task across all departments.
+          if (_task != null && _task!.status == 'employee_done') ...[
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: busy ? null : _approve,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.statusDone,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: _reviewing
+                        ? _Spinner()
+                        : const Icon(Icons.verified, size: 18, color: Colors.white),
+                    label: const Text(
+                      'Approve',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : _requestChanges,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: const BorderSide(color: AppColors.error),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.undo, size: 18),
+                    label: const Text('Request Changes'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           if (widget.onAcceptHandoff != null || widget.onRejectHandoff != null) ...[
             Row(
               children: [

@@ -38,8 +38,16 @@ class PenaltyItem {
     final rawStatus = m['status'] as String?;
     final calcStatus = rawStatus ?? (isApp ? 'approved' : 'pending');
 
-    final empId = m['employee_id'] as String? ?? m['user_id'] as String? ?? m['profile_id'] as String? ?? '';
-    final dateStr = m['penalty_date'] as String? ?? m['date'] as String? ?? m['created_at'] as String? ?? '';
+    final empId =
+        m['employee_id'] as String? ??
+        m['user_id'] as String? ??
+        m['profile_id'] as String? ??
+        '';
+    final dateStr =
+        m['penalty_date'] as String? ??
+        m['date'] as String? ??
+        m['created_at'] as String? ??
+        '';
 
     return PenaltyItem(
       id: m['id'] as String? ?? '',
@@ -59,7 +67,6 @@ class PenaltyItem {
 
 class PenaltyRepository {
   static final _client = SupabaseService.client;
-  static final _admin = SupabaseService.adminClient;
 
   static const _select = '''
     *,
@@ -70,7 +77,7 @@ class PenaltyRepository {
 
   static Future<Map<String, String>> _fetchProfilesMap() async {
     try {
-      final res = await _admin.from('profiles').select('id, full_name');
+      final res = await _client.from('profiles').select('id, full_name');
       final map = <String, String>{};
       for (final r in res as List) {
         map[r['id'] as String] = r['full_name'] as String? ?? 'Unknown';
@@ -83,7 +90,7 @@ class PenaltyRepository {
 
   static Future<Map<String, String>> _fetchTypesMap() async {
     try {
-      final res = await _admin.from('penalty_types').select('id, name');
+      final res = await _client.from('penalty_types').select('id, name');
       final map = <String, String>{};
       for (final r in res as List) {
         map[r['id'] as String] = r['name'] as String? ?? 'Penalty';
@@ -97,12 +104,15 @@ class PenaltyRepository {
   /// All penalties — for admin / manager views.
   /// Pass [teamId] to scope to a specific team's employees.
   /// Pass [issuerId] to include penalties issued or approved by the current user.
-  static Future<List<PenaltyItem>> fetchAll({String? teamId, String? issuerId}) async {
+  static Future<List<PenaltyItem>> fetchAll({
+    String? teamId,
+    String? issuerId,
+  }) async {
     try {
       List<dynamic> data = [];
       try {
         if (teamId != null) {
-          final members = await _admin
+          final members = await _client
               .from('profiles')
               .select('id')
               .eq('team_id', teamId);
@@ -116,13 +126,13 @@ class PenaltyRepository {
             data = [];
           } else if (issuerId != null && issuerId.isNotEmpty) {
             final res1 = idList.isNotEmpty
-                ? await _admin
-                    .from('penalties')
-                    .select(_select)
-                    .inFilter('employee_id', idList)
-                    .order('penalty_date', ascending: false)
+                ? await _client
+                      .from('penalties')
+                      .select(_select)
+                      .inFilter('employee_id', idList)
+                      .order('penalty_date', ascending: false)
                 : [];
-            final res2 = await _admin
+            final res2 = await _client
                 .from('penalties')
                 .select(_select)
                 .eq('approved_by', issuerId)
@@ -137,14 +147,14 @@ class PenaltyRepository {
             }
             data = map.values.toList();
           } else {
-            data = await _admin
+            data = await _client
                 .from('penalties')
                 .select(_select)
                 .inFilter('employee_id', idList)
                 .order('penalty_date', ascending: false);
           }
         } else {
-          data = await _admin
+          data = await _client
               .from('penalties')
               .select(_select)
               .order('penalty_date', ascending: false);
@@ -152,7 +162,7 @@ class PenaltyRepository {
       } catch (_) {
         // Fallback query if relational join fails
         if (teamId != null) {
-          final members = await _admin
+          final members = await _client
               .from('profiles')
               .select('id')
               .eq('team_id', teamId);
@@ -162,14 +172,12 @@ class PenaltyRepository {
           }
           final idList = ids.toList();
           if (idList.isEmpty) return [];
-          data = await _admin
+          data = await _client
               .from('penalties')
               .select()
               .inFilter('employee_id', idList);
         } else {
-          data = await _admin
-              .from('penalties')
-              .select();
+          data = await _client.from('penalties').select();
         }
       }
 
@@ -178,17 +186,24 @@ class PenaltyRepository {
 
       return data.map((m) {
         final itemMap = Map<String, dynamic>.from(m as Map);
-        final empId = itemMap['employee_id'] as String? ?? itemMap['user_id'] as String?;
+        final empId =
+            itemMap['employee_id'] as String? ?? itemMap['user_id'] as String?;
         final typeId = itemMap['penalty_type_id'] as String?;
         final apprId = itemMap['approved_by'] as String?;
 
-        if (itemMap['employee'] == null && empId != null && profiles.containsKey(empId)) {
+        if (itemMap['employee'] == null &&
+            empId != null &&
+            profiles.containsKey(empId)) {
           itemMap['employee'] = {'full_name': profiles[empId]};
         }
-        if (itemMap['penalty_type'] == null && typeId != null && types.containsKey(typeId)) {
+        if (itemMap['penalty_type'] == null &&
+            typeId != null &&
+            types.containsKey(typeId)) {
           itemMap['penalty_type'] = {'name': types[typeId]};
         }
-        if (itemMap['approver'] == null && apprId != null && profiles.containsKey(apprId)) {
+        if (itemMap['approver'] == null &&
+            apprId != null &&
+            profiles.containsKey(apprId)) {
           itemMap['approver'] = {'full_name': profiles[apprId]};
         }
 
@@ -205,21 +220,21 @@ class PenaltyRepository {
     try {
       List<dynamic> data = [];
       try {
-        data = await _admin
+        data = await _client
             .from('penalties')
             .select(_select)
             .eq('employee_id', employeeId)
             .order('penalty_date', ascending: false);
       } catch (_) {
         try {
-          data = await _admin
+          data = await _client
               .from('penalties')
               .select()
               .eq('employee_id', employeeId)
               .order('penalty_date', ascending: false);
         } catch (_) {
           try {
-            data = await _admin
+            data = await _client
                 .from('penalties')
                 .select()
                 .eq('employee_id', employeeId);
@@ -242,17 +257,24 @@ class PenaltyRepository {
 
       return data.map((m) {
         final itemMap = Map<String, dynamic>.from(m as Map);
-        final empId = itemMap['employee_id'] as String? ?? itemMap['user_id'] as String?;
+        final empId =
+            itemMap['employee_id'] as String? ?? itemMap['user_id'] as String?;
         final typeId = itemMap['penalty_type_id'] as String?;
         final apprId = itemMap['approved_by'] as String?;
 
-        if (itemMap['employee'] == null && empId != null && profiles.containsKey(empId)) {
+        if (itemMap['employee'] == null &&
+            empId != null &&
+            profiles.containsKey(empId)) {
           itemMap['employee'] = {'full_name': profiles[empId]};
         }
-        if (itemMap['penalty_type'] == null && typeId != null && types.containsKey(typeId)) {
+        if (itemMap['penalty_type'] == null &&
+            typeId != null &&
+            types.containsKey(typeId)) {
           itemMap['penalty_type'] = {'name': types[typeId]};
         }
-        if (itemMap['approver'] == null && apprId != null && profiles.containsKey(apprId)) {
+        if (itemMap['approver'] == null &&
+            apprId != null &&
+            profiles.containsKey(apprId)) {
           itemMap['approver'] = {'full_name': profiles[apprId]};
         }
 
@@ -265,10 +287,7 @@ class PenaltyRepository {
 
   static Future<List<Map<String, dynamic>>> fetchTypes() async {
     try {
-      final data = await _admin
-          .from('penalty_types')
-          .select()
-          .order('name');
+      final data = await _client.from('penalty_types').select().order('name');
       final list = List<Map<String, dynamic>>.from(data as List);
       if (list.isNotEmpty) return list;
 
@@ -277,10 +296,16 @@ class PenaltyRepository {
         final defaults = [
           {'name': 'Late Arrival', 'description': 'Late arrival penalty'},
           {'name': 'Unexcused Absence', 'description': 'Absence penalty'},
-          {'name': 'Policy Violation', 'description': 'Policy violation penalty'},
+          {
+            'name': 'Policy Violation',
+            'description': 'Policy violation penalty',
+          },
           {'name': 'Other / General', 'description': 'General penalty'},
         ];
-        final inserted = await _admin.from('penalty_types').insert(defaults).select();
+        final inserted = await _client
+            .from('penalty_types')
+            .insert(defaults)
+            .select();
         final insertedList = List<Map<String, dynamic>>.from(inserted as List);
         if (insertedList.isNotEmpty) return insertedList;
       } catch (_) {}
@@ -309,7 +334,7 @@ class PenaltyRepository {
     try {
       if (teamId != null) {
         try {
-          final data = await _admin
+          final data = await _client
               .from('profiles')
               .select('id, full_name, role')
               .neq('role', 'client')
@@ -321,7 +346,7 @@ class PenaltyRepository {
       }
 
       // Fetch all non-client profiles
-      final data = await _admin
+      final data = await _client
           .from('profiles')
           .select('id, full_name, role')
           .neq('role', 'client')
@@ -330,14 +355,14 @@ class PenaltyRepository {
       if (list.isNotEmpty) return list;
 
       // Basic fallback select id, full_name
-      final basicData = await _admin
+      final basicData = await _client
           .from('profiles')
           .select('id, full_name')
           .order('full_name');
       return List<Map<String, dynamic>>.from(basicData as List);
     } catch (_) {
       try {
-        final basicData = await _admin
+        final basicData = await _client
             .from('profiles')
             .select('id, full_name');
         return List<Map<String, dynamic>>.from(basicData as List);
@@ -348,10 +373,13 @@ class PenaltyRepository {
   }
 
   /// Approve & Apply penalty deduction
-  static Future<void> approvePenalty(String penaltyId, {String? actorId}) async {
+  static Future<void> approvePenalty(
+    String penaltyId, {
+    String? actorId,
+  }) async {
     try {
       try {
-        await _admin
+        await _client
             .from('penalties')
             .update({
               'is_applied': true,
@@ -360,7 +388,7 @@ class PenaltyRepository {
             })
             .eq('id', penaltyId);
       } catch (_) {
-        await _admin
+        await _client
             .from('penalties')
             .update({
               'is_applied': true,
@@ -372,7 +400,7 @@ class PenaltyRepository {
       }
 
       try {
-        final p = await _admin
+        final p = await _client
             .from('penalties')
             .select('employee_id, amount, reason')
             .eq('id', penaltyId)
@@ -384,7 +412,8 @@ class PenaltyRepository {
           if (empId != null) {
             await NotificationRepository.notifyAction(
               title: '✅ Penalty Approved',
-              body: 'Your penalty of \$$amt ($reason) has been approved and applied.',
+              body:
+                  'Your penalty of \$$amt ($reason) has been approved and applied.',
               type: 'penalty_applied',
               referenceType: 'penalty',
               referenceId: penaltyId,
@@ -401,24 +430,19 @@ class PenaltyRepository {
   static Future<void> rejectPenalty(String penaltyId, {String? actorId}) async {
     try {
       try {
-        await _admin
+        await _client
             .from('penalties')
-            .update({
-              'is_applied': false,
-            })
+            .update({'is_applied': false})
             .eq('id', penaltyId);
       } catch (_) {
-        await _admin
+        await _client
             .from('penalties')
-            .update({
-              'is_applied': false,
-              'status': 'rejected',
-            })
+            .update({'is_applied': false, 'status': 'rejected'})
             .eq('id', penaltyId);
       }
 
       try {
-        final p = await _admin
+        final p = await _client
             .from('penalties')
             .select('employee_id, amount, reason')
             .eq('id', penaltyId)
@@ -447,7 +471,13 @@ class PenaltyRepository {
     await approvePenalty(penaltyId);
   }
 
-  static Future<void> _sendPenaltyNotif(String? pId, String employeeId, double amount, String reason, String actorId) async {
+  static Future<void> _sendPenaltyNotif(
+    String? pId,
+    String employeeId,
+    double amount,
+    String reason,
+    String actorId,
+  ) async {
     try {
       await NotificationRepository.notifyAction(
         title: '⚠️ Penalty Logged',
@@ -469,19 +499,28 @@ class PenaltyRepository {
     required String approvedBy,
     required String date,
   }) async {
-    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    final uuidRegex = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    );
 
     String resolvedTypeId = penaltyTypeId;
     if (!uuidRegex.hasMatch(resolvedTypeId)) {
       try {
-        final existing = await _admin.from('penalty_types').select('id').limit(1);
+        final existing = await _client
+            .from('penalty_types')
+            .select('id')
+            .limit(1);
         if ((existing as List).isNotEmpty) {
           resolvedTypeId = existing.first['id'] as String;
         } else {
-          final newType = await _admin.from('penalty_types').insert({
-            'name': 'General Penalty',
-            'description': 'General system penalty type',
-          }).select('id').single();
+          final newType = await _client
+              .from('penalty_types')
+              .insert({
+                'name': 'General Penalty',
+                'description': 'General system penalty type',
+              })
+              .select('id')
+              .single();
           resolvedTypeId = newType['id'] as String;
         }
       } catch (_) {}
@@ -489,7 +528,7 @@ class PenaltyRepository {
 
     String resolvedApprovedBy = approvedBy;
     if (!uuidRegex.hasMatch(resolvedApprovedBy)) {
-      final currentUser = _admin.auth.currentUser;
+      final currentUser = _client.auth.currentUser;
       if (currentUser != null && uuidRegex.hasMatch(currentUser.id)) {
         resolvedApprovedBy = currentUser.id;
       } else if (uuidRegex.hasMatch(employeeId)) {
@@ -513,17 +552,38 @@ class PenaltyRepository {
 
     try {
       // 1. Try standard database payload matching public.penalties schema
-      final res = await _admin.from('penalties').insert(payload).select('id').maybeSingle();
+      final res = await _client
+          .from('penalties')
+          .insert(payload)
+          .select('id')
+          .maybeSingle();
       final pId = res?['id'] as String?;
-      await _sendPenaltyNotif(pId, employeeId, amount, reason, resolvedApprovedBy);
+      await _sendPenaltyNotif(
+        pId,
+        employeeId,
+        amount,
+        reason,
+        resolvedApprovedBy,
+      );
       return true;
     } catch (_) {
       try {
         // 2. Try payload with status column if table was altered with status column
-        final fullPayload = Map<String, dynamic>.from(payload)..['status'] = 'pending';
-        final res = await _admin.from('penalties').insert(fullPayload).select('id').maybeSingle();
+        final fullPayload = Map<String, dynamic>.from(payload)
+          ..['status'] = 'pending';
+        final res = await _client
+            .from('penalties')
+            .insert(fullPayload)
+            .select('id')
+            .maybeSingle();
         final pId = res?['id'] as String?;
-        await _sendPenaltyNotif(pId, employeeId, amount, reason, resolvedApprovedBy);
+        await _sendPenaltyNotif(
+          pId,
+          employeeId,
+          amount,
+          reason,
+          resolvedApprovedBy,
+        );
         return true;
       } catch (_) {
         return false;
@@ -533,8 +593,7 @@ class PenaltyRepository {
 
   static Future<void> deletePenalty(String penaltyId) async {
     try {
-      await _admin.from('penalties').delete().eq('id', penaltyId);
+      await _client.from('penalties').delete().eq('id', penaltyId);
     } catch (_) {}
   }
 }
-

@@ -14,6 +14,14 @@ class ProfileModel {
   final String preferredLanguage;
   final String createdAt;
 
+  /// Verified global-admin flag, sourced from the DB column
+  /// `profiles.is_super_admin` (added by the department migration). Super Admin
+  /// is modeled as an admin with this flag set — never as a free-text role
+  /// string — so the tier cannot be spoofed via the `role` enum. Defaults to
+  /// false, including before the column exists, so behavior is unchanged until
+  /// the migration lands.
+  final bool isSuperAdminFlag;
+
   const ProfileModel({
     required this.id,
     required this.role,
@@ -26,6 +34,7 @@ class ProfileModel {
     required this.timezone,
     required this.preferredLanguage,
     required this.createdAt,
+    this.isSuperAdminFlag = false,
   });
 
   factory ProfileModel.fromMap(Map<String, dynamic> m) => ProfileModel(
@@ -40,14 +49,19 @@ class ProfileModel {
     timezone: m['timezone'] as String? ?? 'UTC',
     preferredLanguage: m['preferred_language'] as String? ?? 'en',
     createdAt: m['created_at'] as String? ?? '',
+    isSuperAdminFlag: m['is_super_admin'] as bool? ?? false,
   );
 
-  bool get isSuperAdmin => role == 'super_admin';
-  bool get isAdmin => role == 'admin' || role == 'super_admin';
+  /// True when the user holds the verified global Super Admin flag. The legacy
+  /// `role == 'super_admin'` string is still honored for forward/backward
+  /// compatibility, but the DB enum has no such value, so the flag is the real
+  /// source of truth.
+  bool get isSuperAdmin => isSuperAdminFlag || role == 'super_admin';
+  bool get isAdmin => role == 'admin' || isSuperAdmin;
   bool get isManager => role == 'manager';
   bool get isEmployee => role == 'employee';
   bool get isClient => role == 'client';
-  bool get isAdminOrManager => role == 'admin' || role == 'super_admin' || role == 'manager';
+  bool get isAdminOrManager => isAdmin || isManager;
   bool get isActive => status == 'active';
 
   /// First name for greeting

@@ -1,0 +1,53 @@
+-- ============================================================================
+-- PROPOSED (NOT APPLIED) — Expenses write authorization. Pick ONE. Decision.
+--
+-- Current state: expense_repository create/approve/reject/delete run via the
+-- service-role client (RLS bypass). `expenses` RLS has ONE policy: admin-only
+-- ("Admin only on expenses" USING is_global_admin()). The UI gates the expense
+-- screen by team_privileges.can_manage_expenses, so MANAGERS can manage
+-- expenses today — only because service-role bypasses RLS.
+--
+-- What breaks if we move expense writes to _client WITHOUT a policy change:
+--   createExpense, approveExpense, rejectExpense, deleteExpense by a MANAGER
+--   -> all rejected by RLS (admin-only). Admin writes keep working.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- OPTION A — Expenses are admin-only (tightest).
+-- No new policy. After choosing A, convert expense_repository writes to _client.
+-- Effect: only admins/super-admins create/approve/reject/delete expenses.
+-- Managers lose expense write (and keep seeing 0 expenses, matching the current
+-- manager finance behavior). Simplest; fewest moving parts.
+-- (No SQL needed beyond the app-side _client switch.)
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- OPTION B — Managers manage ONLY their own team's expenses (NOT company-wide).
+-- Adds a team-scoped write+read policy; admins keep global via the existing
+-- admin policy. Then convert expense_repository writes to _client.
+-- Scope = expenses whose recorder (recorded_by) is a member of the manager's
+-- team. This is NOT company-wide access.
+-- NOTE: this also lets managers READ their team's expenses (reverses the
+-- earlier "managers see 0 expenses" finance behavior) — a product change.
+-- ----------------------------------------------------------------------------
+-- CREATE POLICY "manager_team_expenses" ON public.expenses
+--   FOR ALL
+--   USING (
+--     public.is_manager()
+--     AND recorded_by IN (SELECT id FROM public.manager_member_ids())
+--   )
+--   WITH CHECK (
+--     public.is_manager()
+--     AND recorded_by IN (SELECT id FROM public.manager_member_ids())
+--   );
+
+-- ----------------------------------------------------------------------------
+-- RECOMMENDATION: Option B.
+-- The product already exposes expense management to managers (gated by
+-- team_privileges.can_manage_expenses), so A would silently remove a real
+-- manager feature. B keeps that feature, enforced at the DB, with NO
+-- company-wide exposure. Tradeoff: B means managers can see/write their own
+-- team's expenses (the finance expense total for a manager stops being 0).
+-- Confirm that product behavior, then me apply B + convert the writes.
+-- If managers should truly have NO expense role, choose A instead.
+-- ============================================================================

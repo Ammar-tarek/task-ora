@@ -1,0 +1,25 @@
+{
+  "note": "Pre-migration recoverable snapshot of tables affected by PROPOSED_calendar_department.sql (events, teams). Project ref csncaoqvercxvbfbzbfa. Events have no team_id yet. Restore events/teams from here if needed.",
+  "snapshot_at": "2026-10-21T21:36:50.628294+00:00",
+  "counts": { "teams": 5, "events": 29, "event_attendees": 56 },
+  "teams": [
+    {"id":"c87fe040-382d-43fd-9a80-3ddc798782b6","name":"Montage","department":"Montage","team_lead_id":"3dd18334-8d23-4f7d-bd22-67621d2633e6","is_active":true},
+    {"id":"f398bbb2-f5c2-4a1c-852e-745c911c1264","name":"Marketing","department":"Marketing","team_lead_id":"3dd18334-8d23-4f7d-bd22-67621d2633e6","is_active":true},
+    {"id":"4b6cdddd-69b6-432c-9a77-f290c7f97b49","name":"Admins","department":null,"team_lead_id":"3dd18334-8d23-4f7d-bd22-67621d2633e6","is_active":true},
+    {"id":"794f294c-77cc-4845-b8ba-b5fa9198fd55","name":"Video Production","department":"Video Production","team_lead_id":"1cd0976f-8363-4be2-af62-d0205d43c29c","is_active":true},
+    {"id":"94cb8533-fcf2-4c56-975f-2e3e57d7ded2","name":"Sales","department":null,"team_lead_id":"1cd0976f-8363-4be2-af62-d0205d43c29c","is_active":true}
+  ],
+  "events_created_by_map": "29 events; team_id currently absent. Full row detail retained in the session transcript (snapshot query at 2026-10-21T21:36:50Z). created_by values drive the backfill: 22 map to a department team, 7 (admin/Admins-team creators) remain NULL.",
+  "events_ids": [
+    "4ccaa47f-57f7-4d62-a241-653ead59afd4","19d7d392-180f-4718-8247-4f930c6bd2ac","ebfb45c9-a6ac-4b21-843d-26f073abe61a",
+    "67e35e97-38eb-4b72-a5b8-0a2d87e8d60b","8481bb6c-cf7d-4d8d-a0cd-fb8ce0e9536d","406e2726-bb4d-4c42-94db-7cc1b9458765",
+    "597ca932-5b89-4829-b54a-0d4bb5476b03","aa73da25-7910-4f19-ad27-fabe62c3fc45","1f0725ac-32de-4ec2-862e-226e0339c952",
+    "21020b43-1b05-4598-88c9-4fa880d1b58f","9412edf9-67a3-4129-ad2b-37cdaf9b083b","614f3bac-7f85-4242-8d25-dcd298e37a2a",
+    "84f5e15a-a19b-4a54-ba6e-1122f9f31bcb","21176fb5-3831-4017-aef0-84fbb04542e8","74d3ec19-c976-4f7f-8fd3-24986f94affd",
+    "5820c403-c55c-4991-a90f-a1b2fec8b4bd","6194688d-54bf-45b3-ac5f-a47c86b0bb9f","45639f07-dfde-4ab8-9085-4bffa0eddd1a",
+    "b88557af-2fcb-4f0f-9ddf-77d2793e0983","3f9fd146-51f8-42d5-846a-a3db687ba828","431c03cb-d3a0-4135-8e51-9c4f6a2bfd81",
+    "0cc6d405-9505-40d6-8821-ddf17a77745a","2f8ff34f-5dfd-4624-a302-9b70ee5a776b","097eae6c-9a8c-49fd-9069-3c65978b405b",
+    "1d9126c4-27a9-4a2c-8d3c-9423137aada5","5663ee03-1ee0-4bf0-aea6-5527b4972e13","0f66f7ab-cdd2-4f8a-a366-ccce0c8c05f2",
+    "09d00d5b-b339-48c0-b342-db52a2cb5b41","5eb9cff5-3043-4552-b03a-2e1205d5cf01"
+  ]
+}

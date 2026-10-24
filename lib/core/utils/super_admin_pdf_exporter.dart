@@ -142,23 +142,23 @@ class SuperAdminPdfExporter {
               pw.SizedBox(width: 8),
               pw.Expanded(child: _kpiBox('Hours Logged', '${data.totalHoursWorked.toStringAsFixed(1)} h', const PdfColor.fromInt(0xFFF3E8FF), primaryColor)),
               pw.SizedBox(width: 8),
-              pw.Expanded(child: _kpiBox('Net Balance', '\$${data.netBalance.toStringAsFixed(2)}', data.netBalance >= 0 ? const PdfColor.fromInt(0xFFF0FDF4) : const PdfColor.fromInt(0xFFFEF2F2), data.netBalance >= 0 ? PdfColors.green800 : PdfColors.red800)),
+              pw.Expanded(child: _kpiBox('Net Balance', '${data.netBalance.toStringAsFixed(2)} EGP', data.netBalance >= 0 ? const PdfColor.fromInt(0xFFF0FDF4) : const PdfColor.fromInt(0xFFFEF2F2), data.netBalance >= 0 ? PdfColors.green800 : PdfColors.red800)),
             ],
           ),
           pw.SizedBox(height: 6),
           pw.Row(
             children: [
-              pw.Expanded(child: _kpiBox('Total Revenue', '\$${data.totalRevenue.toStringAsFixed(2)}', const PdfColor.fromInt(0xFFF0FDF4), PdfColors.green800)),
+              pw.Expanded(child: _kpiBox('Total Revenue', '${data.totalRevenue.toStringAsFixed(2)} EGP', const PdfColor.fromInt(0xFFF0FDF4), PdfColors.green800)),
               pw.SizedBox(width: 8),
-              pw.Expanded(child: _kpiBox('Paid Revenue', '\$${data.totalPaidRevenue.toStringAsFixed(2)}', const PdfColor.fromInt(0xFFECFDF5), PdfColors.green900)),
+              pw.Expanded(child: _kpiBox('Paid Revenue', '${data.totalPaidRevenue.toStringAsFixed(2)} EGP', const PdfColor.fromInt(0xFFECFDF5), PdfColors.green900)),
               pw.SizedBox(width: 8),
-              pw.Expanded(child: _kpiBox('Total Expenses', '\$${data.totalExpenses.toStringAsFixed(2)}', const PdfColor.fromInt(0xFFFFF7ED), PdfColors.orange800)),
+              pw.Expanded(child: _kpiBox('Total Expenses', '${data.totalExpenses.toStringAsFixed(2)} EGP', const PdfColor.fromInt(0xFFFFF7ED), PdfColors.orange800)),
             ],
           ),
           pw.SizedBox(height: 6),
           pw.Row(
             children: [
-              pw.Expanded(child: _kpiBox('Total Penalties', '\$${data.totalPenalties.toStringAsFixed(2)}', const PdfColor.fromInt(0xFFFEFCE8), goldColor)),
+              pw.Expanded(child: _kpiBox('Total Penalties', '${data.totalPenalties.toStringAsFixed(2)} EGP', const PdfColor.fromInt(0xFFFEFCE8), goldColor)),
               pw.SizedBox(width: 8),
               pw.Expanded(child: _kpiBox('Active Staff Members', '${data.userList.length}', const PdfColor.fromInt(0xFFECFEFF), primaryColor)),
               pw.SizedBox(width: 8),
@@ -346,10 +346,10 @@ class SuperAdminPdfExporter {
                             // Penalties
                             if (dossier.penalties.isNotEmpty) ...[
                               pw.SizedBox(height: 4),
-                              pw.Text('Penalties Issued (${dossier.penalties.length}, Total: \$${dossier.totalPenalties.toStringAsFixed(2)}):', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.red800)),
+                              pw.Text('Penalties Issued (${dossier.penalties.length}, Total: ${dossier.totalPenalties.toStringAsFixed(2)} EGP):', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.red800)),
                               ...dossier.penalties.map((p) => pw.Padding(
                                     padding: const pw.EdgeInsets.only(left: 6, top: 1),
-                                    child: pw.Text('* ${_c(p.date)} - \$${p.amount.toStringAsFixed(2)}: ${_c(p.reason)} (${_c(p.status)})', style: const pw.TextStyle(fontSize: 7.5, color: textDark)),
+                                    child: pw.Text('* ${_c(p.date)} - ${p.amount.toStringAsFixed(2)} EGP: ${_c(p.reason)} (${_c(p.status)})', style: const pw.TextStyle(fontSize: 7.5, color: textDark)),
                                   )),
                             ],
                           ],
@@ -469,7 +469,7 @@ class SuperAdminPdfExporter {
                           pw.SizedBox(height: 4),
 
                           // Client Financials / CRM
-                          pw.Text('Client Financials & Contracts (${clientDossier.crmEntries.length}, Total Contract: \$${clientDossier.totalContractValue.toStringAsFixed(2)}, Paid: \$${clientDossier.totalPaid.toStringAsFixed(2)}, Outstanding: \$${clientDossier.totalOutstanding.toStringAsFixed(2)}):', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                          pw.Text('Client Financials & Contracts (${clientDossier.crmEntries.length}, Total Contract: ${clientDossier.totalContractValue.toStringAsFixed(2)} EGP, Paid: ${clientDossier.totalPaid.toStringAsFixed(2)} EGP, Outstanding: ${clientDossier.totalOutstanding.toStringAsFixed(2)} EGP):', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
                           clientDossier.crmEntries.isEmpty
                               ? _emptyText('No financial entries recorded.')
                               : pw.TableHelper.fromTextArray(
@@ -488,9 +488,9 @@ class SuperAdminPdfExporter {
                                   },
                                   data: clientDossier.crmEntries.map((crm) => [
                                     crm.invoiceNumber != null ? '[#${_c(crm.invoiceNumber)}] ${_c(crm.title)}' : _c(crm.title),
-                                    '\$${crm.amount.toStringAsFixed(2)}',
-                                    '\$${crm.paidAmount.toStringAsFixed(2)}',
-                                    '\$${crm.outstanding.toStringAsFixed(2)}',
+                                    '${crm.amount.toStringAsFixed(2)} EGP',
+                                    '${crm.paidAmount.toStringAsFixed(2)} EGP',
+                                    '${crm.outstanding.toStringAsFixed(2)} EGP',
                                     _c(crm.status.toUpperCase()),
                                     _c(crm.dueDate != null ? (crm.dueDate!.length >= 10 ? crm.dueDate!.substring(0, 10) : crm.dueDate!) : '-'),
                                   ]).toList(),
@@ -527,7 +527,7 @@ class SuperAdminPdfExporter {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('Expenses by Category (${data.expenseList.length} entries, \$${data.totalExpenses.toStringAsFixed(2)}):', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                    pw.Text('Expenses by Category (${data.expenseList.length} entries, ${data.totalExpenses.toStringAsFixed(2)} EGP):', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
                     pw.SizedBox(height: 4),
                     data.expenseCategories.isEmpty
                         ? _emptyText('No expense entries.')
@@ -540,7 +540,7 @@ class SuperAdminPdfExporter {
                             data: data.expenseCategories.map((c) => [
                               _c(c.categoryName),
                               '${c.count}',
-                              '\$${c.totalAmount.toStringAsFixed(2)}',
+                              '${c.totalAmount.toStringAsFixed(2)} EGP',
                             ]).toList(),
                           ),
                   ],
@@ -551,7 +551,7 @@ class SuperAdminPdfExporter {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('Penalties Log (${data.penaltyList.length} entries, \$${data.totalPenalties.toStringAsFixed(2)}):', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                    pw.Text('Penalties Log (${data.penaltyList.length} entries, ${data.totalPenalties.toStringAsFixed(2)} EGP):', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
                     pw.SizedBox(height: 4),
                     data.penaltyList.isEmpty
                         ? _emptyText('No penalty logs.')
@@ -564,7 +564,7 @@ class SuperAdminPdfExporter {
                             data: data.penaltyList.map((p) => [
                               _c(p.employeeName),
                               _c(p.reason),
-                              '\$${p.amount.toStringAsFixed(2)}',
+                              '${p.amount.toStringAsFixed(2)} EGP',
                               _c(p.date),
                             ]).toList(),
                           ),

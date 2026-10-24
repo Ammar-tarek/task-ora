@@ -28,6 +28,7 @@ class S {
       'attendance': 'Attendance',
       'expenses': 'Daily Expenses',
       'penalties': 'Penalties',
+      'department_revenue': 'Department Revenue',
       'clients': 'Clients',
       'notifications': 'Notifications',
       'team': 'TEAM',
@@ -127,7 +128,8 @@ class S {
 
       'security': 'SECURITY',
       'enable_biometric_login': 'Enable Biometric Login',
-      'enable_biometric_login_sub': 'Use Fingerprint or Face ID for faster login',
+      'enable_biometric_login_sub':
+          'Use Fingerprint or Face ID for faster login',
       'biometric_prompt_title': 'Enable Biometric Login?',
       'biometric_prompt_msg':
           'Would you like to use Fingerprint or Face ID for faster login next time?',
@@ -147,7 +149,8 @@ class S {
       'login_with_fingerprint': 'Sign in with fingerprint',
       'biometric_no_session':
           'No saved session on this device. Please sign in with your password first.',
-      'biometric_failed': 'Fingerprint sign-in failed. Try again or use your password.',
+      'biometric_failed':
+          'Fingerprint sign-in failed. Try again or use your password.',
 
       // Settings
       'language': 'Language',
@@ -187,8 +190,7 @@ class S {
       'english_interface': 'English interface',
       'arabic_interface': 'Arabic interface',
       'super_admin_panel': 'Super Admin Master Panel',
-      'super_admin_panel_desc':
-          'Exclusive controls reserved for Super Admin.',
+      'super_admin_panel_desc': 'Exclusive controls reserved for Super Admin.',
 
       // Actions & Common
       'save': 'Save',
@@ -335,6 +337,7 @@ class S {
       'attendance': 'الحضور',
       'expenses': 'المصروفات اليومية',
       'penalties': 'الجزاءات',
+      'department_revenue': 'إيرادات القسم',
       'clients': 'العملاء',
       'notifications': 'الإشعارات',
       'team': 'الفريق',
@@ -454,7 +457,8 @@ class S {
       'login_with_fingerprint': 'الدخول بالبصمة',
       'biometric_no_session':
           'لا توجد جلسة محفوظة على هذا الجهاز. الرجاء تسجيل الدخول بكلمة المرور أولاً.',
-      'biometric_failed': 'فشل الدخول بالبصمة. حاول مرة أخرى أو استخدم كلمة المرور.',
+      'biometric_failed':
+          'فشل الدخول بالبصمة. حاول مرة أخرى أو استخدم كلمة المرور.',
 
       // Settings
       'language': 'اللغة',

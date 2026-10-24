@@ -734,13 +734,20 @@ class TAvatar extends StatelessWidget {
       const Color(0xFF1B5E20),
       const Color(0xFFE65100),
     ];
-    return colors[name.codeUnitAt(0) % colors.length];
+    // Guard against an empty name (e.g. a profile with no full name) — using a
+    // stable index 0 avoids RangeError from codeUnitAt on an empty string.
+    final key = name.trim();
+    final index = key.isEmpty ? 0 : key.codeUnitAt(0) % colors.length;
+    return colors[index];
   }
 
   String get _initials {
-    final parts = name.trim().split(' ');
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '?'; // safe fallback for missing names
+    final parts = trimmed.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.substring(0, name.length >= 2 ? 2 : 1).toUpperCase();
+    final first = parts.first;
+    return first.substring(0, first.length >= 2 ? 2 : 1).toUpperCase();
   }
 
   @override

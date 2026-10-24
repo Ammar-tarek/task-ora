@@ -33,8 +33,9 @@ class RealtimeService {
   /// Call once after Supabase.initialize (main.dart).
   void init() {
     if (_channel != null) return;
-    // adminClient socket → service-role bypasses RLS, one stream for all roles.
-    var ch = SupabaseService.adminClient.channel('app-live');
+    // Authenticated socket → realtime respects RLS, so each role only receives
+    // change events for rows it can see. Callbacks just trigger RLS-scoped refetches.
+    var ch = SupabaseService.client.channel('app-live');
     for (final t in _tables) {
       ch = ch.onPostgresChanges(
         event: PostgresChangeEvent.all,

@@ -6,13 +6,13 @@ import '../models/user_privileges_model.dart';
 import '../services/supabase_service.dart';
 
 class UserPrivilegesRepository {
-  static final _admin = SupabaseService.adminClient;
+  static final _client = SupabaseService.client;
 
   /// Fetch privileges for [userId]. Returns defaults when no row saved yet,
   /// or null if the table is missing / on error.
   static Future<UserPrivilegesModel?> fetchForUser(String userId) async {
     try {
-      final data = await _admin
+      final data = await _client
           .from('user_privileges')
           .select()
           .eq('user_id', userId)
@@ -38,7 +38,7 @@ class UserPrivilegesRepository {
     UserPrivilegesModel privileges, {
     String? updatedBy,
   }) async {
-    await _admin
+    await _client
         .from('user_privileges')
         .upsert(
           privileges.toUpsertMap(updatedBy: updatedBy),

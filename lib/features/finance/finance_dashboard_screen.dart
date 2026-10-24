@@ -12,6 +12,7 @@ import '../../core/repositories/expense_repository.dart';
 import '../../core/repositories/finance_repository.dart';
 import '../../core/repositories/team_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/currency.dart';
 import '../../core/widgets/team_filter_chip.dart';
 
 class FinanceDashboardScreen extends StatefulWidget {
@@ -109,7 +110,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
           IconButton(
             icon: const Icon(Icons.bar_chart),
-            onPressed: () => context.push('/finance/analytics'),
+            onPressed: () => context.push('/finance/analytics/details'),
           ),
           const SizedBox(width: 8),
         ],
@@ -149,7 +150,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  _fmtAmount(_summary.grossRevenue),
+                                  Money.egpCompact(_summary.grossRevenue),
                                   style: AppTextStyles.dataLg.copyWith(
                                     color: AppColors.gold,
                                     fontSize: 36,
@@ -161,19 +162,19 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                                   children: [
                                     _MiniStat(
                                       label: 'task_services',
-                                      value: _fmtAmount(_summary.taskRevenue),
+                                      value: Money.egpCompact(_summary.taskRevenue),
                                     ),
                                     const SizedBox(width: 20),
                                     _MiniStat(
                                       label: 'meetings',
-                                      value: _fmtAmount(
+                                      value: Money.egpCompact(
                                         _summary.meetingRevenue,
                                       ),
                                     ),
                                     const SizedBox(width: 20),
                                     _MiniStat(
                                       label: 'invoiced',
-                                      value: _fmtAmount(_summary.totalInvoiced),
+                                      value: Money.egpCompact(_summary.totalInvoiced),
                                     ),
                                   ],
                                 ),
@@ -185,19 +186,19 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                                   children: [
                                     _MiniStat(
                                       label: 'expenses',
-                                      value: _fmtAmount(_summary.totalExpenses),
+                                      value: Money.egpCompact(_summary.totalExpenses),
                                       isNegative: true,
                                     ),
                                     const SizedBox(width: 24),
                                     _MiniStat(
                                       label: 'net_profit',
-                                      value: _fmtAmount(_summary.netProfit),
+                                      value: Money.egpCompact(_summary.netProfit),
                                       isPositive: true,
                                     ),
                                     const SizedBox(width: 24),
                                     _MiniStat(
                                       label: 'outstanding',
-                                      value: _fmtAmount(_summary.outstanding),
+                                      value: Money.egpCompact(_summary.outstanding),
                                       isNegative: _summary.outstanding > 0,
                                     ),
                                   ],
@@ -235,7 +236,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                           TSectionHeader(
                             title: 'revenue_trend',
                             action: 'full_analytics',
-                            onAction: () => context.push('/finance/analytics'),
+                            onAction: () => context.push('/finance/analytics/details'),
                           ),
                           const SizedBox(height: 12),
                           _monthly.isEmpty
@@ -249,7 +250,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                               Expanded(
                                 child: _StatCard(
                                   label: 'paid',
-                                  value: _fmtAmount(_summary.totalPaid),
+                                  value: Money.egpCompact(_summary.totalPaid),
                                   color: const Color(0xFF81C784),
                                 ),
                               ),
@@ -257,7 +258,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                               Expanded(
                                 child: _StatCard(
                                   label: 'outstanding',
-                                  value: _fmtAmount(_summary.outstanding),
+                                  value: Money.egpCompact(_summary.outstanding),
                                   color: _summary.outstanding > 0
                                       ? AppColors.error
                                       : AppColors.onSurfaceVariant,

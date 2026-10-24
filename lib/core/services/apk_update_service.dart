@@ -108,7 +108,7 @@ class ApkUpdateService {
               .limit(1)
               .maybeSingle();
         } catch (_) {
-          data = await SupabaseService.adminClient
+          data = await SupabaseService.client
               .from('app_versions')
               .select()
               .eq('platform', 'android')

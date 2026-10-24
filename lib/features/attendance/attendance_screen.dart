@@ -1221,7 +1221,7 @@ class _ManualAttendanceDialogState extends State<_ManualAttendanceDialog> {
   Future<void> _loadEmployees() async {
     setState(() => _loadingEmployees = true);
     try {
-      final data = await SupabaseService.adminClient
+      final data = await SupabaseService.client
           .from('profiles')
           .select('id, full_name')
           .neq('role', 'client')
@@ -2280,7 +2280,7 @@ class _AdminAddAttendanceDialogState extends State<_AdminAddAttendanceDialog> {
 
   Future<void> _loadEmployees() async {
     try {
-      final data = await SupabaseService.adminClient
+      final data = await SupabaseService.client
           .from('profiles')
           .select('id, full_name')
           .neq('role', 'client')

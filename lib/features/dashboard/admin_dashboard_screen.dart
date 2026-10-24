@@ -12,9 +12,12 @@ import '../../core/repositories/task_repository.dart';
 import '../../core/repositories/team_repository.dart';
 import '../../core/models/task_model.dart';
 import '../../core/models/profile_model.dart';
+import 'dashboard_quick_actions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/providers/theme_controller.dart';
 import '../../core/providers/locale_controller.dart';
+import '../../core/providers/team_filter_notifier.dart';
+import '../../core/providers/workspace_scope_notifier.dart';
 import '../../core/l10n/app_strings.dart';
 import '../tasks/task_detail_sheet.dart';
 
@@ -45,11 +48,42 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   late final String _wisdom;
 
+  // The admin "view by team" / department scope. Reload the dashboard whenever
+  // the selected department changes so stats stay scoped to it.
+  TeamFilterNotifier? _teamFilter;
+  WorkspaceScopeNotifier? _scope;
+
   @override
   void initState() {
     super.initState();
     _wisdom = _cashbackWisdoms[Random().nextInt(_cashbackWisdoms.length)];
     _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final tf = context.read<TeamFilterNotifier>();
+    if (!identical(tf, _teamFilter)) {
+      _teamFilter?.removeListener(_onScopeChanged);
+      _teamFilter = tf..addListener(_onScopeChanged);
+    }
+    final sc = context.read<WorkspaceScopeNotifier>();
+    if (!identical(sc, _scope)) {
+      _scope?.removeListener(_onScopeChanged);
+      _scope = sc..addListener(_onScopeChanged);
+    }
+  }
+
+  void _onScopeChanged() {
+    if (mounted) _load(animate: false);
+  }
+
+  @override
+  void dispose() {
+    _teamFilter?.removeListener(_onScopeChanged);
+    _scope?.removeListener(_onScopeChanged);
+    super.dispose();
   }
 
   Future<void> _load({bool animate = true}) async {
@@ -70,32 +104,49 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       return;
     }
 
+    // Department scope (admin only): null = All Departments (company-wide).
+    final scopeTeamId = profile.isAdmin
+        ? context.read<WorkspaceScopeNotifier>().taskScopeTeamId
+        : null;
+
     // Fetch each data source independently so one failure doesn't kill the page.
     DashboardStats? stats;
     List<TaskModel> tasks = [];
     List<ProfileModel> employees = [];
 
     try {
-      stats = await DashboardRepository.fetchStats(profile);
+      stats = await DashboardRepository.fetchStats(
+        profile,
+        scopeTeamId: scopeTeamId,
+      );
     } catch (_) {
       /* stats stays null — cards show 0 */
     }
 
     try {
-      // Role-aware: admin=all, manager=their team, employee=assigned tasks.
-      tasks = await TaskRepository.fetchTasksForProfile(profile);
+      // Role-aware: admin=all (or selected department), manager=their team,
+      // employee=assigned tasks.
+      tasks = await TaskRepository.fetchTasksForProfile(
+        profile,
+        overrideTeamId: scopeTeamId,
+      );
     } catch (_) {
       /* tasks stays empty — shows "No data" */
     }
 
     try {
-      // Only show members of the user's own team — not all profiles.
-      final myTeams = await TeamRepository.fetchByLeadId(profile.id);
-      final teamId = myTeams.isNotEmpty
-          ? myTeams.first.id
-          : profile.teamId; // fallback to assigned team
-      if (teamId != null) {
-        employees = await TeamRepository.fetchMembers(teamId);
+      if (scopeTeamId != null) {
+        // A department is selected — show that team's members.
+        employees = await TeamRepository.fetchMembers(scopeTeamId);
+      } else {
+        // All Departments — fall back to the user's own/led team members.
+        final myTeams = await TeamRepository.fetchByLeadId(profile.id);
+        final teamId = myTeams.isNotEmpty
+            ? myTeams.first.id
+            : profile.teamId; // fallback to assigned team
+        if (teamId != null) {
+          employees = await TeamRepository.fetchMembers(teamId);
+        }
       }
     } catch (_) {
       /* employees stays empty — shows "No data" */
@@ -133,7 +184,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     final isDark = context.select<ThemeController, bool>((t) => t.isDark);
     context.select<LocaleController, Locale>((l) => l.locale);
-    final profile = context.select<AuthNotifier, ProfileModel?>((a) => a.profile);
+    final profile = context.select<AuthNotifier, ProfileModel?>(
+      (a) => a.profile,
+    );
     final isAdmin = profile?.isAdmin ?? false;
     final now = DateTime.now();
     final greeting = now.hour < 12
@@ -193,7 +246,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         : Icons.dark_mode_outlined,
                     color: AppColors.gold,
                   ),
-                  onPressed: () => context.read<ThemeController>().setDark(!isDark),
+                  onPressed: () =>
+                      context.read<ThemeController>().setDark(!isDark),
                 ),
                 IconButton(
                   icon: Stack(
@@ -367,20 +421,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   context.go('/tasks?filter=In Progress'),
                             ),
                             TStatCard(
-                              title: (isAdmin || profile?.isManager == true) ? 'team_size' : 'my_attendance',
+                              title: (isAdmin || profile?.isManager == true)
+                                  ? 'team_size'
+                                  : 'my_attendance',
                               value: (isAdmin || profile?.isManager == true)
                                   ? '${_stats?.totalEmployees ?? 0}'
-                                  : ((_stats?.presentToday ?? 0) > 0 ? (S.isArabic ? 'حاضر' : 'Present') : (S.isArabic ? 'لم يسجل' : 'Not Checked In')),
-                              icon: (isAdmin || profile?.isManager == true) ? Icons.people_outline : Icons.how_to_reg_outlined,
+                                  : ((_stats?.presentToday ?? 0) > 0
+                                        ? (S.isArabic ? 'حاضر' : 'Present')
+                                        : (S.isArabic
+                                              ? 'لم يسجل'
+                                              : 'Not Checked In')),
+                              icon: (isAdmin || profile?.isManager == true)
+                                  ? Icons.people_outline
+                                  : Icons.how_to_reg_outlined,
                               sub: (isAdmin || profile?.isManager == true)
                                   ? (S.isArabic
-                                      ? '${_stats?.presentToday ?? 0} حاضر'
-                                      : '${_stats?.presentToday ?? 0} present')
-                                  : (S.isArabic ? 'حالة اليوم' : 'Today Status'),
+                                        ? '${_stats?.presentToday ?? 0} حاضر'
+                                        : '${_stats?.presentToday ?? 0} present')
+                                  : (S.isArabic
+                                        ? 'حالة اليوم'
+                                        : 'Today Status'),
                               onTap: () {
                                 if (isAdmin) {
                                   context.push('/users');
-                                } else if (profile?.isManager == true && profile?.teamId != null) {
+                                } else if (profile?.isManager == true &&
+                                    profile?.teamId != null) {
                                   context.push(
                                     '/teams/${profile!.teamId}/members',
                                     extra: 'My Team',
@@ -403,28 +468,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       screenWidth: screenW,
                       actions: [
                         _QuickActionData(
-                          'kanban_board',
-                          Icons.view_kanban_outlined,
-                          () => context.go('/tasks'),
-                        ),
-                        _QuickActionData(
-                          'analytics',
-                          Icons.bar_chart,
-                          () => context.push('/analytics'),
-                        ),
-                        _QuickActionData(
                           'attendance',
                           Icons.how_to_reg_outlined,
                           () => context.push('/attendance'),
                         ),
-                        if (profile?.isClient != true)
+                        _QuickActionData(
+                          'penalties',
+                          Icons.gavel_outlined,
+                          () => context.push('/penalties'),
+                        ),
+                        // Department revenue = the active department's finance
+                        // dashboard (scoped by the selected workspace), NOT the
+                        // company-wide Expenses screen. Manager/admin only —
+                        // employees are redirected away from /finance by the
+                        // router, so the action is hidden for them here too.
+                        if (DashboardQuickActions.showDepartmentRevenue(
+                          profile,
+                        ))
                           _QuickActionData(
-                            'penalties',
-                            Icons.gavel_outlined,
-                            () => context.push('/penalties'),
+                            'department_revenue',
+                            Icons.trending_up,
+                            () => context.go('/finance'),
                           ),
-                        // Finance & Expenses — admin only
-                        if (isAdmin) ..._adminFinanceActions(context),
+                        _QuickActionData(
+                          'tasks',
+                          Icons.check_box_outlined,
+                          () => context.go('/tasks'),
+                        ),
                       ],
                     ),
 
@@ -443,8 +513,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             title: 'recent_alerts',
                             value: (_stats?.unreadNotifications ?? 0) > 0
                                 ? (S.isArabic
-                                    ? '${_stats!.unreadNotifications} غير مقروء'
-                                    : '${_stats!.unreadNotifications} unread')
+                                      ? '${_stats!.unreadNotifications} غير مقروء'
+                                      : '${_stats!.unreadNotifications} unread')
                                 : S.t('no_data'),
                             onTap: () => context.push('/notifications'),
                           ),
@@ -455,23 +525,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               iconColor: AppColors.statusDone,
                               title: 'total_revenue',
                               value: (_stats?.totalRevenue ?? 0) > 0
-                                  ? '\$${NumberFormat.compact().format(_stats!.totalRevenue)}'
+                                  ? '${NumberFormat.compact().format(_stats!.totalRevenue)} EGP'
                                   : S.t('no_data'),
                               onTap: () => context.go('/finance'),
                             ),
                           _OverviewCard(
                             icon: Icons.how_to_reg_outlined,
                             iconColor: AppColors.statusInProgress,
-                            title: (isAdmin || profile?.isManager == true) ? 'attendance_today' : 'my_attendance',
+                            title: (isAdmin || profile?.isManager == true)
+                                ? 'attendance_today'
+                                : 'my_attendance',
                             value: (isAdmin || profile?.isManager == true)
                                 ? ((_stats?.presentToday ?? 0) > 0
-                                    ? (S.isArabic
-                                        ? '${_stats!.presentToday} حاضر'
-                                        : '${_stats!.presentToday} present')
-                                    : S.t('no_data'))
+                                      ? (S.isArabic
+                                            ? '${_stats!.presentToday} حاضر'
+                                            : '${_stats!.presentToday} present')
+                                      : S.t('no_data'))
                                 : ((_stats?.presentToday ?? 0) > 0
-                                    ? (S.isArabic ? 'حاضر' : 'Present')
-                                    : (S.isArabic ? 'لم يسجل' : 'Not Checked In')),
+                                      ? (S.isArabic ? 'حاضر' : 'Present')
+                                      : (S.isArabic
+                                            ? 'لم يسجل'
+                                            : 'Not Checked In')),
                             onTap: () => context.push('/attendance'),
                           ),
                         ];
@@ -557,21 +631,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 }
 
-// ── Admin-only finance quick actions ──────────────────────────────────────────
-List<_QuickActionData> _adminFinanceActions(BuildContext context) => [
-  _QuickActionData(
-    'finance',
-    Icons.account_balance_wallet_outlined,
-    () => context.go('/finance'),
-  ),
-  _QuickActionData(
-    'expenses',
-    Icons.receipt_long_outlined,
-    () => context.push('/expenses'),
-  ),
-  _QuickActionData('teams', Icons.group_outlined, () => context.push('/teams')),
-];
-
 // ── Supporting data class ──────────────────────────────────────────────────────
 class _QuickActionData {
   final String label;
@@ -649,33 +708,39 @@ class _TaskDistributionBar extends StatelessWidget {
           // Bar
           RepaintBoundary(
             child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              height: 10,
-              child: total > 0
-                  ? Row(
-                      children: [
-                        _barSegment(done / total, AppColors.statusDone),
-                        _barSegment(
-                          inProgress / total,
-                          AppColors.statusInProgress,
-                        ),
-                        _barSegment(todo / total, AppColors.statusTodo),
-                      ],
-                    )
-                  : Container(
-                      color: AppColors.outlineVariant.withValues(alpha: 0.3),
-                    ),
+              borderRadius: BorderRadius.circular(4),
+              child: SizedBox(
+                height: 10,
+                child: total > 0
+                    ? Row(
+                        children: [
+                          _barSegment(done / total, AppColors.statusDone),
+                          _barSegment(
+                            inProgress / total,
+                            AppColors.statusInProgress,
+                          ),
+                          _barSegment(todo / total, AppColors.statusTodo),
+                        ],
+                      )
+                    : Container(
+                        color: AppColors.outlineVariant.withValues(alpha: 0.3),
+                      ),
+              ),
             ),
           ),
-        ),
           const SizedBox(height: 14),
           // Legend — wraps responsively
           Wrap(
             spacing: 16,
             runSpacing: 8,
             children: [
-              _legend(context, AppColors.statusDone, S.t('done'), 'Completed', done),
+              _legend(
+                context,
+                AppColors.statusDone,
+                S.t('done'),
+                'Completed',
+                done,
+              ),
               _legend(
                 context,
                 AppColors.statusInProgress,

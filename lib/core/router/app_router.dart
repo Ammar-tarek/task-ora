@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
-import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/theme/app_theme.dart';
 
 import '../../features/splash/splash_screen.dart';
@@ -21,6 +20,7 @@ import '../../features/tasks/task_detail_screen.dart';
 import '../../features/calendar/calendar_screen.dart';
 import '../../features/finance/finance_dashboard_screen.dart';
 import '../../features/finance/finance_analytics_screen.dart';
+import '../../features/finance/department_revenue_sheet_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/super_admin/archived_tasks_screen.dart';
 import '../../features/analytics/advanced_analytics_screen.dart';
@@ -40,6 +40,8 @@ import '../../features/clients/client_finance_screen.dart';
 import '../../features/users/create_user_screen.dart';
 import '../../features/super_admin/super_admin_report_screen.dart';
 import '../widgets/bottom_nav_shell.dart';
+import '../../features/workspaces/department_workspace_screen.dart';
+import 'workspace_routing.dart';
 
 /// Called from main.dart — receives the AuthNotifier so the router
 /// can listen for changes via [refreshListenable].
@@ -56,7 +58,8 @@ GoRouter makeRouter(AuthNotifier auth) {
       final status = auth.status;
 
       // ① Session still loading or biometric lock active — stay on splash
-      if (status == AuthStatus.loading || status == AuthStatus.biometricRequired) {
+      if (status == AuthStatus.loading ||
+          status == AuthStatus.biometricRequired) {
         return loc == '/splash' ? null : '/splash';
       }
 
@@ -83,14 +86,23 @@ GoRouter makeRouter(AuthNotifier auth) {
         return (role == 'admin' || role == 'manager') ? '/dashboard' : '/tasks';
       }
 
-      // ④ Logged in — redirect away from auth-only screens & root path '/'
-      if (loc == '/' || loc == '/splash' || loc == '/login' || loc == '/signup') {
-        final role = auth.profile?.role ?? 'employee';
-        if (role == 'admin' || role == 'super_admin') return '/dashboard';
-        if (role == 'manager') return '/dashboard';
-        if (role == 'employee') return '/tasks';
-        if (role == 'client') return '/tasks';
-        return '/dashboard';
+      // ④ Logged in — redirect away from auth-only screens & root path '/'.
+      // Entry point is role-based (see WorkspaceRouting): admins/super admins
+      // land on the department workspace selector, everyone else on their
+      // existing workspace landing.
+      if (loc == '/' ||
+          loc == '/splash' ||
+          loc == '/login' ||
+          loc == '/signup') {
+        return WorkspaceRouting.entryRouteFor(auth.profile);
+      }
+
+      // ④b The department workspace entry screen is global-only (admin /
+      // super admin). Managers, employees and clients are sent to their own
+      // authorized landing instead.
+      if (loc == '/workspaces') {
+        final redirect = WorkspaceRouting.guardWorkspaces(auth.profile);
+        if (redirect != null) return redirect;
       }
 
       // ⑤ Role-based access control
@@ -110,7 +122,7 @@ GoRouter makeRouter(AuthNotifier auth) {
             loc == '/analytics' ||
             loc == '/attendance' ||
             loc == '/expenses' ||
-            loc == '/finance/analytics') {
+            loc.startsWith('/finance/analytics')) {
           return '/tasks';
         }
       }
@@ -120,6 +132,8 @@ GoRouter makeRouter(AuthNotifier auth) {
       // /roles (scoped to their own team — privileges only), and their own
       // team's members screen (/teams/:id/members).
       if (profile?.isManager == true) {
+        // Managers are completely blocked from internal Finance + Analytics.
+        if (loc.startsWith('/finance')) return '/dashboard';
         final isMembersRoute = RegExp(r'^/teams/[^/]+/members$').hasMatch(loc);
         if (!isMembersRoute && (loc == '/teams' || loc.startsWith('/teams/'))) {
           return '/dashboard';
@@ -229,9 +243,17 @@ GoRouter makeRouter(AuthNotifier auth) {
                 path: '/finance',
                 builder: (_, _) => const _FinanceRouter(),
                 routes: [
+                  // Analytics area = the retained revenue dashboard, with the
+                  // deeper financial analytics under 'details'.
                   GoRoute(
                     path: 'analytics',
-                    builder: (_, _) => const FinanceAnalyticsScreen(),
+                    builder: (_, _) => const FinanceDashboardScreen(),
+                    routes: [
+                      GoRoute(
+                        path: 'details',
+                        builder: (_, _) => const FinanceAnalyticsScreen(),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -251,6 +273,10 @@ GoRouter makeRouter(AuthNotifier auth) {
 
       // ── Full-page routes (no bottom nav) ──────────────────────────────────
       GoRoute(
+        path: '/workspaces',
+        builder: (_, _) => const DepartmentWorkspaceScreen(),
+      ),
+      GoRoute(
         path: '/analytics',
         builder: (_, _) => const AdvancedAnalyticsScreen(),
       ),
@@ -262,10 +288,7 @@ GoRouter makeRouter(AuthNotifier auth) {
         path: '/super-admin/archived-tasks',
         builder: (_, _) => const ArchivedTasksScreen(),
       ),
-      GoRoute(
-        path: '/attendance',
-        builder: (_, _) => const AttendanceScreen(),
-      ),
+      GoRoute(path: '/attendance', builder: (_, _) => const AttendanceScreen()),
       GoRoute(
         path: '/attendance/reminders',
         builder: (_, _) => const AttendanceReminderTrackingScreen(),
@@ -330,28 +353,30 @@ GoRouter makeRouter(AuthNotifier auth) {
   );
 }
 
-/// Shows the right finance screen based on role + team privileges.
+/// Shows the right finance screen based on role.
+/// - Client  → their own client-specific finance portal.
+/// - Admin / Super Admin → the internal Department Revenue sheet.
+/// - Manager / Employee → never reach here (router redirects /finance away);
+///   a defensive denial is rendered just in case.
 class _FinanceRouter extends StatelessWidget {
   const _FinanceRouter();
 
   @override
   Widget build(BuildContext context) {
     final profile = context.watch<AuthNotifier>().profile;
-    final privs = context.watch<TeamPrivilegesNotifier>();
 
     if (profile?.isClient == true) {
       return ClientFinanceScreen(clientId: profile!.id, asClient: true);
     }
-    // Manager blocked by team privileges
-    if (profile?.isManager == true && !privs.canViewFinance) {
-      return const _PrivilegeDeniedScreen(
-        icon: Icons.account_balance_outlined,
-        message:
-            'Your team does not have access to the Finance dashboard.\n'
-            'Contact your admin to enable it.',
-      );
+    if (profile?.isAdmin == true) {
+      return const DepartmentRevenueSheetScreen();
     }
-    return const FinanceDashboardScreen();
+    return const _PrivilegeDeniedScreen(
+      icon: Icons.account_balance_outlined,
+      message:
+          'Finance is restricted to administrators.\n'
+          'Contact your admin if you need access.',
+    );
   }
 }
 

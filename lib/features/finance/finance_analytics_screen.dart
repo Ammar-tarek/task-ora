@@ -5,6 +5,7 @@ import '../../core/l10n/app_strings.dart';
 import '../../core/providers/locale_controller.dart';
 import '../../core/repositories/finance_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/currency.dart';
 
 class FinanceAnalyticsScreen extends StatefulWidget {
   const FinanceAnalyticsScreen({super.key});
@@ -91,7 +92,7 @@ class _FinanceAnalyticsScreenState extends State<FinanceAnalyticsScreen> {
                         Expanded(
                           child: _KpiCard(
                             label: 'GROSS REVENUE',
-                            value: _fmtAmount(_summary.grossRevenue),
+                            value: Money.egpCompact(_summary.grossRevenue),
                             trend: _revenueTrend,
                             up: _trendUp,
                           ),
@@ -100,7 +101,7 @@ class _FinanceAnalyticsScreenState extends State<FinanceAnalyticsScreen> {
                         Expanded(
                           child: _KpiCard(
                             label: 'NET PROFIT',
-                            value: _fmtAmount(_summary.netProfit),
+                            value: Money.egpCompact(_summary.netProfit),
                             trend: _summary.netProfit >= 0
                                 ? 'Positive'
                                 : 'Negative',
@@ -115,7 +116,7 @@ class _FinanceAnalyticsScreenState extends State<FinanceAnalyticsScreen> {
                         Expanded(
                           child: _KpiCard(
                             label: 'TOTAL EXPENSES',
-                            value: _fmtAmount(_summary.totalExpenses),
+                            value: Money.egpCompact(_summary.totalExpenses),
                             trend: 'All time',
                             up: false,
                           ),
@@ -124,7 +125,7 @@ class _FinanceAnalyticsScreenState extends State<FinanceAnalyticsScreen> {
                         Expanded(
                           child: _KpiCard(
                             label: 'OUTSTANDING',
-                            value: _fmtAmount(_summary.outstanding),
+                            value: Money.egpCompact(_summary.outstanding),
                             trend: '${_summary.pendingInvoices} invoices',
                             up: false,
                           ),

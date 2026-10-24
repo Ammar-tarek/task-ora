@@ -1,6 +1,6 @@
 // lib/core/repositories/analytics_repository.dart
-// Real task analytics, scoped by team / department. Uses adminClient so a
-// manager can read their whole team and an admin can read any department.
+// Real task analytics, scoped by team / department. Uses the authenticated
+// client; RLS lets a manager read their team and an admin read any department.
 
 import '../services/supabase_service.dart';
 
@@ -49,14 +49,14 @@ class TaskStat {
 }
 
 class AnalyticsRepository {
-  static final _admin = SupabaseService.adminClient;
+  static final _client = SupabaseService.client;
 
   /// Fetch task stats. Pass [teamIds] to scope (manager = own team, admin =
   /// a department's teams). Null = all teams.
   static Future<List<TaskStat>> fetchTaskStats({List<String>? teamIds}) async {
     try {
       if (teamIds != null && teamIds.isEmpty) return [];
-      var q = _admin
+      var q = _client
           .from('tasks')
           .select(
             'status, priority, team_id, completion_percentage, due_date, '

@@ -494,7 +494,7 @@ class SuperAdminReportData {
 }
 
 class SuperAdminReportRepository {
-  static final _admin = SupabaseService.adminClient;
+  static final _client = SupabaseService.client;
 
   static Future<SuperAdminReportData> fetchMasterReport({
     DateTimeRange? dateRange,
@@ -516,7 +516,7 @@ class SuperAdminReportRepository {
     final Map<String, String> teamDepts = {};
     final List<TeamReportItem> teamList = [];
     try {
-      final teamsData = await _admin
+      final teamsData = await _client
           .from('teams')
           .select('*, leader:profiles!teams_leader_id_fkey(full_name)')
           .order('name', ascending: true);
@@ -534,7 +534,7 @@ class SuperAdminReportRepository {
 
         int mCount = 0;
         try {
-          final mRes = await _admin.from('team_members').select('id').eq('team_id', id);
+          final mRes = await _client.from('team_members').select('id').eq('team_id', id);
           mCount = mRes.length;
         } catch (_) {}
 
@@ -555,12 +555,12 @@ class SuperAdminReportRepository {
     try {
       List<dynamic> profilesData = [];
       try {
-        profilesData = await _admin
+        profilesData = await _client
             .from('profiles')
             .select('id, full_name, phone, role, status, team_id, created_at, team:teams(name, department)')
             .order('full_name', ascending: true);
       } catch (_) {
-        profilesData = await _admin
+        profilesData = await _client
             .from('profiles')
             .select('id, full_name, phone, role, status, team_id, created_at')
             .order('full_name', ascending: true);
@@ -594,7 +594,7 @@ class SuperAdminReportRepository {
     // 3. Clients Directory (Safe select *)
     final List<ClientReportItem> clientList = [];
     try {
-      final clientData = await _admin
+      final clientData = await _client
           .from('client_profiles')
           .select('*')
           .order('company_name', ascending: true);
@@ -624,7 +624,7 @@ class SuperAdminReportRepository {
     // 4. Task Comments Query (Safe select * and author_id mapping)
     List<dynamic> commentsData = [];
     try {
-      commentsData = await _admin
+      commentsData = await _client
           .from('task_comments')
           .select('*')
           .order('created_at', ascending: false);
@@ -633,13 +633,13 @@ class SuperAdminReportRepository {
     // 5. Tasks Query
     List<dynamic> tasksData = [];
     try {
-      tasksData = await _admin
+      tasksData = await _client
           .from('tasks')
           .select('*, client:client_profiles(company_name), team:teams(name, department), creator:profiles!tasks_created_by_fkey(full_name), task_assignees(profile_id, is_lead)')
           .order('created_at', ascending: false);
     } catch (_) {
       try {
-        tasksData = await _admin.from('tasks').select('*').order('created_at', ascending: false);
+        tasksData = await _client.from('tasks').select('*').order('created_at', ascending: false);
       } catch (_) {}
     }
 
@@ -764,7 +764,7 @@ class SuperAdminReportRepository {
     double hoursWorkedSum = 0;
 
     try {
-      final attData = await _admin
+      final attData = await _client
           .from('attendance')
           .select('*, employee:profiles!attendance_employee_id_fkey(full_name)')
           .order('attendance_date', ascending: false);
@@ -814,7 +814,7 @@ class SuperAdminReportRepository {
     double paidRevenueSum = 0.0;
 
     try {
-      final crmData = await _admin
+      final crmData = await _client
           .from('crm_entries')
           .select('*, client:client_profiles(company_name)')
           .order('created_at', ascending: false);
@@ -855,7 +855,7 @@ class SuperAdminReportRepository {
     // 8. Client Meetings / Events Query
     List<ClientMeetingReportItem> meetingList = [];
     try {
-      final eventsData = await _admin
+      final eventsData = await _client
           .from('events')
           .select('id, title, description, start_time, end_time, location, client_id, meeting_notes, status, created_at')
           .order('start_time', ascending: false);
@@ -888,7 +888,7 @@ class SuperAdminReportRepository {
     final Map<String, _CatAcc> catMap = {};
 
     try {
-      final expData = await _admin
+      final expData = await _client
           .from('expenses')
           .select('*, category:expense_categories(name), recorder:profiles!expenses_recorded_by_fkey(full_name)')
           .order('expense_date', ascending: false);
@@ -936,7 +936,7 @@ class SuperAdminReportRepository {
     List<PenaltyReportItem> penaltyList = [];
     double penaltiesSum = 0.0;
     try {
-      final penData = await _admin
+      final penData = await _client
           .from('penalties')
           .select('*, employee:profiles!penalties_employee_id_fkey(full_name)')
           .order('issue_date', ascending: false);

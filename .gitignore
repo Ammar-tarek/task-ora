@@ -11,6 +11,13 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+node_modules/
+.dart_tool/
+build/
+.env
+.env.*
+!.env.example
+supabase/.temp/
 
 # IntelliJ related
 *.iml
@@ -43,3 +50,5 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+# Widget Preview related
+.widget_preview/

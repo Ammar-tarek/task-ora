@@ -1,6 +1,7 @@
 // lib/features/roles/roles_editor_screen.dart
 // Roles & Privileges — shows real users from Supabase grouped by role.
-// Admin can change any user's role. Uses adminClient to bypass RLS.
+// Admin can change any user's role. Reads via RLS (admin sees all); the role
+// change goes through the admin-gated PrivilegedOps.updateUser.
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import '../../core/auth/auth_notifier.dart';
 import '../../core/l10n/app_strings.dart';
 import '../../core/providers/locale_controller.dart';
 import '../../core/models/profile_model.dart';
+import '../../core/services/privileged_ops.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -77,7 +79,7 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
       _error = null;
     });
     try {
-      var query = SupabaseService.adminClient.from('profiles').select();
+      var query = SupabaseService.client.from('profiles').select();
       // Managers only see their own team (members + their clients).
       if (!_isAdmin && _scopeTeamId != null) {
         query = query.eq('team_id', _scopeTeamId!);
@@ -147,10 +149,8 @@ class _RolesEditorScreenState extends State<RolesEditorScreen> {
     if (confirmed != true) return;
 
     try {
-      await SupabaseService.adminClient
-          .from('profiles')
-          .update({'role': newRole})
-          .eq('id', user.id);
+      // Privileged: super_admin grants are gated server-side.
+      await PrivilegedOps.updateUser(userId: user.id, role: newRole);
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

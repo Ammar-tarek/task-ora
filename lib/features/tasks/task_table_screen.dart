@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/providers/team_filter_notifier.dart';
+import '../../core/providers/workspace_scope_notifier.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/models/task_model.dart';
 import '../../core/utils/task_permissions.dart';
@@ -29,6 +30,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
 
   TaskPermissions? _perms;
   TeamFilterNotifier? _teamFilter;
+  WorkspaceScopeNotifier? _scope;
 
   late AnimationController _pageAnim;
   late Animation<double> _pageFade;
@@ -38,7 +40,8 @@ class _TaskTableScreenState extends State<TaskTableScreen>
     'All',
     'To Do',
     'In Progress',
-    'Employee Done',
+    'Pending Review',
+    'Changes Requested',
     'Client Approved',
     'Client Rejected',
     'Completed',
@@ -47,7 +50,8 @@ class _TaskTableScreenState extends State<TaskTableScreen>
   static const _statusMap = <String, String>{
     'To Do': 'not_started',
     'In Progress': 'in_progress',
-    'Employee Done': 'employee_done',
+    'Pending Review': 'employee_done',
+    'Changes Requested': 'changes_requested',
     'Client Approved': 'client_approved',
     'Client Rejected': 'client_rejected',
     'Completed': 'completed',
@@ -67,6 +71,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _pageAnim, curve: Curves.easeOut));
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scope = context.read<WorkspaceScopeNotifier>()..addListener(_onTeamChange);
       _teamFilter = context.read<TeamFilterNotifier>()
         ..loadTeams()
         ..addListener(_onTeamChange);
@@ -76,6 +81,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
 
   @override
   void dispose() {
+    _scope?.removeListener(_onTeamChange);
     _teamFilter?.removeListener(_onTeamChange);
     _pageAnim.dispose();
     super.dispose();
@@ -172,9 +178,12 @@ class _TaskTableScreenState extends State<TaskTableScreen>
       final profile = context.read<AuthNotifier>().profile;
       _perms = profile != null ? TaskPermissions(profile) : null;
 
+      // Authoritative workspace scope (see task_board_screen): an active
+      // department never maps to null ("show all"); unresolved → sentinel → none.
+      final scope = context.read<WorkspaceScopeNotifier>();
       String? overrideTeamId;
       if (profile?.isAdmin == true) {
-        overrideTeamId = context.read<TeamFilterNotifier>().selectedTeamId;
+        overrideTeamId = scope.taskScopeTeamId;
       }
 
       final data = profile != null
@@ -292,6 +301,8 @@ class _TaskTableScreenState extends State<TaskTableScreen>
         return AppColors.statusInProgress;
       case 'employee_done':
         return AppColors.statusMedium;
+      case 'changes_requested':
+        return AppColors.statusHigh;
       case 'client_approved':
         return AppColors.statusDone;
       case 'client_rejected':

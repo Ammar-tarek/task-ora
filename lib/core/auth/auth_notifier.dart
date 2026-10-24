@@ -119,7 +119,7 @@ class AuthNotifier extends ChangeNotifier {
               .eq('id', userId)
               .maybeSingle();
         } catch (_) {
-          data = await SupabaseService.adminClient
+          data = await SupabaseService.client
               .from('profiles')
               .select()
               .eq('id', userId)
@@ -137,22 +137,8 @@ class AuthNotifier extends ChangeNotifier {
           return;
         }
 
-        final userEmail = user.email?.toLowerCase();
-        final isAmmarSuperAdmin = userEmail == 'ammar@cashback.com';
-
-        if (isAmmarSuperAdmin && data['role'] != 'super_admin') {
-          data['role'] = 'super_admin';
-          try {
-            await SupabaseService.adminClient
-                .from('profiles')
-                .update({'role': 'super_admin'})
-                .eq('id', userId);
-          } catch (_) {
-            // DB enum user_role might not have 'super_admin' value yet.
-            // Local memory profile is still safely marked as super_admin.
-          }
-        }
-
+        // Super admin is determined by the DB `is_super_admin` flag (read by
+        // ProfileModel.isSuperAdmin) — no client-side role rewrite.
         _profile = ProfileModel.fromMap(data);
         // Don't flip to authenticated while the biometric lock is still active
         // — a background tokenRefreshed event must not bypass the lock.
@@ -165,7 +151,7 @@ class AuthNotifier extends ChangeNotifier {
 
         // Update last_login_at (fire-and-forget)
         try {
-          SupabaseService.adminClient
+          SupabaseService.client
               .from('profiles')
               .update({'last_login_at': DateTime.now().toIso8601String()})
               .eq('id', userId)
@@ -213,14 +199,14 @@ class AuthNotifier extends ChangeNotifier {
       if (avatarBytes != null) {
         final ext = (avatarExt ?? 'jpg').toLowerCase();
         final path = '$userId/avatar.$ext';
-        await SupabaseService.adminClient.storage
+        await SupabaseService.client.storage
             .from('avatars')
             .uploadBinary(
               path,
               Uint8List.fromList(avatarBytes),
               fileOptions: const FileOptions(upsert: true),
             );
-        final url = SupabaseService.adminClient.storage
+        final url = SupabaseService.client.storage
             .from('avatars')
             .getPublicUrl(path);
         // Cache-bust so the new image shows immediately.
@@ -228,7 +214,7 @@ class AuthNotifier extends ChangeNotifier {
             '$url?v=${DateTime.now().millisecondsSinceEpoch}';
       }
       if (updates.isNotEmpty) {
-        await SupabaseService.adminClient
+        await SupabaseService.client
             .from('profiles')
             .update(updates)
             .eq('id', userId);

@@ -5,13 +5,13 @@ import '../models/team_privileges_model.dart';
 import '../services/supabase_service.dart';
 
 class TeamPrivilegesRepository {
-  static final _admin = SupabaseService.adminClient;
+  static final _client = SupabaseService.client;
 
   /// Fetch privileges for [teamId].
   /// Returns defaults if the table exists but no row has been saved yet.
   /// Throws if the table doesn't exist (caller should show SQL migration prompt).
   static Future<TeamPrivilegesModel> fetchForTeam(String teamId) async {
-    final data = await _admin
+    final data = await _client
         .from('team_privileges')
         .select()
         .eq('team_id', teamId)
@@ -22,7 +22,7 @@ class TeamPrivilegesRepository {
 
   /// Upsert [privileges] — inserts on first save, updates on subsequent saves.
   static Future<void> save(TeamPrivilegesModel privileges) async {
-    await _admin
+    await _client
         .from('team_privileges')
         .upsert(privileges.toUpsertMap(), onConflict: 'team_id');
   }

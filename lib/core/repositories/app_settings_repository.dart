@@ -8,7 +8,7 @@ import 'dart:convert';
 import '../services/supabase_service.dart';
 
 class AppSettingsRepository {
-  static final _admin = SupabaseService.adminClient;
+  static final _client = SupabaseService.client;
 
   /// Legacy single-SSID key. Kept for backward compatibility (see [getWifiSsids]
   /// / [setWifiSsids]) — never deleted so old app versions keep working.
@@ -25,7 +25,7 @@ class AppSettingsRepository {
   /// Read a single setting value. Returns null if missing.
   static Future<String?> get(String key) async {
     try {
-      final row = await _admin
+      final row = await _client
           .from('app_settings')
           .select('value')
           .eq('key', key)
@@ -38,7 +38,7 @@ class AppSettingsRepository {
 
   /// Write a single setting value (admin only — UI gates this).
   static Future<void> set(String key, String value, {String? updatedBy}) async {
-    await _admin.from('app_settings').upsert({
+    await _client.from('app_settings').upsert({
       'key': key,
       'value': value,
       'updated_at': DateTime.now().toIso8601String(),

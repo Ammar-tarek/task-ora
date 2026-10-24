@@ -10,21 +10,22 @@ import 'notification_repository.dart';
 
 class TeamRepository {
   static final _client = SupabaseService.client;
-  static final _admin = SupabaseService.adminClient;
 
   // ── Teams ──────────────────────────────────────────────────────────────────
 
-  /// All teams bypassing RLS — needed where a manager must see OTHER teams
-  /// (e.g. the department-handoff picker). Managers' RLS limits them to their
-  /// own team, so the normal [fetchAll] would return only one team.
+  /// Active teams for pickers where a manager must see OTHER teams (e.g. the
+  /// department-handoff picker). Backed by the SECURITY DEFINER RPC
+  /// `list_active_teams` (id/name/department only — not department-sensitive),
+  /// so no service-role key is needed. [activeOnly] is kept for call-site
+  /// compatibility; the RPC always returns active teams.
   static Future<List<TeamModel>> fetchAllAdmin({
     bool activeOnly = false,
   }) async {
     try {
-      var query = _admin.from('teams').select();
-      if (activeOnly) query = query.eq('is_active', true);
-      final data = await query.order('name');
-      return (data as List).map((m) => TeamModel.fromMap(m)).toList();
+      final data = await _client.rpc('list_active_teams');
+      return (data as List)
+          .map((m) => TeamModel.fromMap(m as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -141,7 +142,7 @@ class TeamRepository {
   /// must list another team's members, e.g. the task assignee picker.
   static Future<List<ProfileModel>> fetchMembersAdmin(String teamId) async {
     try {
-      final data = await _admin
+      final data = await _client
           .from('profiles')
           .select()
           .eq('team_id', teamId)
@@ -156,7 +157,7 @@ class TeamRepository {
   /// has no team yet.
   static Future<List<ProfileModel>> fetchAllStaffAdmin() async {
     try {
-      final data = await _admin
+      final data = await _client
           .from('profiles')
           .select()
           .neq('role', 'client')
@@ -170,7 +171,7 @@ class TeamRepository {
 
   static Future<List<ProfileModel>> fetchMembers(String teamId) async {
     try {
-      final data = await _admin
+      final data = await _client
           .from('profiles')
           .select()
           .eq('team_id', teamId)
@@ -184,7 +185,7 @@ class TeamRepository {
   /// Assign or remove a user from a team. Pass null [teamId] to unassign.
   static Future<bool> setTeamForUser(String userId, String? teamId) async {
     try {
-      await _admin
+      await _client
           .from('profiles')
           .update({'team_id': teamId})
           .eq('id', userId);
@@ -227,7 +228,7 @@ class TeamRepository {
   /// Fetch member counts for every team at once. Returns {teamId -> count}.
   static Future<Map<String, int>> fetchMemberCounts() async {
     try {
-      final data = await _admin
+      final data = await _client
           .from('profiles')
           .select('team_id')
           .not('team_id', 'is', null);
