@@ -15,7 +15,7 @@ node_modules/
 .dart_tool/
 build/
 .env
-.env.*
+.env.* 
 !.env.example
 supabase/.temp/
 
