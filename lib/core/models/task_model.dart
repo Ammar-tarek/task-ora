@@ -212,6 +212,14 @@ class TaskModel {
   String get leadAssigneeName =>
       assignees.isEmpty ? '—' : assignees.first.fullName;
 
+  /// This profile's assignment row, or null if they are not an assignee.
+  TaskAssignee? assigneeFor(String profileId) {
+    for (final a in assignees) {
+      if (a.profileId == profileId) return a;
+    }
+    return null;
+  }
+
   TaskModel copyWith({
     String? status,
     String? paymentStatus,
@@ -258,11 +266,24 @@ class TaskAssignee {
   final String fullName;
   final bool isLead;
 
+  /// Assignment response: 'pending' | 'accepted' | 'rejected'. Null = legacy
+  /// row (treated as accepted). Distinct from the task's review status.
+  final String? response;
+  final String? respondedAt;
+  final String? responseReason;
+
   const TaskAssignee({
     required this.profileId,
     required this.fullName,
     required this.isLead,
+    this.response,
+    this.respondedAt,
+    this.responseReason,
   });
+
+  /// True when this assignee has not yet accepted/rejected (and is not legacy).
+  bool get isPendingResponse => response == 'pending';
+  bool get hasRejectedAssignment => response == 'rejected';
 
   factory TaskAssignee.fromMap(Map<String, dynamic> m) {
     final profile = m['profile'] as Map<String, dynamic>?;
@@ -270,6 +291,9 @@ class TaskAssignee {
       profileId: m['profile_id'] as String? ?? '',
       fullName: profile?['full_name'] as String? ?? 'Unknown',
       isLead: m['is_lead'] as bool? ?? false,
+      response: m['response'] as String?,
+      respondedAt: m['responded_at'] as String?,
+      responseReason: m['response_reason'] as String?,
     );
   }
 }

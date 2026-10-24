@@ -1,16 +1,18 @@
 // lib/features/expenses/daily_expenses_screen.dart
+// Standalone CENTRAL COMPANY EXPENSES page (Admin only). Shows the company's
+// central cash balance and a deposit/expense ledger. Fully isolated from
+// Department Finance and the shared `expenses` table — it reads/writes only the
+// company_ledger via CompanyLedgerRepository (admin-only, atomic, server-side).
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
-import '../../core/l10n/app_strings.dart';
 import '../../core/providers/locale_controller.dart';
-import '../../core/providers/team_filter_notifier.dart';
-import '../../core/providers/team_privileges_notifier.dart';
-import '../../core/repositories/expense_repository.dart';
+import '../../core/repositories/company_ledger_repository.dart';
+import '../../core/router/app_routes.dart';
 import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/team_filter_chip.dart';
 
 class DailyExpensesScreen extends StatefulWidget {
   const DailyExpensesScreen({super.key});
@@ -19,23 +21,21 @@ class DailyExpensesScreen extends StatefulWidget {
 }
 
 class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
-  List<ExpenseItem> _all = [];
-  List<Map<String, dynamic>> _categories = [];
-  String _cat = 'All';
+  List<LedgerEntry> _all = []; // all rows, chronological, running balance set
   bool _loading = true;
-  TeamFilterNotifier? _teamFilter;
+
+  // Selected reporting month — defaults to the current calendar month.
+  late int _year;
+  late int _month;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _teamFilter = context.read<TeamFilterNotifier>()
-        ..loadTeams()
-        ..addListener(_onTeamChange);
-      _load();
-    });
-    // Live refresh when expenses change.
-    RealtimeService.instance.listen(const ['expenses'], _onRealtime);
+    final now = DateTime.now();
+    _year = now.year;
+    _month = now.month;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    RealtimeService.instance.listen(const ['company_ledger'], _onRealtime);
   }
 
   void _onRealtime() {
@@ -45,456 +45,355 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
   @override
   void dispose() {
     RealtimeService.instance.unlisten(_onRealtime);
-    _teamFilter?.removeListener(_onTeamChange);
     super.dispose();
-  }
-
-  void _onTeamChange() {
-    if (mounted) _load();
   }
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final profile = context.read<AuthNotifier>().profile;
-    // Refresh privileges so grants/restrictions take effect immediately.
-    await context.read<TeamPrivilegesNotifier>().reload();
-    if (!mounted) return;
-
-    // Determine team scope: admin uses switcher, manager uses their own team
-    String? teamId;
-    if (profile?.isAdmin == true) {
-      teamId = context.read<TeamFilterNotifier>().selectedTeamId;
-    } else if (profile?.isManager == true) {
-      teamId = profile?.teamId;
-    }
-
-    final results = await Future.wait([
-      ExpenseRepository.fetchAll(teamId: teamId),
-      ExpenseRepository.fetchCategories(),
-    ]);
+    final all = await CompanyLedgerRepository.fetchAll();
     if (mounted) {
       setState(() {
-        _all = results[0] as List<ExpenseItem>;
-        _categories = results[1] as List<Map<String, dynamic>>;
+        _all = all;
         _loading = false;
       });
     }
   }
 
-  List<ExpenseItem> get _filtered =>
-      _cat == 'All' ? _all : _all.where((e) => e.categoryName == _cat).toList();
-
-  double get _total => _filtered.fold(0, (s, e) => s + e.amount);
-
-  List<String> get _catLabels {
-    final names = _categories.map((c) => c['name'] as String? ?? '').toList();
-    return ['All', ...names];
+  // Selected-month slice, newest first for display.
+  List<LedgerEntry> get _monthEntries {
+    final m = CompanyLedgerRepository.inMonth(_all, _year, _month);
+    return m.reversed.toList();
   }
 
-  IconData _categoryIcon(String cat) {
-    switch (cat.toLowerCase()) {
-      case 'food':
-        return Icons.restaurant_outlined;
-      case 'infrastructure':
-        return Icons.construction_outlined;
-      case 'software':
-        return Icons.computer_outlined;
-      case 'office':
-        return Icons.business_outlined;
-      case 'transport':
-        return Icons.directions_car_outlined;
-      case 'training':
-        return Icons.school_outlined;
-      default:
-        return Icons.receipt_long_outlined;
+  double get _balance => CompanyLedgerRepository.balanceOf(_all);
+  double get _monthExpenses =>
+      CompanyLedgerRepository.monthlyExpenseTotal(_all, _year, _month);
+  int get _monthCount =>
+      CompanyLedgerRepository.monthlyExpenseCount(_all, _year, _month);
+
+  bool get _isCurrentOrPast {
+    final now = DateTime.now();
+    return _year < now.year || (_year == now.year && _month <= now.month);
+  }
+
+  void _prevMonth() {
+    setState(() {
+      if (_month == 1) {
+        _month = 12;
+        _year--;
+      } else {
+        _month--;
+      }
+    });
+  }
+
+  void _nextMonth() {
+    if (_isCurrentOrPast) {
+      // only move forward up to the current month
+      final now = DateTime.now();
+      if (_year == now.year && _month == now.month) return;
+      setState(() {
+        if (_month == 12) {
+          _month = 1;
+          _year++;
+        } else {
+          _month++;
+        }
+      });
     }
   }
 
-  Future<void> _approveExpense(ExpenseItem e) async {
-    final profile = context.read<AuthNotifier>().profile;
-    if (profile == null) return;
-    await ExpenseRepository.approveExpense(e.id, profile.id);
-    _load();
-  }
+  static const _monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
 
-  Future<void> _deleteExpense(ExpenseItem e) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Expense'),
-        content: const Text('Are you sure you want to delete this expense?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      await ExpenseRepository.deleteExpense(e.id);
-      _load();
+  void _goBack() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.dashboard);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     context.select<LocaleController, Locale>((l) => l.locale);
-    final profile = context.select<AuthNotifier, dynamic>((a) => a.profile);
-    final canManageExpenses = (profile?.isAdmin == true) || context.select<TeamPrivilegesNotifier, bool>((p) => p.canManageExpenses);
-    final isManager = canManageExpenses;
+    final isAdmin = context.select<AuthNotifier, bool>(
+      (a) => a.profile?.isAdmin == true,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(S.t('expenses')),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back to dashboard',
+          onPressed: _goBack,
+        ),
+        title: const Text('Company Expenses'),
         actions: [
-          if (isManager)
-            IconButton(
-              icon: const Icon(Icons.category_outlined),
-              tooltip: 'Manage Categories',
-              onPressed: () => _showManageCategories(context),
-            ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
-      floatingActionButton: (!isManager || canManageExpenses)
-          ? FloatingActionButton(
-              onPressed: () => _showAddExpense(isManager: isManager),
-              backgroundColor: AppColors.primary,
-              child: const Icon(Icons.add, color: AppColors.gold),
-            )
-          : null,
-      body: Column(
-        children: [
-          const TeamFilterChip(),
-          Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.gold),
-                  )
-                : Column(
+      body: !isAdmin
+          ? const _AdminOnlyNotice()
+          : _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppColors.gold),
+                )
+              : RefreshIndicator(
+                  color: AppColors.gold,
+                  onRefresh: _load,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
                     children: [
-                      // Total banner
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        color: AppColors.primary,
-                        child: Column(
-                          children: [
-                            Text(
-                              'TOTAL EXPENSES',
-                              style: AppTextStyles.labelCaps.copyWith(
-                                color: AppColors.onPrimary.withValues(alpha: 0.7),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${_total.toStringAsFixed(2)} EGP',
-                              style: AppTextStyles.dataLg.copyWith(
-                                color: AppColors.gold,
-                                fontSize: 28,
-                              ),
-                            ),
-                            Text(
-                              '${_filtered.length} record${_filtered.length == 1 ? '' : 's'}',
-                              style: AppTextStyles.bodySm.copyWith(
-                                color: AppColors.onPrimary.withValues(alpha: 0.7),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Category chips
-                      Container(
-                        color: AppColors.surfaceContainerLowest,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: _catLabels
-                                .map(
-                                  (c) => Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: ChoiceChip(
-                                      label: Text(c),
-                                      selected: _cat == c,
-                                      onSelected: (_) =>
-                                          setState(() => _cat = c),
-                                      selectedColor: AppColors.primary,
-                                      labelStyle: AppTextStyles.bodySm.copyWith(
-                                        color: _cat == c
-                                            ? AppColors.onPrimary
-                                            : AppColors.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                        ),
-                      ),
-                      const Divider(height: 1),
-
-                      // List
-                      Expanded(
-                        child: _filtered.isEmpty
-                            ? Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.receipt_long_outlined,
-                                      size: 64,
-                                      color: AppColors.outlineVariant,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      'No expenses found',
-                                      style: AppTextStyles.labelMd,
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : RefreshIndicator(
-                                color: AppColors.gold,
-                                onRefresh: _load,
-                                child: ListView.separated(
-                                  padding: const EdgeInsets.all(16),
-                                  itemCount: _filtered.length,
-                                  separatorBuilder: (_, _) =>
-                                      const SizedBox(height: 8),
-                                  itemBuilder: (_, i) {
-                                    final e = _filtered[i];
-                                    return _ExpenseCard(
-                                      item: e,
-                                      isManager: isManager,
-                                      icon: _categoryIcon(e.categoryName),
-                                      onApprove:
-                                          (isManager && e.status != 'approved')
-                                          ? () => _approveExpense(e)
-                                          : null,
-                                      onDelete: isManager
-                                          ? () => _deleteExpense(e)
-                                          : null,
-                                    );
-                                  },
-                                ),
-                              ),
-                      ),
+                      _buildMonthNav(),
+                      const SizedBox(height: 16),
+                      _buildBalanceCard(),
+                      const SizedBox(height: 16),
+                      _buildActions(),
+                      const SizedBox(height: 20),
+                      _buildLedger(),
                     ],
                   ),
-          ),
-        ],
-      ),
+                ),
     );
   }
 
-  Future<void> _showManageCategories(BuildContext context) async {
-    await showDialog(
-      context: context,
-      builder: (_) =>
-          _ManageCategoriesDialog(categories: _categories, onChanged: _load),
-    );
-  }
-
-  Future<void> _showAddExpense({required bool isManager}) async {
-    if (_categories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isManager
-                ? 'No categories yet. Use the category button to add some.'
-                : 'No categories available. Please ask your admin to create categories.',
-          ),
+  Widget _buildMonthNav() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.chevron_left, color: AppColors.gold),
+          onPressed: _prevMonth,
+          tooltip: 'Previous month',
         ),
-      );
-      return;
-    }
-    await showDialog(
-      context: context,
-      builder: (_) => _AddExpenseDialog(
-        categories: _categories,
-        recordedBy: context.read<AuthNotifier>().profile?.id ?? '',
-        onSaved: _load,
-      ),
+        Text(
+          '${_monthNames[_month - 1]} $_year',
+          style: AppTextStyles.headlineSm,
+        ),
+        IconButton(
+          icon: Icon(
+            Icons.chevron_right,
+            color: (_year == DateTime.now().year && _month == DateTime.now().month)
+                ? AppColors.outlineVariant
+                : AppColors.gold,
+          ),
+          onPressed: _nextMonth,
+          tooltip: 'Next month',
+        ),
+      ],
     );
   }
-}
 
-// ── Expense Card ────────────────────────────────────────────────────────────
-
-class _ExpenseCard extends StatelessWidget {
-  const _ExpenseCard({
-    required this.item,
-    required this.isManager,
-    required this.icon,
-    this.onApprove,
-    this.onDelete,
-  });
-  final ExpenseItem item;
-  final bool isManager;
-  final IconData icon;
-  final VoidCallback? onApprove;
-  final VoidCallback? onDelete;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildBalanceCard() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: item.status == 'approved'
-              ? AppColors.statusDone.withValues(alpha: 0.4)
-              : AppColors.outlineVariant,
-        ),
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            'AVAILABLE COMPANY BALANCE',
+            style: AppTextStyles.labelCaps.copyWith(
+              color: AppColors.onPrimary.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${_balance.toStringAsFixed(2)} EGP',
+            style: AppTextStyles.dataLg.copyWith(
+              color: AppColors.gold,
+              fontSize: 32,
+            ),
+          ),
+          const SizedBox(height: 16),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              _MiniStat(
+                label: 'THIS MONTH',
+                value: '${_monthExpenses.toStringAsFixed(2)} EGP',
+              ),
               Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: AppColors.gold, size: 20),
+                width: 1,
+                height: 32,
+                color: AppColors.onPrimary.withValues(alpha: 0.2),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.description.isNotEmpty
-                          ? item.description
-                          : item.categoryName,
-                      style: AppTextStyles.labelMd,
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        TStatusChip(
-                          label: item.categoryName,
-                          color: AppColors.secondary,
-                        ),
-                        const SizedBox(width: 6),
-                        Text('· ${item.date}', style: AppTextStyles.bodySm),
-                      ],
-                    ),
-                    if (item.recordedByName.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        'By: ${item.recordedByName}',
-                        style: AppTextStyles.bodySm.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${item.amount.toStringAsFixed(2)} EGP',
-                    style: AppTextStyles.dataMd.copyWith(
-                      color: AppColors.statusHigh,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  _ExpenseStatusBadge(status: item.status),
-                ],
+              _MiniStat(
+                label: 'TRANSACTIONS',
+                value: '$_monthCount',
               ),
             ],
           ),
-
-          // Admin / manager actions
-          if (isManager) ...[
-            const SizedBox(height: 10),
-            const Divider(height: 1),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (onApprove != null)
-                  TextButton.icon(
-                    icon: const Icon(
-                      Icons.check_circle_outline,
-                      size: 16,
-                      color: AppColors.statusDone,
-                    ),
-                    label: Text(
-                      'Approve',
-                      style: AppTextStyles.bodySm.copyWith(
-                        color: AppColors.statusDone,
-                      ),
-                    ),
-                    onPressed: onApprove,
-                  ),
-                if (onDelete != null)
-                  TextButton.icon(
-                    icon: const Icon(
-                      Icons.delete_outline,
-                      size: 16,
-                      color: AppColors.error,
-                    ),
-                    label: Text(
-                      'Delete',
-                      style: AppTextStyles.bodySm.copyWith(
-                        color: AppColors.error,
-                      ),
-                    ),
-                    onPressed: onDelete,
-                  ),
-              ],
-            ),
-          ],
         ],
       ),
     );
   }
+
+  Widget _buildActions() {
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _showAddFunds,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.statusDone,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            icon: const Icon(Icons.add_card, size: 18, color: Colors.white),
+            label: const Text('Add Funds', style: TextStyle(color: Colors.white)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _showRecordExpense,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            icon: const Icon(Icons.remove_circle_outline, size: 18, color: AppColors.gold),
+            label: const Text('Record Expense', style: TextStyle(color: AppColors.gold)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLedger() {
+    final entries = _monthEntries;
+    if (entries.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 40),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.outlineVariant),
+              const SizedBox(height: 12),
+              Text('No transactions this month', style: AppTextStyles.labelMd),
+            ],
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('LEDGER', style: AppTextStyles.labelCaps),
+        const SizedBox(height: 8),
+        // Horizontal scroll keeps the table readable on narrow phones.
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: MediaQuery.of(context).size.width - 32,
+            ),
+            child: DataTable(
+              columnSpacing: 20,
+              headingRowColor: WidgetStatePropertyAll(
+                AppColors.surfaceContainerLowest,
+              ),
+              columns: const [
+                DataColumn(label: Text('Date')),
+                DataColumn(label: Text('Type')),
+                DataColumn(label: Text('Description')),
+                DataColumn(label: Text('Amount'), numeric: true),
+                DataColumn(label: Text('Balance'), numeric: true),
+              ],
+              rows: entries.map((e) {
+                final sign = e.isDeposit ? '+' : '−';
+                final color = e.isDeposit ? AppColors.statusDone : AppColors.statusHigh;
+                return DataRow(cells: [
+                  DataCell(Text(e.date, style: AppTextStyles.bodySm)),
+                  DataCell(_TypePill(isDeposit: e.isDeposit)),
+                  DataCell(
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 200),
+                      child: Text(
+                        e.description.isEmpty ? '—' : e.description,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySm,
+                      ),
+                    ),
+                  ),
+                  DataCell(Text(
+                    '$sign${e.amount.toStringAsFixed(2)}',
+                    style: AppTextStyles.dataSm.copyWith(color: color),
+                  )),
+                  DataCell(Text(
+                    e.balanceAfter.toStringAsFixed(2),
+                    style: AppTextStyles.dataSm,
+                  )),
+                ]);
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Dialogs ────────────────────────────────────────────────────────────────
+
+  Future<void> _showAddFunds() => _showTxnDialog(isDeposit: true);
+  Future<void> _showRecordExpense() => _showTxnDialog(isDeposit: false);
+
+  Future<void> _showTxnDialog({required bool isDeposit}) async {
+    final token = CompanyLedgerRepository.newToken(); // one per attempt
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => _TxnDialog(
+        isDeposit: isDeposit,
+        clientToken: token,
+        currentBalance: _balance,
+      ),
+    );
+    if (saved == true) _load();
+  }
 }
 
-// ── Expense Status Badge ────────────────────────────────────────────────────
+// ── Mini stat (inside the balance card) ───────────────────────────────────────
 
-class _ExpenseStatusBadge extends StatelessWidget {
-  const _ExpenseStatusBadge({required this.status});
-  final String status;
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({required this.label, required this.value});
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
-    final Color color;
-    final String label;
-    switch (status) {
-      case 'approved':
-        color = AppColors.statusDone;
-        label = 'Approved';
-        break;
-      case 'rejected':
-        color = AppColors.statusHigh;
-        label = 'Rejected';
-        break;
-      default:
-        color = AppColors.gold;
-        label = 'Pending';
-    }
+    return Column(
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.bodySm.copyWith(
+            color: AppColors.onPrimary.withValues(alpha: 0.7),
+            fontSize: 10,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: AppTextStyles.labelMd.copyWith(color: AppColors.onPrimary),
+        ),
+      ],
+    );
+  }
+}
+
+class _TypePill extends StatelessWidget {
+  const _TypePill({required this.isDeposit});
+  final bool isDeposit;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDeposit ? AppColors.statusDone : AppColors.statusHigh;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -503,311 +402,100 @@ class _ExpenseStatusBadge extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(
-        label,
+        isDeposit ? 'Deposit' : 'Expense',
         style: AppTextStyles.bodySm.copyWith(color: color, fontSize: 10),
       ),
     );
   }
 }
 
-// ── Manage Categories Dialog ────────────────────────────────────────────────
-
-class _ManageCategoriesDialog extends StatefulWidget {
-  const _ManageCategoriesDialog({
-    required this.categories,
-    required this.onChanged,
-  });
-  final List<Map<String, dynamic>> categories;
-  final VoidCallback onChanged;
-
+class _AdminOnlyNotice extends StatelessWidget {
+  const _AdminOnlyNotice();
   @override
-  State<_ManageCategoriesDialog> createState() =>
-      _ManageCategoriesDialogState();
-}
-
-class _ManageCategoriesDialogState extends State<_ManageCategoriesDialog> {
-  late List<Map<String, dynamic>> _cats;
-  final _nameCtrl = TextEditingController();
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _cats = List<Map<String, dynamic>>.from(widget.categories);
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _addCategory() async {
-    final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
-    setState(() => _saving = true);
-    final ok = await ExpenseRepository.createCategory(name: name);
-    if (ok) {
-      _nameCtrl.clear();
-      final updated = await ExpenseRepository.fetchCategories();
-      if (mounted) setState(() => _cats = updated);
-      widget.onChanged();
-    }
-    if (mounted) setState(() => _saving = false);
-  }
-
-  Future<void> _deleteCategory(String id) async {
-    await ExpenseRepository.deleteCategory(id);
-    final updated = await ExpenseRepository.fetchCategories();
-    if (mounted) setState(() => _cats = updated);
-    widget.onChanged();
-  }
-
-  Future<void> _editCategory(Map<String, dynamic> cat) async {
-    final ctrl = TextEditingController(text: cat['name'] as String? ?? '');
-    final result = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Edit Category'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(labelText: 'Category Name'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-            child: const Text('Save'),
-          ),
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.lock_outline, size: 56, color: AppColors.outlineVariant),
+          const SizedBox(height: 12),
+          Text('Company Expenses is admin-only.', style: AppTextStyles.labelMd),
         ],
       ),
     );
-    ctrl.dispose();
-    if (result != null && result.isNotEmpty) {
-      await ExpenseRepository.updateCategory(
-        id: cat['id'] as String,
-        name: result,
-      );
-      final updated = await ExpenseRepository.fetchCategories();
-      if (mounted) setState(() => _cats = updated);
-      widget.onChanged();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Manage Categories'),
-      content: SizedBox(
-        width: 360,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Add new
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _nameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'New Category Name',
-                      hintText: 'e.g. Marketing',
-                    ),
-                    onSubmitted: (_) => _addCategory(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _saving ? null : _addCategory,
-                  child: _saving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Add'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Divider(),
-            const SizedBox(height: 4),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 300),
-              child: _cats.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text('No categories yet'),
-                    )
-                  : ListView.builder(
-                      // ignore: deprecated_member_use
-                      cacheExtent: 250.0,
-                      itemExtent: 48.0,
-                      addRepaintBoundaries: true,
-                      itemCount: _cats.length,
-                      itemBuilder: (_, i) {
-                        final cat = _cats[i];
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            cat['name'] as String? ?? '',
-                            style: AppTextStyles.bodyMd,
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.edit_outlined,
-                                  size: 18,
-                                  color: AppColors.gold,
-                                ),
-                                tooltip: 'Rename',
-                                onPressed: () => _editCategory(cat),
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  size: 18,
-                                  color: AppColors.error,
-                                ),
-                                tooltip: 'Remove',
-                                onPressed: () =>
-                                    _deleteCategory(cat['id'] as String),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Done'),
-        ),
-      ],
-    );
   }
 }
 
-// ── Add Expense Dialog ──────────────────────────────────────────────────────
+// ── Add Funds / Record Expense dialog ─────────────────────────────────────────
 
-class _AddExpenseDialog extends StatefulWidget {
-  const _AddExpenseDialog({
-    required this.categories,
-    required this.recordedBy,
-    required this.onSaved,
+class _TxnDialog extends StatefulWidget {
+  const _TxnDialog({
+    required this.isDeposit,
+    required this.clientToken,
+    required this.currentBalance,
   });
-  final List<Map<String, dynamic>> categories;
-  final String recordedBy;
-  final VoidCallback onSaved;
+  final bool isDeposit;
+  final String clientToken;
+  final double currentBalance;
 
   @override
-  State<_AddExpenseDialog> createState() => _AddExpenseDialogState();
+  State<_TxnDialog> createState() => _TxnDialogState();
 }
 
-class _AddExpenseDialogState extends State<_AddExpenseDialog> {
+class _TxnDialogState extends State<_TxnDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _paidCtrl = TextEditingController();
-
-  late List<Map<String, dynamic>> _cats;
-  String? _catId;
   DateTime _date = DateTime.now();
   bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _cats = List<Map<String, dynamic>>.from(widget.categories);
-    if (_cats.isNotEmpty) {
-      _catId = _cats.first['id'] as String;
-    }
-  }
+  String? _error;
 
   @override
   void dispose() {
     _amountCtrl.dispose();
     _descCtrl.dispose();
-    _paidCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _addNewCategory() async {
-    final ctrl = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New Category'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(
-            labelText: 'Category Name',
-            hintText: 'e.g. Marketing',
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-    ctrl.dispose();
-    if (name != null && name.isNotEmpty) {
-      final ok = await ExpenseRepository.createCategory(name: name);
-      if (ok) {
-        final updated = await ExpenseRepository.fetchCategories();
-        if (mounted) {
-          setState(() {
-            _cats = updated;
-            final match = _cats.firstWhere(
-              (c) => c['name'] == name,
-              orElse: () => _cats.last,
-            );
-            _catId = match['id'] as String;
-          });
-        }
-      }
-    }
-  }
-
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate() || _catId == null) return;
-    setState(() => _saving = true);
-    await ExpenseRepository.createExpense(
-      categoryId: _catId!,
-      amount: double.tryParse(_amountCtrl.text.trim()) ?? 0,
-      description: _descCtrl.text.trim(),
-      recordedBy: widget.recordedBy,
-      date: _date.toIso8601String().substring(0, 10),
-      paidTo: _paidCtrl.text.trim().isEmpty ? null : _paidCtrl.text.trim(),
-    );
-    if (mounted) {
-      Navigator.pop(context);
-      widget.onSaved();
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final amount = double.parse(_amountCtrl.text.trim());
+    final date = _date.toIso8601String().substring(0, 10);
+    final desc = _descCtrl.text.trim();
+    final err = widget.isDeposit
+        ? await CompanyLedgerRepository.addFunds(
+            amount: amount,
+            date: date,
+            description: desc.isEmpty ? null : desc,
+            clientToken: widget.clientToken,
+          )
+        : await CompanyLedgerRepository.recordExpense(
+            amount: amount,
+            date: date,
+            description: desc,
+            clientToken: widget.clientToken,
+          );
+    if (!mounted) return;
+    if (err != null) {
+      setState(() {
+        _saving = false;
+        _error = err;
+      });
+      return;
     }
+    Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
+    final deposit = widget.isDeposit;
     return AlertDialog(
-      title: const Text('Add Expense'),
+      backgroundColor: AppColors.surfaceContainerLowest,
+      title: Text(deposit ? 'Add Funds' : 'Record Expense'),
       content: SizedBox(
         width: 400,
         child: Form(
@@ -816,73 +504,50 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _catId,
-                        decoration: const InputDecoration(labelText: 'Category'),
-                        items: _cats
-                            .map(
-                              (c) => DropdownMenuItem<String>(
-                                value: c['id'] as String,
-                                child: Text(c['name'] as String? ?? ''),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) => setState(() => _catId = v),
-                        validator: (v) => v == null ? 'Required' : null,
+                if (!deposit) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Available: ${widget.currentBalance.toStringAsFixed(2)} EGP',
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: IconButton(
-                        icon: const Icon(Icons.add_circle_outline, color: AppColors.gold),
-                        tooltip: 'Add new category',
-                        onPressed: _addNewCategory,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 TextFormField(
                   controller: _amountCtrl,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
                     labelText: 'Amount (EGP)',
                     prefixText: 'EGP ',
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Required';
-                    if (double.tryParse(v) == null) {
-                      return 'Enter a valid number';
+                    final n = double.tryParse((v ?? '').trim());
+                    if (n == null) return 'Enter a valid number';
+                    if (n <= 0) return 'Amount must be greater than zero';
+                    if (!deposit && n > widget.currentBalance) {
+                      return 'Exceeds available balance';
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 12),
-
                 TextFormField(
                   controller: _descCtrl,
                   maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-
-                TextFormField(
-                  controller: _paidCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Paid To (optional)',
-                    hintText: 'Vendor / supplier name',
+                  decoration: InputDecoration(
+                    labelText: deposit ? 'Description (optional)' : 'Description',
                   ),
+                  validator: (v) {
+                    if (!deposit && (v == null || v.trim().isEmpty)) {
+                      return 'Required';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 12),
-
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
@@ -903,6 +568,13 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
                     if (picked != null) setState(() => _date = picked);
                   },
                 ),
+                if (_error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _error!,
+                    style: AppTextStyles.bodySm.copyWith(color: AppColors.error),
+                  ),
+                ],
               ],
             ),
           ),
@@ -910,7 +582,7 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _saving ? null : () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
@@ -919,12 +591,9 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
-              : const Text('Save'),
+              : Text(deposit ? 'Add Funds' : 'Record Expense'),
         ),
       ],
     );

@@ -25,7 +25,6 @@ import '../../core/utils/task_permissions.dart';
 import '../../core/services/n8n_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'status_options_manager_sheet.dart';
-import 'employee_status_workflow.dart';
 
 class TaskDetailSheet extends StatefulWidget {
   final String taskId;
@@ -370,6 +369,114 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       if (mounted) Navigator.pop(context);
     } finally {
       if (mounted) setState(() => _reviewing = false);
+    }
+  }
+
+  /// Employee accepts the assignment.
+  Future<void> _acceptAssignment() async {
+    setState(() => _reviewing = true);
+    try {
+      final err = await TaskRepository.respondToAssignment(widget.taskId, accept: true);
+      if (err != null) {
+        _showSnack(err, isError: true);
+        return;
+      }
+      _showSnack('Task accepted');
+      widget.onUpdated?.call();
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _reviewing = false);
+    }
+  }
+
+  /// Employee rejects the assignment (reason required). Does NOT change status.
+  Future<void> _rejectAssignment() async {
+    final reasonCtrl = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: const Text('Reject Assignment'),
+        content: TextField(
+          controller: reasonCtrl,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Reason *',
+            hintText: 'Why can you not take this task?',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, reasonCtrl.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Reject', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (reason == null) return;
+    if (reason.isEmpty) {
+      _showSnack('A reason is required', isError: true);
+      return;
+    }
+    setState(() => _reviewing = true);
+    try {
+      final err = await TaskRepository.respondToAssignment(
+        widget.taskId,
+        accept: false,
+        reason: reason,
+      );
+      if (err != null) {
+        _showSnack(err, isError: true);
+        return;
+      }
+      _showSnack('Assignment rejected');
+      widget.onUpdated?.call();
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _reviewing = false);
+    }
+  }
+
+  /// Employee moves an accepted task to In Progress.
+  Future<void> _startWork() async {
+    setState(() => _reviewing = true);
+    try {
+      final err = await TaskRepository.startWork(widget.taskId);
+      if (err != null) {
+        _showSnack(err, isError: true);
+        return;
+      }
+      _showSnack('Work started');
+      widget.onUpdated?.call();
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _reviewing = false);
+    }
+  }
+
+  /// Employee-permitted save: only the deadline.
+  Future<void> _saveDeadline() async {
+    setState(() => _saving = true);
+    try {
+      final err = await TaskRepository.updateDeadline(
+        widget.taskId,
+        _dueDate?.toIso8601String().split('T').first,
+      );
+      if (err != null) {
+        _showSnack(err, isError: true);
+        return;
+      }
+      _showSnack('Deadline saved');
+      widget.onUpdated?.call();
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -846,6 +953,71 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         content: Text(msg),
         backgroundColor: isError ? Colors.red.shade800 : null,
         duration: Duration(seconds: isError ? 6 : 3),
+      ),
+    );
+  }
+
+  /// This viewer's own assignee row (employee), or null.
+  TaskAssignee? get _myAssignment {
+    final uid = context.read<AuthNotifier>().profile?.id;
+    if (uid == null || _task == null) return null;
+    return _task!.assigneeFor(uid);
+  }
+
+  /// Banner about the employee's own assignment response (pending / rejected).
+  /// Empty when accepted, legacy (null), or the viewer is not an assignee.
+  List<Widget> _assignmentBanner() {
+    final a = _myAssignment;
+    if (a == null) return const [];
+    if (a.response == 'pending') {
+      return [
+        _banner(
+          AppColors.statusInProgress,
+          Icons.help_outline,
+          'Awaiting your response',
+          'Accept or reject this assignment below.',
+        ),
+      ];
+    }
+    if (a.response == 'rejected') {
+      return [
+        _banner(
+          AppColors.error,
+          Icons.block,
+          'You rejected this assignment',
+          (a.responseReason ?? '').trim().isEmpty ? null : a.responseReason,
+        ),
+      ];
+    }
+    return const [];
+  }
+
+  /// Small coloured banner used by the assignment/review notices.
+  Widget _banner(Color color, IconData icon, String title, String? body) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 8),
+              Text(title, style: AppTextStyles.labelMd.copyWith(color: color)),
+            ],
+          ),
+          if (body != null && body.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(body, style: AppTextStyles.bodySm),
+          ],
+        ],
       ),
     );
   }
@@ -1488,6 +1660,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         ),
         const Divider(height: 24),
 
+        ..._assignmentBanner(),
         ..._reviewBanner(),
 
         // Description (read-only)
@@ -1530,75 +1703,48 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           const SizedBox(height: 18),
         ],
 
-        // Status — editable (built-in employee-allowed + all custom options)
-        Row(
-          children: [
-            _SectionLabel('UPDATE STATUS'),
-            const Spacer(),
-            TextButton.icon(
-              icon: Icon(
-                Icons.info_outline,
-                size: 14,
-                color: AppColors.outlineVariant,
-              ),
-              label: Text(
-                'View Options',
-                style: AppTextStyles.bodySm.copyWith(
-                  color: AppColors.outlineVariant,
-                ),
-              ),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-              ),
-              onPressed: _showStatusOptionsManager,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: (_isMontageTask
-                  // Montage employee: only the built-in allowed workflow states
-                  // (no custom options, no manager/admin states, never
-                  // 'completed' — completion is manager-confirmed).
-                  ? EmployeeStatusWorkflow.montageEmployeeOptions(_statusOptions)
-                  : _statusOptions
-                      .where((o) =>
-                          !o.isDefault ||
-                          EmployeeStatusWorkflow.employeeCanSet(o.label)))
-              .map(
-                (opt) => _StatusChip(
-                  opt.label,
-                  opt.displayLabel,
-                  _status,
-                  (v) => setState(() => _status = v),
-                ),
-              )
-              .toList(),
+        // Status — READ ONLY (management-controlled). Employees move the task
+        // through the workflow actions in the action bar, not by editing here.
+        _SectionLabel('STATUS'),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TStatusChip(
+            label: _task!.statusLabel,
+            color: _statusColor(_task!.status),
+          ),
         ),
         const SizedBox(height: 18),
 
-        // Progress — editable
+        // Progress — READ ONLY (set by management).
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _SectionLabel('MY PROGRESS'),
+            _SectionLabel('PROGRESS'),
             Text(
-              '${_progress.round()}%',
+              '${_task!.completionPercentage}%',
               style: AppTextStyles.labelMd.copyWith(color: AppColors.gold),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Slider(
-          value: _progress,
-          min: 0,
-          max: 100,
-          divisions: 20,
-          activeColor: AppColors.gold,
-          inactiveColor: AppColors.outlineVariant,
-          onChanged: (v) => setState(() => _progress = v),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: _task!.completionPercentage.clamp(0, 100) / 100.0,
+            minHeight: 6,
+            backgroundColor: AppColors.outlineVariant,
+            color: AppColors.gold,
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        // Deadline — the ONLY task field an employee may edit (backend-guarded).
+        _SectionLabel('DEADLINE'),
+        const SizedBox(height: 8),
+        _DatePickerRow(
+          date: _dueDate,
+          onPick: (d) => setState(() => _dueDate = d),
         ),
         const SizedBox(height: 8),
         const Divider(),
@@ -1791,49 +1937,103 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       );
     }
 
-    // Employee — submit for review + cancel + save (status/progress only)
+    // Employee — assignment response + workflow actions + save deadline.
     if (!_perms.canEditFull) {
-      final canSubmit = _task != null &&
-          const {'not_started', 'in_progress', 'changes_requested', 'on_hold'}
-              .contains(_task!.status);
+      final a = _myAssignment;
+      final pending = a?.response == 'pending';
+      final s = _task?.status ?? '';
+      final canStart = s == 'not_started';
+      final canSubmit = const {
+        'not_started', 'in_progress', 'changes_requested', 'on_hold'
+      }.contains(s);
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         child: Column(
           children: [
-            if (canSubmit) ...[
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: busy ? null : _submitForReview,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.statusDone,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+            if (pending) ...[
+              // Must accept/reject the assignment before working on it.
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: busy ? null : _rejectAssignment,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: const BorderSide(color: AppColors.error),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.close, size: 18),
+                      label: const Text('Reject Task'),
+                    ),
                   ),
-                  icon: _reviewing
-                      ? _Spinner()
-                      : const Icon(Icons.task_alt, size: 18, color: Colors.white),
-                  label: const Text(
-                    'Submit for Review',
-                    style: TextStyle(color: Colors.white),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: busy ? null : _acceptAssignment,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.statusDone,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: _reviewing
+                          ? _Spinner()
+                          : const Icon(Icons.check, size: 18, color: Colors.white),
+                      label: const Text('Accept Task',
+                          style: TextStyle(color: Colors.white)),
+                    ),
                   ),
-                ),
+                ],
               ),
               const SizedBox(height: 10),
+            ] else ...[
+              if (canStart) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: busy ? null : _startWork,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.statusInProgress,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.play_arrow, size: 18, color: Colors.white),
+                    label: const Text('Start Work',
+                        style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (canSubmit) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: busy ? null : _submitForReview,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.statusDone,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: _reviewing
+                        ? _Spinner()
+                        : const Icon(Icons.task_alt, size: 18, color: Colors.white),
+                    label: const Text('Submit for Review',
+                        style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
             ],
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
                     onPressed: busy ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+                    child: const Text('Close'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
-                    onPressed: busy ? null : _save,
-                    child: _saving ? _Spinner() : const Text('Save Changes'),
+                    onPressed: busy ? null : _saveDeadline,
+                    child: _saving ? _Spinner() : const Text('Save Deadline'),
                   ),
                 ),
               ],

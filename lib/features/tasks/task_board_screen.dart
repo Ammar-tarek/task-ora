@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/utils/load_token.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/l10n/app_strings.dart';
@@ -90,6 +91,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   final List<NotionColumn> _customColumns = [];
   TeamFilterNotifier? _teamFilter;
   WorkspaceScopeNotifier? _scope;
+  // Drop a load's result if the admin switched department before it finished.
+  final _loadTok = LoadToken();
   List<TeamModel> _teams = []; // for department handoff picker + names
 
   static const _statusFilters = [
@@ -423,6 +426,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   // ── Load ─────────────────────────────────────────────────────────────────
 
   Future<void> _load({bool animate = true, int attempt = 0}) async {
+    final tok = _loadTok.begin();
     if (animate) {
       setState(() {
         _loading = true;
@@ -466,7 +470,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
           _teams = await TeamRepository.fetchAllAdmin();
         } catch (_) {}
       }
-      if (mounted) {
+      if (mounted && !_loadTok.isStale(tok)) {
         setState(() {
           _tasks = data as List<TaskModel>;
           _loading = false;
@@ -479,7 +483,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
         await Future.delayed(const Duration(milliseconds: 600));
         return _load(animate: false, attempt: attempt + 1);
       }
-      if (mounted) {
+      if (mounted && !_loadTok.isStale(tok)) {
         setState(() {
           _error = e.toString();
           _loading = false;

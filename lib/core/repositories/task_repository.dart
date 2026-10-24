@@ -17,7 +17,7 @@ class TaskRepository {
 
   // ── Task select fragment (reused across methods) ────────────────────────────
   static const _taskSelect =
-      '*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name))';
+      '*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, response, responded_at, response_reason, profile:profiles!task_assignees_profile_id_fkey(full_name))';
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Role-aware fetch (primary entry point)
@@ -778,6 +778,28 @@ class TaskRepository {
     }
   }
 
+  /// Tasks a given employee is assigned to, for the Team performance hub.
+  /// RLS scopes what the VIEWER may see (admin: all; manager: own team), so a
+  /// manager can never pull tasks outside their department via this call.
+  static Future<List<TaskModel>> fetchTasksAssignedTo(String profileId) async {
+    try {
+      final rows = await _client
+          .from('task_assignees')
+          .select('task_id')
+          .eq('profile_id', profileId);
+      final ids = (rows as List).map((r) => r['task_id'] as String).toList();
+      if (ids.isEmpty) return [];
+      final data = await _client
+          .from('tasks')
+          .select(_taskSelect)
+          .inFilter('id', ids)
+          .order('created_at', ascending: false);
+      return (data as List).map((m) => TaskModel.fromMap(m)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // Legacy fetch (kept for backward compat — prefer fetchTasksForProfile)
   // ═══════════════════════════════════════════════════════════════════════════
@@ -856,7 +878,7 @@ class TaskRepository {
           .from('tasks')
           .select('''
             *,
-            task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url)),
+            task_assignees(profile_id, is_lead, response, responded_at, response_reason, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url)),
             task_comments(id, content, is_internal, created_at, author:profiles(full_name)),
             task_attachments(id, file_name, file_url, file_type, is_client_visible),
             task_approvals(id, employee_done_at, client_decision, client_reviewed_at, review_decision, review_reason, reviewed_at, reviewer_id)
@@ -1076,6 +1098,59 @@ class TaskRepository {
   static Future<String?> submitForReview(String taskId) async {
     try {
       await _client.rpc('submit_task_for_review', params: {'p_task_id': taskId});
+      return null;
+    } on PostgrestException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Employee accepts or rejects a task assigned to them. [accept] false
+  /// requires [reason]. Writes task_assignees.response server-side (RPC);
+  /// never changes the task's review/completion status. Returns null on
+  /// success, else an error message.
+  static Future<String?> respondToAssignment(
+    String taskId, {
+    required bool accept,
+    String? reason,
+  }) async {
+    try {
+      await _client.rpc('respond_to_assignment', params: {
+        'p_task_id': taskId,
+        'p_decision': accept ? 'accepted' : 'rejected',
+        'p_reason': reason,
+      });
+      return null;
+    } on PostgrestException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Employee-permitted edit: update ONLY the task deadline (due_date). The
+  /// employee field-guard trigger blocks any other column. [dueDate] is a plain
+  /// date string (yyyy-MM-dd) or null to clear. Returns null on success.
+  static Future<String?> updateDeadline(String taskId, String? dueDate) async {
+    try {
+      await _client.from('tasks').update({'due_date': dueDate}).eq('id', taskId);
+      return null;
+    } on PostgrestException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Employee workflow action: move an accepted task to 'in_progress'.
+  /// Returns null on success, else an error message.
+  static Future<String?> startWork(String taskId) async {
+    try {
+      await _client
+          .from('tasks')
+          .update({'status': 'in_progress'})
+          .eq('id', taskId);
       return null;
     } on PostgrestException catch (e) {
       return e.message;
@@ -1444,6 +1519,8 @@ class TaskRepository {
                 'profile_id': pId,
                 'is_lead': pId == profileIds.first,
                 'assigned_by': assignedBy,
+                // response defaults to 'pending' at the DB level (see migration);
+                // not sent here so the code stays backward-compatible.
               },
             )
             .toList();

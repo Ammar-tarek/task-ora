@@ -1,6 +1,7 @@
 // lib/features/attendance/attendance_screen.dart
 
 import 'package:flutter/material.dart';
+import '../../core/utils/load_token.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -28,6 +29,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   bool _loading = true;
   String _selectedDate = AppTime.now().toIso8601String().substring(0, 10);
   TeamFilterNotifier? _teamFilter;
+  // Drop stale results when the admin switches department mid-load.
+  final _loadTok = LoadToken();
+  final _summaryTok = LoadToken();
 
   // ── Monthly summary mode (admin/manager) ──────────────────────────────────
   bool _summaryMode = false;
@@ -38,6 +42,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   bool _summaryLoading = false;
 
   Future<void> _loadSummary() async {
+    final tok = _summaryTok.begin();
     setState(() => _summaryLoading = true);
     final profile = context.read<AuthNotifier>().profile;
     final teamId = profile?.isAdmin == true
@@ -49,7 +54,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       month: _sumMonth,
       teamId: teamId,
     );
-    if (mounted) {
+    if (mounted && !_summaryTok.isStale(tok)) {
       setState(() {
         _summaries = data;
         _summaryLoading = false;
@@ -105,6 +110,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Future<void> _load() async {
+    final tok = _loadTok.begin();
     setState(() => _loading = true);
     final profile = context.read<AuthNotifier>().profile;
     // Also reload privileges so grants/restrictions take effect immediately.
@@ -130,7 +136,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       // open session if one exists (may have started yesterday), else today's.
       AttendanceRecord? mine;
       mine = await AttendanceRepository.fetchActiveForEmployee(profile.id);
-      if (mounted) {
+      if (mounted && !_loadTok.isStale(tok)) {
         setState(() {
           _records = data;
           _myRecord = mine;
@@ -142,7 +148,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         AttendanceRepository.fetchForEmployee(profile?.id ?? ''),
         AttendanceRepository.fetchActiveForEmployee(profile?.id ?? ''),
       ]);
-      if (mounted) {
+      if (mounted && !_loadTok.isStale(tok)) {
         setState(() {
           _records = results[0] as List<AttendanceRecord>;
           _myRecord = results[1] as AttendanceRecord?;

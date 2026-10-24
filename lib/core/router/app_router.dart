@@ -32,6 +32,8 @@ import '../../features/users/user_privileges_screen.dart';
 import '../../features/roles/roles_editor_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/expenses/daily_expenses_screen.dart';
+import '../../features/team/team_screen.dart';
+import '../../features/team/department_clients_screen.dart';
 import '../../features/teams/team_management_screen.dart';
 import '../../features/teams/team_members_screen.dart';
 import '../../features/teams/team_privileges_screen.dart';
@@ -122,6 +124,8 @@ GoRouter makeRouter(AuthNotifier auth) {
             loc == '/analytics' ||
             loc == '/attendance' ||
             loc == '/expenses' ||
+            loc == '/team' ||
+            loc == '/department-clients' ||
             loc.startsWith('/finance/analytics')) {
           return '/tasks';
         }
@@ -149,6 +153,9 @@ GoRouter makeRouter(AuthNotifier auth) {
             loc == '/roles' ||
             loc == '/teams' ||
             loc.startsWith('/teams/') ||
+            loc == '/team' ||
+            loc == '/department-clients' ||
+            loc == '/analytics' ||
             loc == '/create-user') {
           return '/tasks';
         }
@@ -317,6 +324,11 @@ GoRouter makeRouter(AuthNotifier auth) {
       GoRoute(
         path: '/expenses',
         builder: (_, _) => const DailyExpensesScreen(),
+      ),
+      GoRoute(path: '/team', builder: (_, _) => const TeamScreen()),
+      GoRoute(
+        path: '/department-clients',
+        builder: (_, _) => const DepartmentClientsScreen(),
       ),
       GoRoute(path: '/teams', builder: (_, _) => const TeamManagementScreen()),
       GoRoute(

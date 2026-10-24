@@ -3,6 +3,7 @@
 // Shown columns and available actions depend on admin / manager / employee / client.
 
 import 'package:flutter/material.dart';
+import '../../core/utils/load_token.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/providers/team_filter_notifier.dart';
@@ -24,6 +25,8 @@ class TaskTableScreen extends StatefulWidget {
 class _TaskTableScreenState extends State<TaskTableScreen>
     with SingleTickerProviderStateMixin {
   List<TaskModel> _tasks = [];
+  // Discards a load's result if the workspace/department changed meanwhile.
+  final _loadTok = LoadToken();
   bool _loading = true;
   String? _error;
   String _filter = 'All';
@@ -168,6 +171,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
   // ── Load ─────────────────────────────────────────────────────────────────
 
   Future<void> _load({bool animate = true}) async {
+    final tok = _loadTok.begin();
     if (animate) {
       setState(() {
         _loading = true;
@@ -192,7 +196,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
               overrideTeamId: overrideTeamId,
             )
           : <TaskModel>[];
-      if (mounted) {
+      if (mounted && !_loadTok.isStale(tok)) {
         setState(() {
           _tasks = data;
           _loading = false;
@@ -200,7 +204,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
         if (animate) _pageAnim.forward(from: 0);
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !_loadTok.isStale(tok)) {
         setState(() {
           _error = e.toString();
           _loading = false;

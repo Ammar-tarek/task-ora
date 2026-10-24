@@ -3,6 +3,7 @@
 
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../core/utils/load_token.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -51,6 +52,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // The admin "view by team" / department scope. Reload the dashboard whenever
   // the selected department changes so stats stay scoped to it.
   TeamFilterNotifier? _teamFilter;
+  // Drop stale aggregates if the department changed before the load finished.
+  final _loadTok = LoadToken();
   WorkspaceScopeNotifier? _scope;
 
   @override
@@ -87,6 +90,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _load({bool animate = true}) async {
+    final tok = _loadTok.begin();
     if (animate) {
       setState(() {
         _loading = true;
@@ -152,7 +156,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       /* employees stays empty — shows "No data" */
     }
 
-    if (mounted) {
+    if (mounted && !_loadTok.isStale(tok)) {
       setState(() {
         _stats =
             stats ??
@@ -477,18 +481,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           Icons.gavel_outlined,
                           () => context.push('/penalties'),
                         ),
-                        // Department revenue = the active department's finance
-                        // dashboard (scoped by the selected workspace), NOT the
-                        // company-wide Expenses screen. Manager/admin only —
-                        // employees are redirected away from /finance by the
-                        // router, so the action is hidden for them here too.
-                        if (DashboardQuickActions.showDepartmentRevenue(
-                          profile,
-                        ))
+                        // Analytics = the department's reporting destination
+                        // (replaces the old Finance shortcut). Scoped by role:
+                        // admin = all/selected dept, manager = own team. Company
+                        // Finance / Ledger remain on their own routes.
+                        if (DashboardQuickActions.showAnalytics(profile))
                           _QuickActionData(
-                            'department_revenue',
-                            Icons.trending_up,
-                            () => context.go('/finance'),
+                            'analytics',
+                            Icons.insights_outlined,
+                            () => context.go('/analytics'),
+                          ),
+                        // Team performance hub — admin/manager only, scoped by RLS.
+                        if (DashboardQuickActions.showTeam(profile))
+                          _QuickActionData(
+                            'team',
+                            Icons.groups_outlined,
+                            () => context.push('/team'),
+                          ),
+                        // Department-scoped Client directory — admin/manager.
+                        if (DashboardQuickActions.showClients(profile))
+                          _QuickActionData(
+                            'clients',
+                            Icons.business_center_outlined,
+                            () => context.push('/department-clients'),
                           ),
                         _QuickActionData(
                           'tasks',

@@ -1,5 +1,6 @@
 // lib/features/finance/finance_dashboard_screen.dart
 import 'package:flutter/material.dart';
+import '../../core/utils/load_token.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
@@ -32,6 +33,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   TeamFilterNotifier? _teamFilter;
   String? _filterClientType; // department name → client_type filter
   String? _filterTeamId; // for expense scoping
+  final _loadTok = LoadToken(); // drop stale results on department switch
 
   @override
   void initState() {
@@ -68,6 +70,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   }
 
   Future<void> _load() async {
+    final tok = _loadTok.begin();
     setState(() => _loading = true);
     try {
       final results = await Future.wait([
@@ -79,7 +82,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
         ExpenseRepository.fetchAll(limit: 5, teamId: _filterTeamId),
         FinanceRepository.fetchMonthlyBreakdown(teamId: _filterTeamId),
       ]);
-      if (mounted) {
+      if (mounted && !_loadTok.isStale(tok)) {
         setState(() {
           _clients = results[0] as List<ClientModel>;
           _summary = results[1] as FinanceSummary;
@@ -89,7 +92,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && !_loadTok.isStale(tok)) setState(() => _loading = false);
     }
   }
 
