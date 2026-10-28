@@ -3,7 +3,6 @@
 // All reads run under RLS, so a manager only ever sees their own team and an
 // admin sees everyone — the scope is enforced by the database, not here.
 
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/models/profile_model.dart';
 import '../../core/models/task_model.dart';
 import '../../core/providers/workspace_scope_notifier.dart';
@@ -14,7 +13,22 @@ class TeamMember {
   final String id;
   final String name;
   final String role;
-  const TeamMember({required this.id, required this.name, required this.role});
+  final String status; // 'active' | 'inactive' | 'suspended'
+  final bool isSuperAdmin;
+  const TeamMember({
+    required this.id,
+    required this.name,
+    required this.role,
+    this.status = 'active',
+    this.isSuperAdmin = false,
+  });
+
+  bool get isActive => status == 'active';
+  bool get isAdmin => role == 'admin' || isSuperAdmin;
+
+  /// Count of active members (used for the active-only Team Size).
+  static int activeCount(Iterable<TeamMember> members) =>
+      members.where((m) => m.isActive).length;
 }
 
 /// Single-bucket task counts for one employee (no double counting).
@@ -124,7 +138,13 @@ class TeamPerformanceRepository {
     // Department active but unresolved team → no members (no global fallback).
     if (scopeTeamId == WorkspaceScopeState.noTeamSentinel) return [];
     try {
-      var q = _client.from('profiles').select('id, full_name, role').neq('role', 'client');
+      // Include status + super-admin flag so the UI can grey out inactive
+      // members and apply the admin/super-admin action rules. Inactive members
+      // are intentionally KEPT in the list (shown with an Inactive badge).
+      var q = _client
+          .from('profiles')
+          .select('id, full_name, role, status, is_super_admin')
+          .neq('role', 'client');
       if (scopeTeamId != null) {
         // A specific department → exactly its team members.
         q = q.eq('team_id', scopeTeamId);
@@ -141,6 +161,8 @@ class TeamPerformanceRepository {
                 id: (m as Map<String, dynamic>)['id'] as String,
                 name: m['full_name'] as String? ?? 'Unknown',
                 role: m['role'] as String? ?? 'employee',
+                status: m['status'] as String? ?? 'active',
+                isSuperAdmin: m['is_super_admin'] as bool? ?? false,
               ))
           .toList();
     } catch (_) {
@@ -148,87 +170,11 @@ class TeamPerformanceRepository {
     }
   }
 
-  /// Clients linked to the ACTIVE department, via client_task_visibility
-  /// (team_id, client_id) — the chosen authoritative client↔department link.
-  ///   • real team id → clients configured for that department's team;
-  ///   • noTeamSentinel → [];
-  ///   • null + global admin → all clients (org-wide view).
-  /// RLS on client_task_visibility already scopes managers to their own team.
-  static Future<List<TeamMember>> fetchDepartmentClients(
-    ProfileModel viewer, {
-    String? scopeTeamId,
-  }) async {
-    if (scopeTeamId == WorkspaceScopeState.noTeamSentinel) return [];
-    try {
-      if (scopeTeamId != null) {
-        final rows = await _client
-            .from('client_task_visibility')
-            .select('client_id')
-            .eq('team_id', scopeTeamId);
-        final ids =
-            (rows as List).map((r) => (r as Map)['client_id'] as String).toList();
-        if (ids.isEmpty) return [];
-        final data = await _client
-            .from('client_profiles')
-            .select('id, company_name')
-            .inFilter('id', ids)
-            .order('company_name');
-        return _clientRows(data);
-      }
-      if (viewer.isAdmin) {
-        final data = await _client
-            .from('client_profiles')
-            .select('id, company_name')
-            .order('company_name');
-        return _clientRows(data);
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
-
-  static List<TeamMember> _clientRows(dynamic data) => (data as List)
-      .map((m) => TeamMember(
-            id: (m as Map)['id'] as String,
-            name: m['company_name'] as String? ?? 'Client',
-            role: 'client',
-          ))
-      .toList();
-
-  /// All clients (for the "add a client to this department" picker).
-  static Future<List<TeamMember>> fetchAllClients() async {
-    try {
-      final data = await _client
-          .from('client_profiles')
-          .select('id, company_name')
-          .order('company_name');
-      return _clientRows(data);
-    } catch (_) {
-      return [];
-    }
-  }
-
-  /// Link a client to a department (populates client_task_visibility). RLS lets
-  /// an admin or the team's manager do this; others are rejected server-side.
-  /// Idempotent via the (team_id, client_id) unique key. Returns null on success.
-  static Future<String?> addClientToDepartment(
-    String teamId,
-    String clientId,
-  ) async {
-    try {
-      final uid = _client.auth.currentUser?.id;
-      await _client.from('client_task_visibility').upsert(
-        {'team_id': teamId, 'client_id': clientId, 'configured_by': uid},
-        onConflict: 'team_id,client_id',
-      );
-      return null;
-    } on PostgrestException catch (e) {
-      return e.message;
-    } catch (e) {
-      return e.toString();
-    }
-  }
+  // NOTE: the client↔department directory that used client_task_visibility was
+  // retired. The single Clients module (ClientsScreen at /department-clients)
+  // now scopes clients by client_profiles.client_type, so the old
+  // fetchDepartmentClients / fetchAllClients / addClientToDepartment helpers
+  // were removed. client_task_visibility is left untouched in the database.
 
   /// Tag each task with the employee's own assignment response.
   static List<EmployeeTaskRow> rowsFor(List<TaskModel> tasks, String employeeId) {

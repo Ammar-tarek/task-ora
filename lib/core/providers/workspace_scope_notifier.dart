@@ -103,6 +103,21 @@ class WorkspaceScopeState {
     return dept == null ? null : teamFor(dept)?.id;
   }
 
+  /// The `client_profiles.client_type` filter for the active workspace. Clients
+  /// are tagged to a department by the team's stored `department` string (the
+  /// same value the Clients module and manager views already filter on), so a
+  /// client list / selector can be scoped to the active department:
+  ///   • null  → no filter (All Departments for a global user) → every client;
+  ///   • else  → the active department's team department string, lowercased.
+  /// RLS remains the real boundary; this only narrows what an authorized user
+  /// sees to the active workspace.
+  String? get activeClientTypeFilter {
+    final dept = effectiveDepartment;
+    if (dept == null) return null;
+    final team = isGlobal ? teamFor(dept) : ownTeam;
+    return (team?.department ?? dept.key).toLowerCase();
+  }
+
   /// True when [teamId] is the Montage department team. Works for global users
   /// (via [allTeams]) and scoped users (via [ownTeam]), so Montage-only features
   /// resolve correctly for admins, managers and employees alike.
@@ -177,6 +192,10 @@ class WorkspaceScopeNotifier extends ChangeNotifier {
   /// Real team id for creating a task in the active workspace
   /// (see [WorkspaceScopeState.activeDepartmentTeamId]).
   String? get activeDepartmentTeamId => _state.activeDepartmentTeamId;
+
+  /// `client_type` filter for the active workspace
+  /// (see [WorkspaceScopeState.activeClientTypeFilter]).
+  String? get activeClientTypeFilter => _state.activeClientTypeFilter;
 
   /// True when [teamId] is the Montage department team (any role).
   bool isMontageTeam(String? teamId) => _state.isMontageTeam(teamId);

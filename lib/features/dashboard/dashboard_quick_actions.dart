@@ -1,8 +1,10 @@
 // lib/features/dashboard/dashboard_quick_actions.dart
 // Pure role rule for which dashboard Quick Actions a user may see, so the rule
 // is unit-testable without building the whole dashboard. Mirrors the router
-// guards (employees are redirected away from /finance) and the penalties screen
-// (employees see only their own records).
+// guards (employees are redirected away from /finance).
+//
+// Attendance and Penalties were removed from the app UI, so their quick actions
+// are no longer produced here.
 
 import '../../core/models/profile_model.dart';
 
@@ -10,9 +12,6 @@ class DashboardQuickActions {
   DashboardQuickActions._();
 
   /// Action keys visible to [profile], in display order.
-  ///  - attendance: everyone (own attendance actions).
-  ///  - penalties: everyone (employees see only their OWN records; managers/
-  ///    admins get management on the penalties screen itself).
   ///  - analytics: management (admin/manager) — the department reporting entry
   ///    that replaced the old Finance shortcut. Scoped by role in the screen.
   ///  - tasks: everyone.
@@ -20,8 +19,6 @@ class DashboardQuickActions {
     final isAdmin = profile?.isAdmin == true;
     final isManager = profile?.isManager == true;
     return [
-      'attendance',
-      'penalties',
       // Analytics replaces the old department Finance entry as the department's
       // reporting destination. Admin → all/selected dept; manager → own team
       // (AdvancedAnalyticsScreen scopes by teamIds). Company Finance / Company

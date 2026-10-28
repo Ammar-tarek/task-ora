@@ -220,6 +220,16 @@ class TaskModel {
     return null;
   }
 
+  /// True when [profileId] is an assignee of this task AND their assignment
+  /// response is still pending (awaiting Accept/Reject). A null/accepted/
+  /// rejected response is NOT pending. Lets a task awaiting the current user's
+  /// response stay visible regardless of its due-date month.
+  bool isPendingAssignmentFor(String? profileId) {
+    if (profileId == null) return false;
+    final a = assigneeFor(profileId);
+    return a != null && a.isPendingResponse;
+  }
+
   TaskModel copyWith({
     String? status,
     String? paymentStatus,

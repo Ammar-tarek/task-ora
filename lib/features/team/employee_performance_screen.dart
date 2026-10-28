@@ -1,10 +1,10 @@
 // lib/features/team/employee_performance_screen.dart
-// Read-only employee performance hub: overview counts, task history, monthly
-// attendance, and recorded deductions. All reads are RLS-scoped to the viewer.
+// Read-only employee performance hub: overview counts, task history, and
+// rejected-assignment audit history. All reads are RLS-scoped to the viewer.
+// (Monthly attendance and deductions were removed with the Attendance and
+// Penalties features.)
 
 import 'package:flutter/material.dart';
-import '../../core/repositories/attendance_repository.dart';
-import '../../core/repositories/penalty_repository.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/theme/app_theme.dart';
 import 'team_performance_repository.dart';
@@ -21,24 +21,11 @@ class _EmployeePerformanceScreenState extends State<EmployeePerformanceScreen> {
   bool _loading = true;
   List<EmployeeTaskRow> _rows = [];
   EmployeeTaskSummary _summary = const EmployeeTaskSummary();
-  List<AttendanceRecord> _attendance = [];
-  List<PenaltyItem> _penalties = []; // all; filtered to month in getters
   List<AssignmentRejection> _rejections = []; // durable history (audit log)
-
-  late int _year;
-  late int _month;
-
-  static const _monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _year = now.year;
-    _month = now.month;
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadAll());
   }
 
@@ -46,52 +33,16 @@ class _EmployeePerformanceScreenState extends State<EmployeePerformanceScreen> {
     setState(() => _loading = true);
     final id = widget.member.id;
     final tasks = await TaskRepository.fetchTasksAssignedTo(id);
-    final penalties = await PenaltyRepository.fetchForEmployee(id);
     final rejections = await TeamPerformanceRepository.fetchAssignmentRejections(id);
     final rows = TeamPerformanceRepository.rowsFor(tasks, id);
-    final att = await AttendanceRepository.fetchForEmployeeMonthly(
-      employeeId: id, year: _year, month: _month,
-    );
     if (!mounted) return;
     setState(() {
       _rows = rows;
       _summary = TeamPerformanceRepository.summarize(rows);
-      _penalties = penalties;
-      _attendance = att;
       _rejections = rejections;
       _loading = false;
     });
   }
-
-  /// Only attendance depends on the month; reload it on month change.
-  Future<void> _loadMonth() async {
-    final att = await AttendanceRepository.fetchForEmployeeMonthly(
-      employeeId: widget.member.id, year: _year, month: _month,
-    );
-    if (mounted) setState(() => _attendance = att);
-  }
-
-  void _prevMonth() {
-    setState(() {
-      if (_month == 1) { _month = 12; _year--; } else { _month--; }
-    });
-    _loadMonth();
-  }
-
-  void _nextMonth() {
-    final now = DateTime.now();
-    if (_year == now.year && _month == now.month) return;
-    setState(() {
-      if (_month == 12) { _month = 1; _year++; } else { _month++; }
-    });
-    _loadMonth();
-  }
-
-  String get _monthPrefix =>
-      '$_year-${_month.toString().padLeft(2, '0')}';
-
-  List<PenaltyItem> get _monthPenalties =>
-      _penalties.where((p) => p.date.startsWith(_monthPrefix)).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -115,16 +66,6 @@ class _EmployeePerformanceScreenState extends State<EmployeePerformanceScreen> {
                   _sectionTitle('REJECTED ASSIGNMENTS'),
                   const SizedBox(height: 8),
                   _rejectionsSection(),
-                  const SizedBox(height: 20),
-                  _monthNav(),
-                  const SizedBox(height: 12),
-                  _sectionTitle('MONTHLY ATTENDANCE'),
-                  const SizedBox(height: 8),
-                  _attendanceSection(),
-                  const SizedBox(height: 20),
-                  _sectionTitle('DEDUCTIONS'),
-                  const SizedBox(height: 8),
-                  _deductionsSection(),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -293,111 +234,6 @@ class _EmployeePerformanceScreenState extends State<EmployeePerformanceScreen> {
                   const SizedBox(height: 4),
                   Text('Reason: ${r.reason}',
                       style: AppTextStyles.bodySm.copyWith(color: AppColors.error)),
-                ],
-              ],
-            ),
-          )).toList(),
-    );
-  }
-
-  // ── C. Monthly attendance ───────────────────────────────────────────────────
-  Widget _monthNav() {
-    final now = DateTime.now();
-    final atCurrent = _year == now.year && _month == now.month;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.chevron_left, color: AppColors.gold),
-          onPressed: _prevMonth,
-        ),
-        Text('${_monthNames[_month - 1]} $_year', style: AppTextStyles.labelMd),
-        IconButton(
-          icon: Icon(Icons.chevron_right,
-              color: atCurrent ? AppColors.outlineVariant : AppColors.gold),
-          onPressed: _nextMonth,
-        ),
-      ],
-    );
-  }
-
-  Widget _attendanceSection() {
-    if (_attendance.isEmpty) return _empty('No attendance records this month');
-    int present = 0, late = 0, absent = 0, half = 0;
-    for (final a in _attendance) {
-      switch (a.status) {
-        case 'late': late++; break;
-        case 'absent': absent++; break;
-        case 'half_day': half++; break;
-        default: present++;
-      }
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(spacing: 10, runSpacing: 10, children: [
-          _stat('Present', present, AppColors.statusDone),
-          _stat('Late', late, AppColors.statusHigh),
-          _stat('Half Day', half, AppColors.statusMedium),
-          _stat('Absent', absent, AppColors.error),
-        ]),
-        const SizedBox(height: 10),
-        ..._attendance.map((a) => Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.outlineVariant),
-              ),
-              child: Row(
-                children: [
-                  Expanded(child: Text(a.date, style: AppTextStyles.bodySm)),
-                  Text(a.statusLabel,
-                      style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
-                  if (a.totalHours != null) ...[
-                    const SizedBox(width: 10),
-                    Text('${a.totalHours!.toStringAsFixed(1)}h', style: AppTextStyles.dataSm),
-                  ],
-                ],
-              ),
-            )),
-      ],
-    );
-  }
-
-  // ── D. Deductions / penalties (read-only) ───────────────────────────────────
-  Widget _deductionsSection() {
-    final list = _monthPenalties;
-    if (list.isEmpty) return _empty('No deductions this month');
-    return Column(
-      children: list.map((p) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: Text(p.penaltyType, style: AppTextStyles.labelMd)),
-                    Text('${p.amount.toStringAsFixed(2)} EGP',
-                        style: AppTextStyles.dataMd.copyWith(color: AppColors.statusHigh)),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(children: [
-                  Text(p.date, style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
-                  const SizedBox(width: 8),
-                  Text('· ${p.status}', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
-                ]),
-                if (p.reason.trim().isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(p.reason, style: AppTextStyles.bodySm),
                 ],
               ],
             ),

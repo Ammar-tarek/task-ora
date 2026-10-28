@@ -172,6 +172,43 @@ class ProfileRepository {
     }
   }
 
+  /// Deactivate an employee: the server bans the Auth user and sets
+  /// profiles.status = 'inactive'. No data is deleted. Returns null on success,
+  /// or a user-readable error message.
+  static Future<String?> deactivateEmployee(String userId) =>
+      _setActive(userId, active: false);
+
+  /// Reactivate an employee: lifts the Auth ban and restores
+  /// profiles.status = 'active'. Returns null on success, or an error message.
+  static Future<String?> reactivateEmployee(String userId) =>
+      _setActive(userId, active: true);
+
+  static Future<String?> _setActive(String userId, {required bool active}) async {
+    try {
+      final err = await PrivilegedOps.setActive(userId: userId, active: active);
+      if (err != null) return err;
+
+      // Best-effort: notify the affected user. They may be banned/offline, so
+      // a failure here never fails the status change.
+      try {
+        await NotificationRepository.notifyAction(
+          title: active ? 'Account Reactivated' : 'Account Deactivated',
+          body: active
+              ? 'Your account has been reactivated. You can sign in again.'
+              : 'Your account has been deactivated. Contact your administrator.',
+          type: 'role_changed',
+          referenceType: 'profile',
+          referenceId: userId,
+          targetUserIds: [userId],
+        );
+      } catch (_) {}
+
+      return null;
+    } catch (_) {
+      return 'Could not update employee status. Please try again.';
+    }
+  }
+
   /// Fetch active employees that can be promoted (role == 'employee').
   static Future<List<ProfileModel>> fetchPromotable() async {
     try {

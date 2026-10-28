@@ -23,6 +23,11 @@ class AuthNotifier extends ChangeNotifier {
 
   bool _pendingBiometricEnablePrompt = false;
 
+  /// Error message to surface on the next signedOut event. Lets a forced
+  /// sign-out (e.g. a deactivated account) keep its message instead of the
+  /// signedOut handler clearing it to null.
+  String? _pendingSignOutError;
+
   AuthStatus get status => _status;
   ProfileModel? get profile => _profile;
   String? get error => _error;
@@ -44,7 +49,10 @@ class AuthNotifier extends ChangeNotifier {
           _profile = null;
           _isBiometricVerified = false;
           _status = AuthStatus.unauthenticated;
-          _error = null;
+          // Preserve a forced-sign-out message (e.g. deactivated account) if
+          // one was queued; otherwise clear the error as usual.
+          _error = _pendingSignOutError;
+          _pendingSignOutError = null;
           notifyListeners();
         }
       });
@@ -139,7 +147,31 @@ class AuthNotifier extends ChangeNotifier {
 
         // Super admin is determined by the DB `is_super_admin` flag (read by
         // ProfileModel.isSuperAdmin) — no client-side role rewrite.
-        _profile = ProfileModel.fromMap(data);
+        final loaded = ProfileModel.fromMap(data);
+
+        // Deactivated/suspended accounts are denied access. This complements
+        // the Auth ban set by admin-user-ops `set_active`; a cached or
+        // not-yet-expired access token can still reach here, so enforce the
+        // profile status client-side and sign out safely. Covers fresh login,
+        // token refresh, and cached-session restore (all route through here).
+        if (loaded.status != 'active') {
+          _profile = null;
+          _isBiometricVerified = false;
+          _pendingBiometricEnablePrompt = false;
+          _pendingSignOutError = S.t('account_deactivated');
+          try {
+            await SupabaseService.auth.signOut();
+          } catch (_) {}
+          // Enforce state directly too, in case no signedOut event arrives
+          // (e.g. there was no live session to clear). No redirect loop: the
+          // router simply shows the login screen with this message.
+          _status = AuthStatus.unauthenticated;
+          _error = S.t('account_deactivated');
+          notifyListeners();
+          return;
+        }
+
+        _profile = loaded;
         // Don't flip to authenticated while the biometric lock is still active
         // — a background tokenRefreshed event must not bypass the lock.
         final biometricLocked =

@@ -1,6 +1,7 @@
 // lib/features/calendar/calendar_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/constants/departments.dart';
 import '../../core/providers/locale_controller.dart';
@@ -8,8 +9,8 @@ import '../../core/models/client_model.dart';
 import '../../core/models/profile_model.dart';
 import '../../core/providers/workspace_scope_notifier.dart';
 import 'calendar_attendee_scope.dart';
+import 'start_reminder_offsets.dart';
 import '../../core/repositories/client_repository.dart';
-import '../../core/services/calendar_event_scope.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_time.dart';
@@ -26,6 +27,8 @@ class CalEvent {
     this.assigneeInitials,
     this.clientName,
     this.clientId,
+    this.description,
+    this.link,
     this.cost,
     this.attendeeNames = const [],
     this.attendeeIds = const [],
@@ -44,6 +47,8 @@ class CalEvent {
   final String? assigneeInitials;
   final String? clientName;
   final String? clientId;
+  final String? description;
+  final String? link;
   final double? cost;
   final List<String> attendeeNames;
   final List<String> attendeeIds;
@@ -67,6 +72,8 @@ class CalEvent {
     assigneeInitials: assigneeInitials,
     clientName: clientName,
     clientId: clientId,
+    description: description,
+    link: link,
     cost: cost,
     attendeeNames: attendeeNames,
     attendeeIds: attendeeIds,
@@ -92,10 +99,6 @@ String _fmtHours(double h) {
   final s = h == h.roundToDouble() ? h.toStringAsFixed(0) : h.toString();
   return '$s ${h == 1 ? 'hour' : 'hours'}';
 }
-
-/// Bare number for prefilling an editable field (2, 1.5) with no trailing zeros.
-String _plainNum(double v) =>
-    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
 
 String eventStatusLabel(String status) {
   switch (status) {
@@ -126,6 +129,20 @@ Color eventStatusColor(String status) {
     default:
       return AppColors.gold;
   }
+}
+
+/// Parse an event link and accept it only when it is a safe http/https URL.
+/// Anything else (empty, malformed, `javascript:`, other schemes) → null, so
+/// the UI never renders or opens an unsafe link.
+Uri? safeEventLink(String? raw) {
+  final s = raw?.trim() ?? '';
+  if (s.isEmpty) return null;
+  final uri = Uri.tryParse(s);
+  if (uri == null || !uri.hasScheme) return null;
+  final scheme = uri.scheme.toLowerCase();
+  if (scheme != 'http' && scheme != 'https') return null;
+  if (!uri.hasAuthority) return null;
+  return uri;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -250,6 +267,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   : AppColors.primary,
               clientId: e.clientId,
               clientName: e.clientName,
+              description: e.description,
+              link: e.link,
               cost: e.cost,
               roomName: e.roomName,
               status: e.status,
@@ -639,17 +658,21 @@ class _MonthBody extends StatelessWidget {
           ),
         ),
         Container(height: 1, color: AppColors.outlineVariant),
-        // Month grid
-        _MonthGrid(
-          focusedDate: focusedDate,
-          selectedDate: selectedDate,
-          today: today,
-          eventsForDay: eventsForDay,
-          onDayTap: onDayTap,
+        // Dense month grid — fills most of the screen (TimeTree style).
+        Expanded(
+          flex: 3,
+          child: _MonthGrid(
+            focusedDate: focusedDate,
+            selectedDate: selectedDate,
+            today: today,
+            eventsForDay: eventsForDay,
+            onDayTap: onDayTap,
+          ),
         ),
         Container(height: 1, color: AppColors.outlineVariant),
-        // Agenda for selected day
+        // Compact agenda for the selected day.
         Expanded(
+          flex: 2,
           child: _AgendaForDay(
             day: selectedDate,
             events: eventsForDay(selectedDate),
@@ -691,7 +714,7 @@ class _MonthGrid extends StatelessWidget {
       color: AppColors.surfaceContainerLowest,
       child: Column(
         children: List.generate(rows, (week) {
-          return IntrinsicHeight(
+          return Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: List.generate(7, (dow) {
@@ -700,7 +723,6 @@ class _MonthGrid extends StatelessWidget {
                 if (dayNum < 1 || dayNum > daysInMonth) {
                   return Expanded(
                     child: Container(
-                      height: 52,
                       decoration: BoxDecoration(
                         border: Border(
                           right: BorderSide(
@@ -731,6 +753,7 @@ class _MonthGrid extends StatelessWidget {
                     onTap: () => onDayTap(cellDate),
                     child: Container(
                       constraints: const BoxConstraints(minHeight: 52),
+                      clipBehavior: Clip.hardEdge,
                       decoration: BoxDecoration(
                         color: isSelected && !isToday
                             ? AppColors.primary.withValues(alpha: 0.06)
@@ -785,7 +808,7 @@ class _MonthGrid extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           ...dayEvents
-                              .take(2)
+                              .take(4)
                               .map(
                                 (e) => Container(
                                   margin: const EdgeInsets.only(bottom: 1),
@@ -815,11 +838,11 @@ class _MonthGrid extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                          if (dayEvents.length > 2)
+                          if (dayEvents.length > 4)
                             Padding(
                               padding: const EdgeInsets.only(left: 2),
                               child: Text(
-                                '+${dayEvents.length - 2} more',
+                                '+${dayEvents.length - 4} more',
                                 style: AppTextStyles.bodySm.copyWith(
                                   fontSize: 9,
                                   color: AppColors.onSurfaceVariant,
@@ -1720,6 +1743,13 @@ class _EventDetailSheetState extends State<_EventDetailSheet> {
                   icon: Icons.access_time_outlined,
                   text: _timeLabel(),
                 ),
+                if ((_event.description ?? '').trim().isNotEmpty)
+                  _DetailRow(
+                    icon: Icons.notes_outlined,
+                    text: _event.description!.trim(),
+                  ),
+                if (safeEventLink(_event.link) != null)
+                  _EventLinkRow(uri: safeEventLink(_event.link)!),
                 if (_event.shootingHours != null)
                   _DetailRow(
                     icon: Icons.videocam_outlined,
@@ -1875,6 +1905,53 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
+// ── Clickable event link row (opens a validated http/https URL externally) ─────
+class _EventLinkRow extends StatelessWidget {
+  const _EventLinkRow({required this.uri});
+  final Uri uri;
+
+  Future<void> _open(BuildContext context) async {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not open ${uri.toString()}'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: () => _open(context),
+        borderRadius: BorderRadius.circular(6),
+        child: Row(
+          children: [
+            Icon(Icons.link_outlined, size: 18, color: AppColors.gold),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                uri.toString(),
+                style: AppTextStyles.bodyMd.copyWith(
+                  color: AppColors.gold,
+                  decoration: TextDecoration.underline,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(Icons.open_in_new, size: 16, color: AppColors.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Add event bottom sheet ─────────────────────────────────────────────────────
 class _AddEventSheet extends StatefulWidget {
   const _AddEventSheet({
@@ -1892,28 +1969,22 @@ class _AddEventSheet extends StatefulWidget {
 
 class _AddEventSheetState extends State<_AddEventSheet> {
   final _titleCtrl = TextEditingController();
-  final _costCtrl = TextEditingController();
-  final _shootingCtrl = TextEditingController();
-  final _finalVideoCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _linkCtrl = TextEditingController();
+  // Chosen START-time reminder offsets (minutes before start). Phase 1.
+  final Set<int> _reminderOffsets = {};
 
   // Department ownership (events.team_id) is DERIVED from the active workspace —
   // no in-form picker. Admins switch department via the WorkspaceHeaderBar
   // before opening this form; managers/employees are bound to their own team.
-  // A Studio event is created as a `room_booking` so the DB overlap constraint
-  // protects the studio slot. Attendees are scoped to [_teamId].
   String? _teamId; // owning department team; null = no active department
   Department? _dept;
   bool _isAdmin = false;
 
   List<ClientModel> _clients = [];
   ClientModel? _selectedClient;
-
-  List<Map<String, String>> _employees = [];
-  final Set<String> _selectedEmployeeIds = {};
-
-  List<String> _rooms = [];
-  String? _selectedRoom;
-  bool _loadingRooms = true;
+  // client_type filter for the active workspace (department-scoped clients).
+  String? _clientFilter;
 
   bool _loadingClients = true;
   bool _saving = false;
@@ -1929,8 +2000,6 @@ class _AddEventSheetState extends State<_AddEventSheet> {
     _endTime = DateTime(d.year, d.month, d.day, 11);
     _resolveTeam();
     _fetchClients();
-    _fetchEmployees();
-    _fetchRooms();
   }
 
   /// Derive the owning department/team from the ACTIVE workspace (never an
@@ -1947,81 +2016,26 @@ class _AddEventSheetState extends State<_AddEventSheet> {
       profileTeamId: profile?.teamId,
     );
     _dept = _teamId == null ? null : scope.state.departmentForTeamId(_teamId);
-  }
-
-  Future<void> _fetchRooms() async {
-    try {
-      final data = await SupabaseService.client
-          .from('rooms')
-          .select('name')
-          .order('name');
-      final names = (data as List)
-          .map((r) => r['name'] as String? ?? '')
-          .where((n) => n.isNotEmpty)
-          .toList();
-      if (mounted) {
-        setState(() {
-          _rooms = names;
-          _loadingRooms = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingRooms = false);
-    }
+    _clientFilter = scope.activeClientTypeFilter;
   }
 
   @override
   void dispose() {
     _titleCtrl.dispose();
-    _costCtrl.dispose();
-    _shootingCtrl.dispose();
-    _finalVideoCtrl.dispose();
+    _descCtrl.dispose();
+    _linkCtrl.dispose();
     super.dispose();
   }
 
+  /// Clients are scoped to the active department (client_type), the same source
+  /// of truth as the Clients module; RLS is the real boundary.
   Future<void> _fetchClients() async {
-    final list = await ClientRepository.fetchClients();
+    final list = await ClientRepository.fetchClients(clientType: _clientFilter);
     if (mounted) {
       setState(() {
         _clients = list;
         _loadingClients = false;
       });
-    }
-  }
-
-  /// Attendees = active, non-client members of the owning department team only
-  /// (profiles.team_id = [_teamId]). Other departments are excluded. RLS also
-  /// restricts the read, so this is not a UI-only boundary.
-  Future<void> _fetchEmployees() async {
-    if (_teamId == null) {
-      if (mounted) setState(() => _employees = []);
-      return;
-    }
-    try {
-      final data = await SupabaseService.client
-          .from('profiles')
-          .select('id, full_name')
-          .eq('team_id', _teamId!)
-          .neq('role', 'client')
-          .eq('status', 'active')
-          .order('full_name');
-      final members = (data as List)
-          .map(
-            (m) => {
-              'id': m['id'] as String,
-              'name': m['full_name'] as String? ?? '',
-            },
-          )
-          .toList();
-      if (mounted) {
-        setState(() {
-          _employees = members;
-          final eligible = members.map((e) => e['id']).toSet();
-          _selectedEmployeeIds.removeWhere((id) => !eligible.contains(id));
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _employees = []);
     }
   }
 
@@ -2053,14 +2067,15 @@ class _AddEventSheetState extends State<_AddEventSheet> {
   String _fmt(DateTime d) => AppTime.hm(d);
 
   Future<void> _save() async {
-    if (_titleCtrl.text.trim().isEmpty) return;
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      _showMessage('Event title is required.');
+      return;
+    }
 
-    // Resolve the owning department (team_id). Admins use the picked
-    // department; managers/employees are bound to their own verified team.
     final profile = widget.profile;
     // Department/team is derived from the active workspace (see [_resolveTeam]).
     final String? teamId = _teamId;
-    final Department? dept = _dept;
 
     // A specific department is required — never create an orphaned team_id=null
     // event. Admins in "All Departments" must pick one in the top bar first.
@@ -2073,39 +2088,41 @@ class _AddEventSheetState extends State<_AddEventSheet> {
       return;
     }
 
-    // Studio events are room bookings: tag the type so the DB overlap
-    // constraint can protect the studio slot. These require a valid range.
-    final eventType = CalendarEventScope.eventTypeForDepartment(dept);
-    if (CalendarEventScope.isBookingDepartment(dept) &&
-        !_endTime.isAfter(_startTime)) {
-      _showMessage(
-        'End time must be after the start time for a Studio booking.',
-      );
+    if (!_endTime.isAfter(_startTime)) {
+      _showMessage('End time must be after the start time.');
+      return;
+    }
+
+    // Validate the optional link up front — reject anything that is not a safe
+    // http/https URL instead of saving an unopenable value.
+    final linkText = _linkCtrl.text.trim();
+    if (linkText.isNotEmpty && safeEventLink(linkText) == null) {
+      _showMessage('Enter a valid http(s) link, or leave it empty.');
       return;
     }
 
     setState(() => _saving = true);
 
-    final cost = double.tryParse(_costCtrl.text.trim());
-    final shootingHours = double.tryParse(_shootingCtrl.text.trim());
-    final finalVideoDuration = double.tryParse(_finalVideoCtrl.text.trim());
-    final attendeeIds = _selectedEmployeeIds.toList();
-
     try {
-      await ClientRepository.createEvent(
-        title: _titleCtrl.text.trim(),
+      final newId = await ClientRepository.createEvent(
+        title: title,
         start: _startTime,
         end: _endTime,
         clientId: _selectedClient?.id,
-        cost: cost,
+        description: _descCtrl.text.trim().isEmpty
+            ? null
+            : _descCtrl.text.trim(),
+        link: linkText.isEmpty ? null : linkText,
         createdBy: profile?.id ?? '',
-        attendeeIds: attendeeIds,
-        roomName: _selectedRoom,
-        shootingHours: shootingHours,
-        finalVideoDuration: finalVideoDuration,
         teamId: teamId,
-        eventType: eventType,
       );
+      if (newId != null && _reminderOffsets.isNotEmpty) {
+        final remErr = await ClientRepository.setStartReminderOffsets(
+          newId,
+          StartReminderOffsets.normalize(_reminderOffsets),
+        );
+        if (remErr != null && mounted) _showMessage(remErr);
+      }
     } on BookingConflictException catch (e) {
       if (mounted) {
         setState(() => _saving = false);
@@ -2294,95 +2311,13 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                   ),
                 const SizedBox(height: 12),
 
-                if (_loadingRooms)
-                  const LinearProgressIndicator()
-                else if (_rooms.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.outlineVariant),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.meeting_room_outlined,
-                          size: 18,
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'No rooms available — ask an admin to add rooms.',
-                            style: AppTextStyles.bodySm.copyWith(
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedRoom,
-                    dropdownColor: AppColors.surfaceContainerLowest,
-                    decoration: InputDecoration(
-                      labelText: 'Meeting room (optional)',
-                      prefixIcon: const Icon(
-                        Icons.meeting_room_outlined,
-                        size: 20,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    items: [
-                      DropdownMenuItem(
-                        value: null,
-                        child: Text('— No room —', style: AppTextStyles.bodyMd),
-                      ),
-                      ..._rooms.map(
-                        (r) => DropdownMenuItem(
-                          value: r,
-                          child: Text(r, style: AppTextStyles.bodyMd),
-                        ),
-                      ),
-                    ],
-                    onChanged: (v) => setState(() => _selectedRoom = v),
-                  ),
-                const SizedBox(height: 12),
-
                 TextField(
-                  controller: _costCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
+                  controller: _descCtrl,
+                  maxLines: 3,
                   decoration: InputDecoration(
-                    labelText: 'Meeting cost (optional)',
-                    prefixIcon: const Icon(
-                      Icons.attach_money_outlined,
-                      size: 20,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Shooting Hours and Final Video Duration are two independent
-                // decimal-hour fields, both distinct from the scheduled event
-                // time above. Neither is derived from the other.
-                TextField(
-                  controller: _shootingCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Shooting Hours (optional)',
-                    hintText: 'e.g. 2, 2.5, 6.5',
-                    prefixIcon: const Icon(Icons.videocam_outlined, size: 20),
+                    labelText: 'Description (optional)',
+                    alignLabelWithHint: true,
+                    prefixIcon: const Icon(Icons.notes_outlined, size: 20),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -2391,14 +2326,12 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                 const SizedBox(height: 12),
 
                 TextField(
-                  controller: _finalVideoCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
+                  controller: _linkCtrl,
+                  keyboardType: TextInputType.url,
                   decoration: InputDecoration(
-                    labelText: 'Final Video Duration (hours, optional)',
-                    hintText: 'e.g. 0.25, 0.5, 1.5',
-                    prefixIcon: const Icon(Icons.movie_outlined, size: 20),
+                    labelText: 'Link (optional)',
+                    hintText: 'https://…',
+                    prefixIcon: const Icon(Icons.link_outlined, size: 20),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -2406,44 +2339,14 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                 ),
                 const SizedBox(height: 12),
 
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Attendees', style: AppTextStyles.labelMd),
+                _ReminderOffsetPicker(
+                  selected: _reminderOffsets,
+                  onChanged: (s) => setState(() {
+                    _reminderOffsets
+                      ..clear()
+                      ..addAll(s);
+                  }),
                 ),
-                const SizedBox(height: 8),
-                if (_employees.isEmpty)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      _teamId == null
-                          ? 'Pick a department first to choose attendees.'
-                          : 'No members in this department yet.',
-                      style: AppTextStyles.bodySm.copyWith(
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                  )
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: _employees.map((e) {
-                      final selected = _selectedEmployeeIds.contains(e['id']);
-                      return FilterChip(
-                        label: Text(e['name']!, style: AppTextStyles.bodySm),
-                        selected: selected,
-                        onSelected: (v) => setState(() {
-                          if (v) {
-                            _selectedEmployeeIds.add(e['id']!);
-                          } else {
-                            _selectedEmployeeIds.remove(e['id']!);
-                          }
-                        }),
-                        selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                        checkmarkColor: AppColors.primary,
-                      );
-                    }).toList(),
-                  ),
 
                 const SizedBox(height: 16),
                 SizedBox(
@@ -2497,22 +2400,21 @@ class _EditEventSheet extends StatefulWidget {
 
 class _EditEventSheetState extends State<_EditEventSheet> {
   late final TextEditingController _titleCtrl;
-  late final TextEditingController _costCtrl;
-  late final TextEditingController _shootingCtrl;
-  late final TextEditingController _finalVideoCtrl;
+  late final TextEditingController _descCtrl;
+  late final TextEditingController _linkCtrl;
 
   List<ClientModel> _clients = [];
   ClientModel? _selectedClient;
-
-  List<Map<String, String>> _employees = [];
-  final Set<String> _selectedEmployeeIds = {};
-
-  List<String> _rooms = [];
-  String? _selectedRoom;
-  bool _loadingRooms = true;
+  // Clients scoped to THIS EVENT's department (client_type), not the active
+  // workspace — editing another department's event still shows its own clients.
+  String? _clientFilter;
 
   bool _loadingClients = true;
   bool _saving = false;
+  // Chosen START-time reminder offsets, loaded from the event. Phase 1.
+  final Set<int> _reminderOffsets = {};
+  bool _loadingReminders = true;
+  bool _reminderLoadFailed = false;
 
   late DateTime _startTime;
   late DateTime _endTime;
@@ -2522,39 +2424,49 @@ class _EditEventSheetState extends State<_EditEventSheet> {
     super.initState();
     final e = widget.event;
     _titleCtrl = TextEditingController(text: e.title);
-    _costCtrl = TextEditingController(
-      text: e.cost != null ? e.cost!.toStringAsFixed(2) : '',
-    );
-    _shootingCtrl = TextEditingController(
-      text: e.shootingHours != null ? _plainNum(e.shootingHours!) : '',
-    );
-    _finalVideoCtrl = TextEditingController(
-      text: e.finalVideoDuration != null
-          ? _plainNum(e.finalVideoDuration!)
-          : '',
-    );
+    _descCtrl = TextEditingController(text: e.description ?? '');
+    _linkCtrl = TextEditingController(text: e.link ?? '');
     _startTime = e.start;
     _endTime = e.end;
-    _selectedRoom = e.roomName;
-    // Preselect the event's current attendees (kept even if an attendee is no
-    // longer in the team pool, e.g. a legacy cross-department attendee).
-    _selectedEmployeeIds.addAll(e.attendeeIds);
+    _loadReminders();
+    // Resolve the event's own department client_type filter from its team_id.
+    final scope = context.read<WorkspaceScopeNotifier>();
+    final dept = scope.state.departmentForTeamId(e.teamId);
+    _clientFilter = dept == null
+        ? null
+        : scope.state.teamFor(dept)?.department?.toLowerCase();
     _fetchClients();
-    _fetchEmployees();
-    _fetchRooms();
   }
 
   @override
   void dispose() {
     _titleCtrl.dispose();
-    _costCtrl.dispose();
-    _shootingCtrl.dispose();
-    _finalVideoCtrl.dispose();
+    _descCtrl.dispose();
+    _linkCtrl.dispose();
     super.dispose();
   }
 
+  /// Load this event's start-reminder offsets. Distinguishes a real empty list
+  /// from a read failure so the UI never shows "no reminders" wrongly, and the
+  /// save never overwrites existing settings from an unknown state.
+  Future<void> _loadReminders() async {
+    if (mounted) setState(() => _loadingReminders = true);
+    final res =
+        await ClientRepository.fetchStartReminderOffsets(widget.event.id);
+    if (!mounted) return;
+    setState(() {
+      _loadingReminders = false;
+      _reminderLoadFailed = !res.ok;
+      if (res.ok) {
+        _reminderOffsets
+          ..clear()
+          ..addAll(res.offsets!);
+      }
+    });
+  }
+
   Future<void> _fetchClients() async {
-    final list = await ClientRepository.fetchClients();
+    final list = await ClientRepository.fetchClients(clientType: _clientFilter);
     if (!mounted) return;
     setState(() {
       _clients = list;
@@ -2569,62 +2481,6 @@ class _EditEventSheetState extends State<_EditEventSheet> {
         }
       }
     });
-  }
-
-  /// Edit pool = members of THIS EVENT's department team (events.team_id) only,
-  /// so a new attendee can never be added from another department. The event's
-  /// team is NOT changed by the active workspace. A legacy null team_id yields
-  /// an empty pool (existing attendees are preserved, no cross-dept adds).
-  Future<void> _fetchEmployees() async {
-    final teamId = widget.event.teamId;
-    if (teamId == null) {
-      if (mounted) setState(() => _employees = []);
-      return;
-    }
-    try {
-      final data = await SupabaseService.client
-          .from('profiles')
-          .select('id, full_name')
-          .eq('team_id', teamId)
-          .neq('role', 'client')
-          .eq('status', 'active')
-          .order('full_name');
-      if (mounted) {
-        setState(() {
-          _employees = (data as List)
-              .map(
-                (m) => {
-                  'id': m['id'] as String,
-                  'name': m['full_name'] as String? ?? '',
-                },
-              )
-              .toList();
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _employees = []);
-    }
-  }
-
-  Future<void> _fetchRooms() async {
-    try {
-      final data = await SupabaseService.client
-          .from('rooms')
-          .select('name')
-          .order('name');
-      final names = (data as List)
-          .map((r) => r['name'] as String? ?? '')
-          .where((n) => n.isNotEmpty)
-          .toList();
-      if (mounted) {
-        setState(() {
-          _rooms = names;
-          _loadingRooms = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingRooms = false);
-    }
   }
 
   Future<void> _pickTime(bool isStart) async {
@@ -2655,73 +2511,96 @@ class _EditEventSheetState extends State<_EditEventSheet> {
   String _fmt(DateTime d) => AppTime.hm(d);
 
   Future<void> _save() async {
-    if (_titleCtrl.text.trim().isEmpty) return;
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      _showMessage('Event title is required.');
+      return;
+    }
+    if (!_endTime.isAfter(_startTime)) {
+      _showMessage('End time must be after the start time.');
+      return;
+    }
+    final linkText = _linkCtrl.text.trim();
+    if (linkText.isNotEmpty && safeEventLink(linkText) == null) {
+      _showMessage('Enter a valid http(s) link, or leave it empty.');
+      return;
+    }
     setState(() => _saving = true);
 
-    final cost = double.tryParse(_costCtrl.text.trim());
-    final shootingHours = double.tryParse(_shootingCtrl.text.trim());
-    final finalVideoDuration = double.tryParse(_finalVideoCtrl.text.trim());
-    final attendeeIds = _selectedEmployeeIds.toList();
+    final description = _descCtrl.text.trim().isEmpty
+        ? null
+        : _descCtrl.text.trim();
+    final link = linkText.isEmpty ? null : linkText;
 
     try {
+      // Only the supported fields are updated; legacy data (cost, room,
+      // shooting/final, attendees) is preserved server-side.
       await ClientRepository.updateEvent(
         eventId: widget.event.id,
-        title: _titleCtrl.text.trim(),
+        title: title,
         start: _startTime,
         end: _endTime,
         clientId: _selectedClient?.id,
-        cost: cost,
-        roomName: _selectedRoom,
-        attendeeIds: attendeeIds,
-        shootingHours: shootingHours,
-        finalVideoDuration: finalVideoDuration,
+        description: description,
+        link: link,
       );
+      // Only persist reminders when we actually loaded the current ones. If the
+      // load failed (or is still running), leave the event's reminders UNCHANGED
+      // rather than overwriting an unknown state.
+      if (!_reminderLoadFailed && !_loadingReminders) {
+        final remErr = await ClientRepository.setStartReminderOffsets(
+          widget.event.id,
+          StartReminderOffsets.normalize(_reminderOffsets),
+        );
+        if (remErr != null && mounted) _showMessage(remErr);
+      } else if (_reminderLoadFailed && mounted) {
+        _showMessage('Reminders were not changed (they could not be loaded).');
+      }
     } on BookingConflictException catch (e) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: AppColors.error),
-        );
+        _showMessage(e.message);
       }
       return;
     }
 
-    final selectedNames = _employees
-        .where((e) => _selectedEmployeeIds.contains(e['id']))
-        .map((e) => e['name']!)
-        .toList();
-
+    // Keep legacy fields on the in-memory event so the detail view still shows
+    // any historical cost/room/attendees for this record.
+    final e = widget.event;
     final updated = CalEvent(
-      id: widget.event.id,
-      title: _titleCtrl.text.trim(),
+      id: e.id,
+      title: title,
       start: _startTime,
       end: _endTime,
       color: _selectedClient != null
           ? const Color(0xFFBA1A1A)
           : AppColors.primary,
+      isAllDay: e.isAllDay,
+      assigneeInitials: e.assigneeInitials,
       clientId: _selectedClient?.id,
       clientName: _selectedClient?.companyName,
-      cost: cost,
-      roomName: _selectedRoom,
-      status: widget.event.status,
-      teamId: widget.event.teamId,
-      shootingHours: shootingHours,
-      finalVideoDuration: finalVideoDuration,
-      attendeeNames: selectedNames.isNotEmpty
-          ? selectedNames
-          : widget.event.attendeeNames,
-      attendeeIds: attendeeIds.isNotEmpty
-          ? attendeeIds
-          : widget.event.attendeeIds,
-      assigneeInitials: selectedNames.isNotEmpty
-          ? selectedNames.first.substring(0, 1).toUpperCase()
-          : widget.event.assigneeInitials,
+      description: description,
+      link: link,
+      cost: e.cost,
+      attendeeNames: e.attendeeNames,
+      attendeeIds: e.attendeeIds,
+      roomName: e.roomName,
+      status: e.status,
+      shootingHours: e.shootingHours,
+      finalVideoDuration: e.finalVideoDuration,
+      teamId: e.teamId,
     );
 
     if (mounted) {
       Navigator.pop(context);
       widget.onUpdated(updated);
     }
+  }
+
+  void _showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), backgroundColor: AppColors.error),
+    );
   }
 
   @override
@@ -2857,95 +2736,13 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                   ),
                 const SizedBox(height: 12),
 
-                if (_loadingRooms)
-                  const LinearProgressIndicator()
-                else if (_rooms.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.outlineVariant),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.meeting_room_outlined,
-                          size: 18,
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'No rooms available — ask an admin to add rooms.',
-                            style: AppTextStyles.bodySm.copyWith(
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedRoom,
-                    dropdownColor: AppColors.surfaceContainerLowest,
-                    decoration: InputDecoration(
-                      labelText: 'Meeting room (optional)',
-                      prefixIcon: const Icon(
-                        Icons.meeting_room_outlined,
-                        size: 20,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    items: [
-                      DropdownMenuItem(
-                        value: null,
-                        child: Text('— No room —', style: AppTextStyles.bodyMd),
-                      ),
-                      ..._rooms.map(
-                        (r) => DropdownMenuItem(
-                          value: r,
-                          child: Text(r, style: AppTextStyles.bodyMd),
-                        ),
-                      ),
-                    ],
-                    onChanged: (v) => setState(() => _selectedRoom = v),
-                  ),
-                const SizedBox(height: 12),
-
                 TextField(
-                  controller: _costCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
+                  controller: _descCtrl,
+                  maxLines: 3,
                   decoration: InputDecoration(
-                    labelText: 'Meeting cost (optional)',
-                    prefixIcon: const Icon(
-                      Icons.attach_money_outlined,
-                      size: 20,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Shooting Hours and Final Video Duration are two independent
-                // decimal-hour fields, both distinct from the scheduled event
-                // time above. Neither is derived from the other.
-                TextField(
-                  controller: _shootingCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Shooting Hours (optional)',
-                    hintText: 'e.g. 2, 2.5, 6.5',
-                    prefixIcon: const Icon(Icons.videocam_outlined, size: 20),
+                    labelText: 'Description (optional)',
+                    alignLabelWithHint: true,
+                    prefixIcon: const Icon(Icons.notes_outlined, size: 20),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -2954,14 +2751,12 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                 const SizedBox(height: 12),
 
                 TextField(
-                  controller: _finalVideoCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
+                  controller: _linkCtrl,
+                  keyboardType: TextInputType.url,
                   decoration: InputDecoration(
-                    labelText: 'Final Video Duration (hours, optional)',
-                    hintText: 'e.g. 0.25, 0.5, 1.5',
-                    prefixIcon: const Icon(Icons.movie_outlined, size: 20),
+                    labelText: 'Link (optional)',
+                    hintText: 'https://…',
+                    prefixIcon: const Icon(Icons.link_outlined, size: 20),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -2969,47 +2764,19 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                 ),
                 const SizedBox(height: 12),
 
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Attendees', style: AppTextStyles.labelMd),
+                _ReminderOffsetPicker(
+                  selected: _reminderOffsets,
+                  loading: _loadingReminders,
+                  failed: _reminderLoadFailed,
+                  onRetry: _loadReminders,
+                  onChanged: (s) => setState(() {
+                    _reminderOffsets
+                      ..clear()
+                      ..addAll(s);
+                  }),
                 ),
-                const SizedBox(height: 8),
-                if (_employees.isEmpty)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      widget.event.teamId == null
-                          ? 'This event has no department — assign one to manage attendees.'
-                          : 'No members in this department yet.',
-                      style: AppTextStyles.bodySm.copyWith(
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                  )
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: _employees.map((e) {
-                      final selected = _selectedEmployeeIds.contains(e['id']);
-                      return FilterChip(
-                        label: Text(e['name']!, style: AppTextStyles.bodySm),
-                        selected: selected,
-                        onSelected: (v) => setState(() {
-                          if (v) {
-                            _selectedEmployeeIds.add(e['id']!);
-                          } else {
-                            _selectedEmployeeIds.remove(e['id']!);
-                          }
-                        }),
-                        selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                        checkmarkColor: AppColors.primary,
-                      );
-                    }).toList(),
-                  ),
-                const SizedBox(height: 12),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
@@ -3408,6 +3175,116 @@ class _DeptContextChip extends StatelessWidget {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// Multi-select picker for START-time reminder offsets (Phase 1). Minute values
+/// come from StartReminderOffsets.allowed; delivery is server-side.
+class _ReminderOffsetPicker extends StatelessWidget {
+  const _ReminderOffsetPicker({
+    required this.selected,
+    required this.onChanged,
+    this.loading = false,
+    this.failed = false,
+    this.onRetry,
+  });
+  final Set<int> selected;
+  final ValueChanged<Set<int>> onChanged;
+  final bool loading;
+  final bool failed;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final header = Row(
+      children: [
+        const Icon(Icons.alarm, size: 18, color: AppColors.gold),
+        const SizedBox(width: 6),
+        Text('Reminders (before start)', style: AppTextStyles.labelMd),
+      ],
+    );
+
+    if (loading) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.gold,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('Loading reminders…', style: AppTextStyles.bodySm),
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (failed) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Could not load reminders. They were left unchanged.',
+                  style: AppTextStyles.bodySm.copyWith(color: AppColors.error),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        header,
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: StartReminderOffsets.allowed.map((o) {
+            final sel = selected.contains(o);
+            return FilterChip(
+              label: Text(
+                StartReminderOffsets.label(o),
+                style: AppTextStyles.bodySm,
+              ),
+              selected: sel,
+              onSelected: (v) {
+                final next = {...selected};
+                if (v) {
+                  next.add(o);
+                } else {
+                  next.remove(o);
+                }
+                onChanged(next);
+              },
+              selectedColor: AppColors.primary.withValues(alpha: 0.2),
+              checkmarkColor: AppColors.primary,
+            );
+          }).toList(),
+        ),
       ],
     );
   }

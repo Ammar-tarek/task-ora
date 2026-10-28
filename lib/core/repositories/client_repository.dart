@@ -1,13 +1,12 @@
 // lib/core/repositories/client_repository.dart
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../features/calendar/start_reminder_offsets.dart';
 import '../services/privileged_ops.dart';
 import '../services/supabase_service.dart';
 import '../models/client_model.dart';
 import '../models/task_model.dart';
-import '../utils/app_time.dart';
 import 'finance_repository.dart';
-import 'notification_repository.dart';
 
 /// Thrown when a Studio room booking cannot be saved because its time range
 /// overlaps an existing (non-cancelled) Studio booking. Surfaced from the DB
@@ -29,6 +28,8 @@ class CalEventData {
   final DateTime end;
   final String? clientId;
   final String? clientName;
+  final String? description;
+  final String? link;
   final double? cost;
   final List<String> attendeeNames;
   final List<String> attendeeIds;
@@ -47,6 +48,8 @@ class CalEventData {
     required this.end,
     this.clientId,
     this.clientName,
+    this.description,
+    this.link,
     this.cost,
     this.attendeeNames = const [],
     this.attendeeIds = const [],
@@ -68,6 +71,8 @@ class CalEventData {
       end: DateTime.tryParse(m['end_time'] as String? ?? '') ?? DateTime.now(),
       clientId: m['client_id'] as String?,
       clientName: client?['company_name'] as String?,
+      description: m['description'] as String?,
+      link: m['link'] as String?,
       cost: (m['cost'] as num?)?.toDouble(),
       roomName: m['location'] as String?,
       status: m['status'] as String? ?? 'pending',
@@ -451,108 +456,120 @@ class ClientRepository {
     }
   }
 
-  /// Save a new event to Supabase with optional client, cost, room, and attendees.
-  /// If a client and cost are provided, also creates a CRM entry so the meeting
-  /// fee appears automatically on the client's finance page.
-  static Future<void> createEvent({
+  /// Save a new event (simplified form): title, department (team_id), optional
+  /// client, start/end, description, and link. Department-created notifications
+  /// are handled SERVER-SIDE by the `notify_event_created` trigger (fans out to
+  /// the owning department via team_id and pushes via FCM) — no client-side
+  /// notify here, which avoids double-sends. event_type is left to the column
+  /// default; attendees/cost/room are no longer part of the form.
+  /// Returns the new event id (or null on failure), so callers can attach
+  /// start-reminder offsets to it. Behaviour is otherwise unchanged.
+  static Future<String?> createEvent({
     required String title,
     required DateTime start,
     required DateTime end,
-    String? clientId,
-    double? cost,
     required String createdBy,
-    List<String> attendeeIds = const [],
-    String? roomName,
-    double? shootingHours,
-    double? finalVideoDuration,
+    String? clientId,
+    String? description,
+    String? link,
     String? teamId,
-    String? eventType,
   }) async {
-    // The owning-department insert can be rejected by the Studio booking
-    // exclusion constraint (SQLSTATE 23P01). Surface only that as a typed
-    // conflict so the UI can explain it; other failures keep the historical
-    // silent-fail behaviour of this method.
-    final String eventId;
     try {
-      final event = await _db
-          .from('events')
-          .insert({
-            'title': title,
-            'start_time': start.toIso8601String(),
-            'end_time': end.toIso8601String(),
-            'client_id': clientId,
-            'cost': cost,
-            'created_by': createdBy,
-            'location': roomName,
-            'shooting_hours': shootingHours,
-            'final_video_duration': finalVideoDuration,
-            'team_id': teamId,
-            'event_type': ?eventType,
-          })
-          .select('id')
-          .single();
-      eventId = event['id'] as String;
+      final res = await _db.from('events').insert({
+        'title': title,
+        'start_time': start.toIso8601String(),
+        'end_time': end.toIso8601String(),
+        'client_id': clientId,
+        'description': description,
+        'link': link,
+        'created_by': createdBy,
+        'team_id': teamId,
+      }).select('id').single();
+      return res['id'] as String?;
     } on PostgrestException catch (e) {
       if (e.code == '23P01') throw const BookingConflictException();
-      return;
+      return null;
     } catch (_) {
-      return;
+      return null;
     }
-
-    try {
-      if (attendeeIds.isNotEmpty) {
-        await _db
-            .from('event_attendees')
-            .insert(
-              attendeeIds
-                  .map((pid) => {'event_id': eventId, 'profile_id': pid})
-                  .toList(),
-            );
-      }
-
-      // Event-created notifications are handled SERVER-SIDE (single source of
-      // truth), so there is no client-side notifyAction here:
-      //   • owning-department managers + admins → trigger notify_event_created
-      //     (department-scoped via events.team_id; see PROPOSED_calendar_reminders.sql §4)
-      //   • each assigned attendee → trigger notify_event_attendee
-      // Removing the old notifyAction call prevents the double-send (admins and
-      // attendees were each notified twice). NOTE: this change MUST ship together
-      // with that SQL, or managers will not be notified on create.
-
-      // Auto-create CRM invoice so the cost appears on the client's finance page
-      if (clientId != null && cost != null && cost > 0) {
-        try {
-          await _db.from('crm_entries').insert({
-            'client_id': clientId,
-            'title': '$title – Meeting Booking',
-            'amount': cost,
-            'paid_amount': 0,
-            'status': 'unpaid',
-            'source_type': 'room_booking',
-            'currency': 'EGP',
-          });
-        } catch (_) {}
-      }
-    } catch (_) {}
   }
 
-  /// Update an existing event. Replaces attendees with the new list.
+  // ── Event start-reminder offsets (Phase 1) ──────────────────────────────────
+  // Depends on PROPOSED_phase1_event_start_reminders.sql (not yet applied).
+  // RLS lets the event's department manager/admin write; anyone may read.
+
+  /// Load an event's start-reminder offsets. Returns a [ReminderLoadResult] so
+  /// callers can tell a real empty list (loaded, no reminders) apart from a READ
+  /// FAILURE. A missing table (migration not applied) counts as "no reminders
+  /// yet" (ok, empty), not a failure.
+  static Future<ReminderLoadResult> fetchStartReminderOffsets(
+    String eventId,
+  ) async {
+    try {
+      final data = await _db
+          .from('event_start_reminder_offsets')
+          .select('offset_minutes')
+          .eq('event_id', eventId);
+      return ReminderLoadResult.ok(
+        StartReminderOffsets.parseRows(data as List),
+      );
+    } on PostgrestException catch (e) {
+      if (e.code == '42P01') {
+        // Table does not exist yet (migration pending) → no reminders, not a fail.
+        return const ReminderLoadResult.ok(<int>[]);
+      }
+      return ReminderLoadResult.failed('Could not load reminders: ${e.message}');
+    } catch (e) {
+      return ReminderLoadResult.failed('Could not load reminders: $e');
+    }
+  }
+
+  /// Atomically replace the event's start-reminder offsets with [offsets]
+  /// (an empty list clears all reminders). Runs server-side in ONE transaction
+  /// via the `set_event_start_reminders` RPC, so a failed insert can never wipe
+  /// the user's existing settings. Authorization (admin / event's manager) is
+  /// enforced in the function — no service-role client.
+  ///
+  /// Returns null on success, or a user-readable error message on failure. The
+  /// caller MUST surface a non-null result instead of reporting success.
+  static Future<String?> setStartReminderOffsets(
+    String eventId,
+    List<int> offsets,
+  ) async {
+    try {
+      await _db.rpc('set_event_start_reminders', params: {
+        'p_event_id': eventId,
+        'p_offsets': offsets,
+      });
+      return null;
+    } on PostgrestException catch (e) {
+      // 42883 = function missing (migration not applied); surface a clear hint.
+      if (e.code == '42883') {
+        return 'Reminders are not available yet (pending database update).';
+      }
+      return 'Could not save reminders: ${e.message}';
+    } catch (e) {
+      return 'Could not save reminders: $e';
+    }
+  }
+
+  /// Update an existing event's supported fields only (simplified form):
+  /// title, start/end, client, description, link. Legacy columns (cost, room,
+  /// shooting/final, event_type, team_id) and the event's attendees are left
+  /// UNTOUCHED, so editing never wipes historical data the new form no longer
+  /// shows. An event keeps its owning department; RLS blocks cross-department
+  /// moves.
   static Future<void> updateEvent({
     required String eventId,
     required String title,
     required DateTime start,
     required DateTime end,
     String? clientId,
-    double? cost,
-    String? roomName,
-    List<String> attendeeIds = const [],
-    double? shootingHours,
-    double? finalVideoDuration,
+    String? description,
+    String? link,
   }) async {
-    // Editing a Studio room booking's time can collide with another booking;
-    // the exclusion constraint raises 23P01, surfaced as a typed conflict.
-    // team_id/event_type are intentionally NOT updated here — an event keeps its
-    // owning department, and RLS blocks a manager moving it across departments.
+    // Editing a legacy Studio booking's time can still collide with another
+    // booking; the exclusion constraint raises 23P01, surfaced as a conflict.
     try {
       await _db
           .from('events')
@@ -561,10 +578,8 @@ class ClientRepository {
             'start_time': start.toIso8601String(),
             'end_time': end.toIso8601String(),
             'client_id': clientId,
-            'cost': cost,
-            'location': roomName,
-            'shooting_hours': shootingHours,
-            'final_video_duration': finalVideoDuration,
+            'description': description,
+            'link': link,
           })
           .eq('id', eventId);
     } on PostgrestException catch (e) {
@@ -573,33 +588,6 @@ class ClientRepository {
     } catch (_) {
       return;
     }
-
-    try {
-      await _db.from('event_attendees').delete().eq('event_id', eventId);
-      if (attendeeIds.isNotEmpty) {
-        await _db
-            .from('event_attendees')
-            .insert(
-              attendeeIds
-                  .map((pid) => {'event_id': eventId, 'profile_id': pid})
-                  .toList(),
-            );
-
-        // Notify assigned attendees of updated event details!
-        final dateStr = '${start.day}/${start.month}/${start.year}';
-        final timeStr = '${AppTime.hm(start)} - ${AppTime.hm(end)}';
-        for (final recipientId in attendeeIds) {
-          await NotificationRepository.createNotification(
-            recipientId: recipientId,
-            type: 'calendar_event',
-            title: 'Calendar Event Updated',
-            body: 'Event "$title" on $dateStr ($timeStr) was updated.',
-            referenceType: 'calendar',
-            referenceId: eventId,
-          );
-        }
-      }
-    } catch (_) {}
   }
 
   /// Update only an event's status (done / cancelled_by_client / cancelled_by_us

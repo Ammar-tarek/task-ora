@@ -29,10 +29,11 @@ void main() {
     });
 
     test('other explicit reference types route correctly', () {
-      expect(notificationRouteFor(referenceType: 'penalty'), '/penalties');
       expect(notificationRouteFor(referenceType: 'expense'), '/expenses');
-      expect(notificationRouteFor(referenceType: 'attendance'), '/attendance');
       expect(notificationRouteFor(referenceType: 'payment'), '/finance');
+      // Attendance/Penalties removed from UI — no in-app target.
+      expect(notificationRouteFor(referenceType: 'penalty'), isNull);
+      expect(notificationRouteFor(referenceType: 'attendance'), isNull);
     });
   });
 
@@ -42,13 +43,14 @@ void main() {
       expect(notificationRouteFor(type: 'meeting_reminder'), '/calendar');
     });
 
-    test('task/penalty/attendance types fall back correctly', () {
+    test('task type falls back correctly; removed features return null', () {
       expect(
         notificationRouteFor(type: 'task_assigned', referenceId: 't2'),
         '/tasks/detail/t2',
       );
-      expect(notificationRouteFor(type: 'penalty_applied'), '/penalties');
-      expect(notificationRouteFor(type: 'attendance_alert'), '/attendance');
+      // Attendance/Penalties removed from UI — no in-app target.
+      expect(notificationRouteFor(type: 'penalty_applied'), isNull);
+      expect(notificationRouteFor(type: 'attendance_alert'), isNull);
     });
   });
 

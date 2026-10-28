@@ -16,7 +16,6 @@
 //  * Currency is EGP everywhere.
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/constants/departments.dart';
@@ -102,11 +101,6 @@ class _DepartmentRevenueSheetScreenState
       appBar: AppBar(
         title: const Text('Department Revenue'),
         actions: [
-          IconButton(
-            tooltip: 'Analytics',
-            icon: const Icon(Icons.insights_outlined),
-            onPressed: () => context.push('/finance/analytics'),
-          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
           const SizedBox(width: 4),
         ],
@@ -348,7 +342,23 @@ class _DepartmentRevenueSheetScreenState
             'This department')
         : (scope.effectiveDepartment?.label ?? 'All Departments');
 
-    final clients = await ClientRepository.fetchClients();
+    // Scope the client list to the ACTIVE workspace department (client_type) —
+    // the same mechanism the Clients module uses: a specific department → only
+    // that department's clients; All Departments (global) → every client. RLS
+    // stays the real boundary, and the list is fetched fresh on each open so a
+    // workspace switch never shows a stale set.
+    final clients = await ClientRepository.fetchClients(
+      clientType: scope.activeClientTypeFilter,
+    );
+    final clientItems = [
+      for (final c in clients) (id: c.id, name: c.companyName),
+    ];
+    // On edit the client field is read-only; keep the saved client present so
+    // the dropdown value resolves even if it sits outside the active department.
+    if (edit?.clientId != null &&
+        !clientItems.any((c) => c.id == edit!.clientId)) {
+      clientItems.insert(0, (id: edit!.clientId!, name: edit.clientName));
+    }
 
     if (!mounted) return;
     await showDialog<void>(
@@ -413,9 +423,9 @@ class _DepartmentRevenueSheetScreenState
                       value: null,
                       child: Text('No client (internal)'),
                     ),
-                    ...clients.map((c) => DropdownMenuItem<String?>(
+                    ...clientItems.map((c) => DropdownMenuItem<String?>(
                           value: c.id,
-                          child: Text(c.companyName,
+                          child: Text(c.name,
                               overflow: TextOverflow.ellipsis),
                         )),
                   ],

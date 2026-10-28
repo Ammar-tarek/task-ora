@@ -11,6 +11,7 @@ import '../../core/auth/auth_notifier.dart';
 import '../../core/repositories/dashboard_repository.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/repositories/team_repository.dart';
+import '../../core/repositories/client_repository.dart';
 import '../../core/models/task_model.dart';
 import '../../core/models/profile_model.dart';
 import 'dashboard_quick_actions.dart';
@@ -44,6 +45,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   DashboardStats? _stats;
   List<TaskModel> _recentTasks = [];
   List<ProfileModel> _employees = [];
+  // Nearest upcoming (non-passed, non-cancelled) event in the authorized scope.
+  CalEventData? _upcomingEvent;
+  // Count of clients visible on the destination Clients screen (same scope).
+  int _clientCount = 0;
   bool _loading = true;
   String? _error;
 
@@ -112,6 +117,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final scopeTeamId = profile.isAdmin
         ? context.read<WorkspaceScopeNotifier>().taskScopeTeamId
         : null;
+    // client_type filter for the Clients card — matches the Clients screen:
+    // admin → active workspace dept (null = All Departments), manager → own
+    // team. Captured here (before awaits) so no BuildContext is used later.
+    final clientTypeFilter = (profile.isAdmin || profile.isManager)
+        ? context.read<WorkspaceScopeNotifier>().activeClientTypeFilter
+        : null;
 
     // Fetch each data source independently so one failure doesn't kill the page.
     DashboardStats? stats;
@@ -156,6 +167,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       /* employees stays empty — shows "No data" */
     }
 
+    // Nearest upcoming event — same data source & scope as the Calendar screen:
+    // admin narrows to the active workspace (null = All Departments); everyone
+    // else passes null and RLS restricts them to their department's events.
+    CalEventData? upcomingEvent;
+    try {
+      final events = await ClientRepository.fetchDepartmentEvents(
+        scopedTeamId: scopeTeamId,
+      );
+      upcomingEvent = _pickUpcoming(events);
+    } catch (_) {
+      /* upcomingEvent stays null — card shows the empty state */
+    }
+
+    // Client count — management only (admin/manager). Uses the SAME query and
+    // scope as the destination Clients screen (/department-clients) so the count
+    // always matches the list: admin → active workspace team (null = all),
+    // manager → their own team. RLS remains the real boundary.
+    int clientCount = 0;
+    if (profile.isAdmin || profile.isManager) {
+      try {
+        final clients = await ClientRepository.fetchClients(
+          clientType: clientTypeFilter,
+        );
+        clientCount = clients.length;
+      } catch (_) {
+        /* clientCount stays 0 */
+      }
+    }
+
     if (mounted && !_loadTok.isStale(tok)) {
       setState(() {
         _stats =
@@ -171,9 +211,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             );
         _recentTasks = tasks.take(5).toList();
         _employees = employees.take(6).toList();
+        _upcomingEvent = upcomingEvent;
+        _clientCount = clientCount;
         _loading = false;
       });
     }
+  }
+
+  /// Nearest event that has not passed and is still eligible to show:
+  /// cancelled (client/us) and done events are excluded, mirroring the
+  /// Calendar's status rules. Picks the earliest by start time; an event that
+  /// is currently running (ends in the future) still counts as upcoming.
+  CalEventData? _pickUpcoming(List<CalEventData> events) {
+    final now = DateTime.now();
+    const hidden = {
+      'cancelled',
+      'cancelled_by_client',
+      'cancelled_by_us',
+      'done',
+      'completed',
+    };
+    final upcoming =
+        events
+            .where((e) => !hidden.contains(e.status) && e.end.isAfter(now))
+            .toList()
+          ..sort((a, b) => a.start.compareTo(b.start));
+    return upcoming.isEmpty ? null : upcoming.first;
   }
 
   /// True when all numeric stats are zero (fresh / empty database).
@@ -406,59 +469,48 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               accent: true,
                               onTap: () => context.go('/tasks?filter=All'),
                             ),
+                            // Upcoming Event — replaces the old Completed card.
+                            // Nearest eligible event from the same data source
+                            // and scope as the Calendar; a tap opens Calendar.
                             TStatCard(
-                              title: 'completed',
-                              value: '${_stats?.doneTasks ?? 0}',
-                              icon: Icons.check_circle_outline,
-                              sub: (_stats != null && _stats!.totalTasks > 0)
-                                  ? '${(_stats!.doneTasks / _stats!.totalTasks * 100).round()}%'
-                                  : '0%',
-                              onTap: () =>
-                                  context.go('/tasks?filter=Completed'),
+                              title: 'upcoming_event',
+                              value:
+                                  _upcomingEvent?.title ??
+                                  S.t('no_upcoming_events'),
+                              icon: _upcomingEvent == null
+                                  ? Icons.event_busy_outlined
+                                  : Icons.event_outlined,
+                              sub: _upcomingEvent == null
+                                  ? null
+                                  : DateFormat(
+                                      'd MMM · HH:mm',
+                                      S.lang,
+                                    ).format(_upcomingEvent!.start),
+                              onTap: () => context.go('/calendar'),
                             ),
-                            TStatCard(
-                              title: 'in_progress',
-                              value: '${_stats?.inProgressTasks ?? 0}',
-                              icon: Icons.loop,
-                              sub: 'active',
-                              onTap: () =>
-                                  context.go('/tasks?filter=In Progress'),
-                            ),
-                            TStatCard(
-                              title: (isAdmin || profile?.isManager == true)
-                                  ? 'team_size'
-                                  : 'my_attendance',
-                              value: (isAdmin || profile?.isManager == true)
-                                  ? '${_stats?.totalEmployees ?? 0}'
-                                  : ((_stats?.presentToday ?? 0) > 0
-                                        ? (S.isArabic ? 'حاضر' : 'Present')
-                                        : (S.isArabic
-                                              ? 'لم يسجل'
-                                              : 'Not Checked In')),
-                              icon: (isAdmin || profile?.isManager == true)
-                                  ? Icons.people_outline
-                                  : Icons.how_to_reg_outlined,
-                              sub: (isAdmin || profile?.isManager == true)
-                                  ? (S.isArabic
-                                        ? '${_stats?.presentToday ?? 0} حاضر'
-                                        : '${_stats?.presentToday ?? 0} present')
-                                  : (S.isArabic
-                                        ? 'حالة اليوم'
-                                        : 'Today Status'),
-                              onTap: () {
-                                if (isAdmin) {
-                                  context.push('/users');
-                                } else if (profile?.isManager == true &&
-                                    profile?.teamId != null) {
-                                  context.push(
-                                    '/teams/${profile!.teamId}/members',
-                                    extra: 'My Team',
-                                  );
-                                } else {
-                                  context.push('/attendance');
-                                }
-                              },
-                            ),
+                            // Clients — replaces the old In Progress card.
+                            // Management only; count and destination both use
+                            // the department-scoped Clients directory so the
+                            // number always matches what the screen lists.
+                            if (isAdmin || profile?.isManager == true)
+                              TStatCard(
+                                title: 'clients',
+                                value: '$_clientCount',
+                                icon: Icons.business_center_outlined,
+                                onTap: () =>
+                                    context.push('/department-clients'),
+                              ),
+                            // Team size — management only. Opens the full Team
+                            // performance hub (/team → TeamScreen), identical to
+                            // the Team Quick Action, so it respects the same
+                            // department/team scoping and role-based access.
+                            if (isAdmin || profile?.isManager == true)
+                              TStatCard(
+                                title: 'team_size',
+                                value: '${_stats?.totalEmployees ?? 0}',
+                                icon: Icons.people_outline,
+                                onTap: () => context.push('/team'),
+                              ),
                           ],
                         );
                       },
@@ -471,26 +523,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     _ResponsiveQuickActions(
                       screenWidth: screenW,
                       actions: [
-                        _QuickActionData(
-                          'attendance',
-                          Icons.how_to_reg_outlined,
-                          () => context.push('/attendance'),
-                        ),
-                        _QuickActionData(
-                          'penalties',
-                          Icons.gavel_outlined,
-                          () => context.push('/penalties'),
-                        ),
-                        // Analytics = the department's reporting destination
-                        // (replaces the old Finance shortcut). Scoped by role:
-                        // admin = all/selected dept, manager = own team. Company
-                        // Finance / Ledger remain on their own routes.
-                        if (DashboardQuickActions.showAnalytics(profile))
-                          _QuickActionData(
-                            'analytics',
-                            Icons.insights_outlined,
-                            () => context.go('/analytics'),
-                          ),
+                        // (Analytics shortcut removed from Quick Actions. The
+                        // Analytics module + its /analytics route stay intact.)
                         // Team performance hub — admin/manager only, scoped by RLS.
                         if (DashboardQuickActions.showTeam(profile))
                           _QuickActionData(
@@ -544,25 +578,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   : S.t('no_data'),
                               onTap: () => context.go('/finance'),
                             ),
-                          _OverviewCard(
-                            icon: Icons.how_to_reg_outlined,
-                            iconColor: AppColors.statusInProgress,
-                            title: (isAdmin || profile?.isManager == true)
-                                ? 'attendance_today'
-                                : 'my_attendance',
-                            value: (isAdmin || profile?.isManager == true)
-                                ? ((_stats?.presentToday ?? 0) > 0
-                                      ? (S.isArabic
-                                            ? '${_stats!.presentToday} حاضر'
-                                            : '${_stats!.presentToday} present')
-                                      : S.t('no_data'))
-                                : ((_stats?.presentToday ?? 0) > 0
-                                      ? (S.isArabic ? 'حاضر' : 'Present')
-                                      : (S.isArabic
-                                            ? 'لم يسجل'
-                                            : 'Not Checked In')),
-                            onTap: () => context.push('/attendance'),
-                          ),
                         ];
                         if (isWide) {
                           return Row(

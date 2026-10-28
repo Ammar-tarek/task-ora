@@ -8,9 +8,11 @@ import '../../core/l10n/app_strings.dart';
 import '../../core/providers/locale_controller.dart';
 import '../../core/models/client_model.dart';
 import '../../core/providers/team_privileges_notifier.dart';
+import '../../core/providers/workspace_scope_notifier.dart';
 import '../../core/repositories/client_repository.dart';
 import '../../core/repositories/team_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/load_token.dart';
 
 class ClientsScreen extends StatefulWidget {
   const ClientsScreen({super.key});
@@ -22,7 +24,14 @@ class ClientsScreen extends StatefulWidget {
 class _ClientsScreenState extends State<ClientsScreen> {
   List<ClientModel> _clients = [];
   bool _loading = true;
-  String? _managerDepartment; // null = admin — show all clients
+  // The active department filter (client_profiles.client_type):
+  //   • manager → their own team's department (locked);
+  //   • admin   → the active workspace department, or null for All Departments.
+  // null means "no filter" → every client the viewer's RLS allows.
+  String? _deptFilter;
+  WorkspaceScopeNotifier? _scope;
+  // Drop stale results if the workspace changes before a load finishes.
+  final _loadTok = LoadToken();
 
   @override
   void initState() {
@@ -30,18 +39,44 @@ class _ClientsScreenState extends State<ClientsScreen> {
     _load();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload when an admin switches the active department workspace.
+    final sc = context.read<WorkspaceScopeNotifier>();
+    if (!identical(sc, _scope)) {
+      _scope?.removeListener(_onScopeChanged);
+      _scope = sc..addListener(_onScopeChanged);
+    }
+  }
+
+  void _onScopeChanged() {
+    if (mounted) _load();
+  }
+
+  @override
+  void dispose() {
+    _scope?.removeListener(_onScopeChanged);
+    super.dispose();
+  }
+
   Future<void> _load() async {
+    final tok = _loadTok.begin();
     setState(() => _loading = true);
     final profile = context.read<AuthNotifier>().profile;
+    String? deptFilter;
     if (profile?.isManager == true && profile?.teamId != null) {
+      // Managers stay locked to their own department, regardless of workspace.
       final team = await TeamRepository.fetchById(profile!.teamId!);
-      _managerDepartment = team?.department?.toLowerCase();
+      deptFilter = team?.department?.toLowerCase();
+    } else if (profile?.isAdmin == true) {
+      // Admins follow the active workspace (null = All Departments → all).
+      deptFilter = context.read<WorkspaceScopeNotifier>().activeClientTypeFilter;
     }
-    final clients = await ClientRepository.fetchClients(
-      clientType: _managerDepartment,
-    );
-    if (mounted) {
+    final clients = await ClientRepository.fetchClients(clientType: deptFilter);
+    if (mounted && !_loadTok.isStale(tok)) {
       setState(() {
+        _deptFilter = deptFilter;
         _clients = clients;
         _loading = false;
       });
@@ -127,7 +162,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
       ),
       builder: (_) => _CreateClientSheet(
         onCreated: _load,
-        presetClientType: _managerDepartment,
+        presetClientType: _deptFilter,
       ),
     );
   }
@@ -391,85 +426,50 @@ class _CreateClientSheet extends StatefulWidget {
 }
 
 class _CreateClientSheetState extends State<_CreateClientSheet> {
-  final _fullNameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  final _companyCtrl = TextEditingController();
-  final _contactCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-  final _whatsappCtrl = TextEditingController();
-  final _addressCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
-  bool _obscurePassword = true;
   bool _saving = false;
-  List<String> _departments = [];
-  String? _selectedType;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedType = widget.presetClientType?.toLowerCase();
-    // Seed with the current value so the dropdown always has a matching item.
-    if (_selectedType != null && _selectedType!.isNotEmpty) {
-      _departments = [_selectedType!];
-    }
-    loadClientDepartments().then((d) {
-      if (!mounted) return;
-      setState(() {
-        _departments = {..._departments, ...d}.toList()..sort();
-      });
-    });
-  }
 
   @override
   void dispose() {
-    _fullNameCtrl.dispose();
-    _emailCtrl.dispose();
-    _passwordCtrl.dispose();
-    _companyCtrl.dispose();
-    _contactCtrl.dispose();
+    _nameCtrl.dispose();
     _phoneCtrl.dispose();
-    _whatsappCtrl.dispose();
-    _addressCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
 
-  String? _validate() {
-    if (_fullNameCtrl.text.trim().isEmpty) return 'Full name is required';
-    if (_emailCtrl.text.trim().isEmpty) return 'Email is required';
-    if (_passwordCtrl.text.length < 6) {
-      return 'Password must be at least 6 characters';
-    }
-    if (_companyCtrl.text.trim().isEmpty) return 'Company name is required';
-    if (_contactCtrl.text.trim().isEmpty) return 'Contact person is required';
-    return null;
-  }
-
   Future<void> _save() async {
-    final err = _validate();
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Client name is required')),
+      );
       return;
     }
-
+    if (_saving) return; // guard against a double tap while saving
     setState(() => _saving = true);
 
+    // A client row needs a backing auth account (client_profiles.id → a
+    // profiles/auth user) and company_name/contact_person/email are NOT NULL in
+    // the schema. The form only asks for a name, so the login credentials are
+    // generated here (the admin never types an email or password) and the name
+    // fills both company_name and contact_person. Existing clients keep their
+    // real accounts — this only affects clients created from this simple form.
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    final email = 'client.$stamp@clients.taskora.local';
+    final password = 'Cx${stamp.toRadixString(36)}!A7';
+
     final result = await ClientRepository.createClientWithAccount(
-      fullName: _fullNameCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
-      password: _passwordCtrl.text,
-      companyName: _companyCtrl.text.trim(),
-      contactPerson: _contactCtrl.text.trim(),
+      fullName: name,
+      email: email,
+      password: password,
+      companyName: name,
+      contactPerson: name,
       phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-      whatsappNumber: _whatsappCtrl.text.trim().isEmpty
-          ? null
-          : _whatsappCtrl.text.trim(),
-      address: _addressCtrl.text.trim().isEmpty
-          ? null
-          : _addressCtrl.text.trim(),
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      clientType: _selectedType,
+      // Department comes from the active workspace (never chosen in this form).
+      clientType: widget.presetClientType?.toLowerCase(),
     );
 
     if (!mounted) return;
@@ -517,91 +517,19 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
             ),
             const SizedBox(height: 20),
             Text('New Client', style: AppTextStyles.headlineSm),
-            const SizedBox(height: 4),
-            Text(
-              'Creates a login account and company profile',
-              style: AppTextStyles.bodySm.copyWith(
-                color: AppColors.onSurfaceVariant,
-              ),
-            ),
             const SizedBox(height: 20),
 
-            // ── Account section ──────────────────────────────────────
-            _SectionLabel(label: 'LOGIN ACCOUNT'),
-            const SizedBox(height: 10),
             _Field(
-              controller: _fullNameCtrl,
-              label: 'Full name *',
-              icon: Icons.person_outline,
-            ),
-            const SizedBox(height: 12),
-            _Field(
-              controller: _emailCtrl,
-              label: 'Email *',
-              icon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _passwordCtrl,
-              obscureText: _obscurePassword,
-              decoration: InputDecoration(
-                labelText: 'Password *',
-                prefixIcon: const Icon(Icons.lock_outline, size: 20),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    size: 20,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ── Company section ──────────────────────────────────────
-            _SectionLabel(label: 'COMPANY DETAILS'),
-            const SizedBox(height: 10),
-            _Field(
-              controller: _companyCtrl,
-              label: 'Company name *',
+              controller: _nameCtrl,
+              label: 'Client name *',
               icon: Icons.business_outlined,
             ),
             const SizedBox(height: 12),
             _Field(
-              controller: _contactCtrl,
-              label: 'Contact person *',
-              icon: Icons.badge_outlined,
-            ),
-            const SizedBox(height: 12),
-            _Field(
               controller: _phoneCtrl,
-              label: 'Phone',
+              label: 'Phone number',
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 12),
-            _Field(
-              controller: _whatsappCtrl,
-              label: 'WhatsApp number',
-              icon: Icons.chat_outlined,
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 12),
-            _Field(
-              controller: _addressCtrl,
-              label: 'Address',
-              icon: Icons.location_on_outlined,
             ),
             const SizedBox(height: 12),
             _Field(
@@ -609,18 +537,6 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
               label: 'Notes',
               icon: Icons.notes_outlined,
               maxLines: 3,
-            ),
-            const SizedBox(height: 20),
-
-            // ── Client type section ──────────────────────────────────
-            _SectionLabel(label: 'DEPARTMENT'),
-            const SizedBox(height: 10),
-            _DepartmentDropdown(
-              departments: _departments,
-              value: _selectedType,
-              // Managers create clients only within their own department.
-              enabled: widget.presetClientType == null,
-              onChanged: (v) => setState(() => _selectedType = v),
             ),
             const SizedBox(height: 24),
 
@@ -639,7 +555,7 @@ class _CreateClientSheetState extends State<_CreateClientSheet> {
                         color: AppColors.onPrimary,
                       )
                     : Text(
-                        'Create Client Account',
+                        'Create Client',
                         style: TextStyle(
                           color: AppColors.onPrimary,
                           fontWeight: FontWeight.w600,
@@ -1054,12 +970,10 @@ class _DepartmentDropdown extends StatelessWidget {
     required this.departments,
     required this.value,
     required this.onChanged,
-    this.enabled = true,
   });
   final List<String> departments;
   final String? value;
   final ValueChanged<String?> onChanged;
-  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1074,10 +988,6 @@ class _DepartmentDropdown extends StatelessWidget {
           horizontal: 12,
           vertical: 12,
         ),
-        filled: !enabled,
-        fillColor: !enabled
-            ? AppColors.outlineVariant.withValues(alpha: 0.12)
-            : null,
       ),
       hint: const Text('Select department'),
       items: [
@@ -1086,7 +996,7 @@ class _DepartmentDropdown extends StatelessWidget {
             .map((d) => DropdownMenuItem(value: d, child: Text(_titleCase(d)))),
         const DropdownMenuItem(value: 'both', child: Text('Both Departments')),
       ],
-      onChanged: enabled ? onChanged : null,
+      onChanged: onChanged,
     );
   }
 }

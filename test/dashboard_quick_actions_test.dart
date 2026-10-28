@@ -18,9 +18,12 @@ ProfileModel _p({required String role, bool superAdmin = false}) => ProfileModel
 
 void main() {
   group('DashboardQuickActions.visibleKeys', () {
-    test('employee: Tasks/Attendance/Penalties, NO Analytics, NO Team', () {
+    test('employee: Tasks only, NO Analytics, NO Team, NO removed features', () {
       final keys = DashboardQuickActions.visibleKeys(_p(role: 'employee'));
-      expect(keys, containsAll(['attendance', 'penalties', 'tasks']));
+      expect(keys, contains('tasks'));
+      // Attendance/Penalties removed from the UI.
+      expect(keys, isNot(contains('attendance')));
+      expect(keys, isNot(contains('penalties')));
       expect(keys, isNot(contains('analytics')));
       expect(keys, isNot(contains('department_revenue'))); // old entry gone
       expect(keys, isNot(contains('team')));
@@ -31,7 +34,10 @@ void main() {
     test('manager: Analytics + Team + Clients visible, NO old Finance entry', () {
       final keys = DashboardQuickActions.visibleKeys(_p(role: 'manager'));
       expect(keys, isNot(contains('department_revenue')));
-      expect(keys, containsAll(['attendance', 'penalties', 'tasks', 'team', 'analytics', 'clients']));
+      expect(keys, containsAll(['tasks', 'team', 'analytics', 'clients']));
+      // Attendance/Penalties removed from the UI.
+      expect(keys, isNot(contains('attendance')));
+      expect(keys, isNot(contains('penalties')));
       expect(DashboardQuickActions.showAnalytics(_p(role: 'manager')), isTrue);
       expect(DashboardQuickActions.showClients(_p(role: 'manager')), isTrue);
     });

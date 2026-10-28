@@ -5,7 +5,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'core/services/supabase_service.dart';
 import 'core/services/realtime_service.dart';
-import 'core/services/wifi_attendance_service.dart';
 import 'core/services/local_notification_service.dart';
 import 'core/services/notification_trigger_service.dart';
 import 'core/services/apk_update_service.dart';
@@ -102,12 +101,8 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
     if (auth == null) return;
 
     final profile = auth.profile;
-    // Start WiFi attendance tracking for logged in users (employees, managers, admins, super admins).
-    if (auth.isLoggedIn && profile != null) {
-      WifiAttendanceService.instance.init(profile.id);
-    } else {
-      WifiAttendanceService.instance.dispose();
-    }
+    // Attendance feature removed: the WiFi attendance background service is no
+    // longer started, so the app never records attendance on its own.
 
     // Start / stop realtime notification triggers & FCM push based on login state & check updates.
     if (auth.isLoggedIn && profile != null) {
@@ -125,13 +120,12 @@ class _CbToDoAppState extends State<CbToDoApp> with WidgetsBindingObserver {
     }
   }
 
-  // Re-check WiFi whenever the app comes back to the foreground.
+  // Re-check for app updates whenever the app comes back to the foreground.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       final profile = context.read<AuthNotifier>().profile;
       if (profile != null) {
-        WifiAttendanceService.instance.checkNow();
         if (!kIsWeb) ApkUpdateService.checkForUpdates(context);
       }
       // Refresh privileges so admin/manager edits take effect on next foreground.

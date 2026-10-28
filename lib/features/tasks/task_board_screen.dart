@@ -14,6 +14,7 @@ import '../../core/providers/theme_controller.dart';
 import '../../core/providers/workspace_scope_notifier.dart';
 import '../../core/services/montage_task_filter.dart';
 import 'montage_monthly_progress.dart';
+import 'task_month_visibility.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/repositories/team_repository.dart';
 import '../../core/services/realtime_service.dart';
@@ -256,9 +257,12 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       _tasks.where((t) => t.handoffToTeamId == null),
     );
 
-    // Month workspace — primary context. Show only tasks anchored to the
-    // active month (by due date, else creation date). Pure view filter.
-    list = list.where((t) => t.monthAnchor == _activeMonth).toList();
+    // Month workspace — primary context. Show tasks anchored to the active
+    // month (by due date, else creation date), PLUS any task awaiting THIS
+    // user's Accept/Reject response so an assignee never loses it to the month
+    // filter (e.g. a Nov-due task assigned to them while viewing Oct). Other
+    // tasks still follow the month filter. Pure view filter.
+    list = TaskMonthVisibility.filter(list, _activeMonth, _profile?.id);
 
     // Status filter
     if (_filter != 'All') {
@@ -2203,8 +2207,13 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       builder: (_) => _CreateTaskSheet(
         initialMonth: _activeMonth,
         isLiveMonth: _activeMonth == _liveMonth,
-        onCreated: () {
+        onCreated: (taskMonth) {
           Navigator.pop(context);
+          // Jump to the month the new task is anchored to so the creator sees
+          // it immediately (month view would otherwise hide a future-due task).
+          if (taskMonth != null && mounted) {
+            setState(() => _activeMonth = taskMonth);
+          }
           _load(animate: false);
         },
       ),
@@ -2891,7 +2900,11 @@ class _KanbanCard extends StatelessWidget {
 }
 
 class _CreateTaskSheet extends StatefulWidget {
-  final VoidCallback onCreated;
+  /// Called after a task is successfully created. Carries the new task's month
+  /// (first day of its due-date month, else creation month) so the board can
+  /// jump to the month where the task is actually anchored — otherwise a task
+  /// due in another month is created but hidden behind the current month filter.
+  final ValueChanged<DateTime?> onCreated;
   // The month workspace the user is currently viewing. A new task defaults its
   // due date so it lands in this month. [isLiveMonth] is true when that is the
   // real current calendar month.
@@ -3011,7 +3024,22 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
       dueDate: _dueDate?.toIso8601String().split('T').first,
     );
 
-    if (taskId != null && _selectedAssigneeIds.isNotEmpty) {
+    // Insert failed (RLS / schema / network). Do NOT report success — surface
+    // the error and keep the sheet open so the user can retry. Previously this
+    // ignored the null id and closed as if it worked.
+    if (taskId == null) {
+      if (!mounted) return;
+      setState(() => _creating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(S.t('task_create_failed')),
+          backgroundColor: Colors.red.shade800,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedAssigneeIds.isNotEmpty) {
       try {
         await TaskRepository.assignEmployees(
           taskId: taskId,
@@ -3023,7 +3051,7 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
 
     // Post initial comment (may embed a link) once the task exists.
     final commentText = _commentCtrl.text.trim();
-    if (taskId != null && commentText.isNotEmpty) {
+    if (commentText.isNotEmpty) {
       try {
         await TaskRepository.addComment(
           taskId,
@@ -3034,7 +3062,10 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
       } catch (_) {}
     }
 
-    widget.onCreated();
+    // Hand up the task's anchor month (due-date month, else now) so the board
+    // navigates there and the new task is never hidden by the month filter.
+    final anchor = _dueDate ?? DateTime.now();
+    widget.onCreated(DateTime(anchor.year, anchor.month));
   }
 
   void _showInsertLinkDialog() {

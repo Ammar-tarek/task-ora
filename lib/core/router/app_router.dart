@@ -18,22 +18,16 @@ import '../../features/tasks/task_board_screen.dart';
 import '../../features/tasks/task_table_screen.dart';
 import '../../features/tasks/task_detail_screen.dart';
 import '../../features/calendar/calendar_screen.dart';
-import '../../features/finance/finance_dashboard_screen.dart';
-import '../../features/finance/finance_analytics_screen.dart';
 import '../../features/finance/department_revenue_sheet_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/super_admin/archived_tasks_screen.dart';
 import '../../features/analytics/advanced_analytics_screen.dart';
-import '../../features/attendance/attendance_screen.dart';
-import '../../features/attendance/attendance_reminder_tracking_screen.dart';
-import '../../features/penalties/penalty_management_screen.dart';
 import '../../features/users/user_management_screen.dart';
 import '../../features/users/user_privileges_screen.dart';
 import '../../features/roles/roles_editor_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/expenses/daily_expenses_screen.dart';
 import '../../features/team/team_screen.dart';
-import '../../features/team/department_clients_screen.dart';
 import '../../features/teams/team_management_screen.dart';
 import '../../features/teams/team_members_screen.dart';
 import '../../features/teams/team_privileges_screen.dart';
@@ -115,26 +109,23 @@ GoRouter makeRouter(AuthNotifier auth) {
         if (loc == '/users' ||
             loc.startsWith('/users/') ||
             loc == '/roles' ||
-            loc == '/penalties' ||
             loc == '/teams' ||
             loc.startsWith('/teams/') ||
             loc == '/clients' ||
             loc.startsWith('/clients/') ||
             loc == '/dashboard' ||
             loc == '/analytics' ||
-            loc == '/attendance' ||
             loc == '/expenses' ||
             loc == '/team' ||
-            loc == '/department-clients' ||
-            loc.startsWith('/finance/analytics')) {
+            loc == '/department-clients') {
           return '/tasks';
         }
       }
 
       // Managers: no team creation/editing, no analytics.
-      // They CAN access /users, /clients, /attendance, /expenses, /penalties,
-      // /roles (scoped to their own team — privileges only), and their own
-      // team's members screen (/teams/:id/members).
+      // They CAN access /users, /clients, /expenses, /roles (scoped to their
+      // own team — privileges only), and their own team's members screen
+      // (/teams/:id/members).
       if (profile?.isManager == true) {
         // Managers are completely blocked from internal Finance + Analytics.
         if (loc.startsWith('/finance')) return '/dashboard';
@@ -145,7 +136,6 @@ GoRouter makeRouter(AuthNotifier auth) {
       }
 
       // Employees: no finance, no user/role/team management.
-      // /penalties IS allowed — screen shows only their own record.
       if (profile?.isEmployee == true) {
         if (loc.startsWith('/finance')) return '/tasks';
         if (loc == '/users' ||
@@ -243,26 +233,16 @@ GoRouter makeRouter(AuthNotifier auth) {
               ),
             ],
           ),
-          // 3 — Finance (role-aware: clients see their own finance)
+          // 3 — Finance (role-aware: clients see their own finance portal;
+          // admins get the Department Revenue sheet). The obsolete department
+          // Finance dashboard/analytics subtree (/finance/analytics[/details])
+          // was retired — reporting lives at '/analytics' and the company
+          // ledger at '/expenses'.
           StatefulShellBranch(
             routes: [
               GoRoute(
                 path: '/finance',
                 builder: (_, _) => const _FinanceRouter(),
-                routes: [
-                  // Analytics area = the retained revenue dashboard, with the
-                  // deeper financial analytics under 'details'.
-                  GoRoute(
-                    path: 'analytics',
-                    builder: (_, _) => const FinanceDashboardScreen(),
-                    routes: [
-                      GoRoute(
-                        path: 'details',
-                        builder: (_, _) => const FinanceAnalyticsScreen(),
-                      ),
-                    ],
-                  ),
-                ],
               ),
             ],
           ),
@@ -295,15 +275,14 @@ GoRouter makeRouter(AuthNotifier auth) {
         path: '/super-admin/archived-tasks',
         builder: (_, _) => const ArchivedTasksScreen(),
       ),
-      GoRoute(path: '/attendance', builder: (_, _) => const AttendanceScreen()),
-      GoRoute(
-        path: '/attendance/reminders',
-        builder: (_, _) => const AttendanceReminderTrackingScreen(),
-      ),
-      GoRoute(
-        path: '/penalties',
-        builder: (_, _) => const PenaltyManagementScreen(),
-      ),
+      // ── Removed features (Attendance & Penalties) ────────────────────────
+      // The screens were removed from the app UI. These paths remain only as
+      // safe redirects so stale deep links / saved routes don't crash: they
+      // bounce to '/dashboard', and the top-level redirect then sends clients
+      // on to '/tasks' (clients can't see the dashboard).
+      GoRoute(path: '/attendance', redirect: (_, _) => '/dashboard'),
+      GoRoute(path: '/attendance/reminders', redirect: (_, _) => '/dashboard'),
+      GoRoute(path: '/penalties', redirect: (_, _) => '/dashboard'),
       GoRoute(path: '/users', builder: (_, _) => const UserManagementScreen()),
       GoRoute(
         path: '/users/:id/privileges',
@@ -326,9 +305,12 @@ GoRouter makeRouter(AuthNotifier auth) {
         builder: (_, _) => const DailyExpensesScreen(),
       ),
       GoRoute(path: '/team', builder: (_, _) => const TeamScreen()),
+      // Department-aware Clients module (the single Clients implementation).
+      // ClientsScreen scopes its list + create to the active workspace
+      // department (admins) or the viewer's own department (managers).
       GoRoute(
         path: '/department-clients',
-        builder: (_, _) => const DepartmentClientsScreen(),
+        builder: (_, _) => const ClientsScreen(),
       ),
       GoRoute(path: '/teams', builder: (_, _) => const TeamManagementScreen()),
       GoRoute(
@@ -355,7 +337,9 @@ GoRouter makeRouter(AuthNotifier auth) {
           );
         },
       ),
-      GoRoute(path: '/clients', builder: (_, _) => const ClientsScreen()),
+      // Legacy Clients route retired → the Clients module now lives at
+      // '/department-clients'. Kept as a safe redirect for saved links.
+      GoRoute(path: '/clients', redirect: (_, _) => '/department-clients'),
       GoRoute(
         path: '/clients/:id/finance',
         builder: (_, state) =>

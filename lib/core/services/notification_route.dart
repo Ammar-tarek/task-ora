@@ -19,15 +19,14 @@ String? notificationRouteFor({
   final refId = referenceId;
 
   // 1) Explicit routing via reference_type.
+  // Attendance and Penalties were removed from the app UI — their notifications
+  // no longer have an in-app target, so they fall through and return null (the
+  // row stays tappable-to-read but navigates nowhere).
   switch (referenceType) {
     case 'task':
       return refId != null ? '/tasks/detail/$refId' : '/tasks';
-    case 'penalty':
-      return '/penalties';
     case 'expense':
       return '/expenses';
-    case 'attendance':
-      return '/attendance';
     case 'payment':
       return '/finance';
     case 'calendar': // legacy event reference type
@@ -41,13 +40,10 @@ String? notificationRouteFor({
     case 'task_done':
     case 'task_handoff':
       return refId != null ? '/tasks/detail/$refId' : '/tasks';
-    case 'penalty_issued':
-    case 'penalty_applied':
-      return '/penalties';
     case 'payment_due':
       return '/finance';
-    case 'attendance_alert':
-      return '/attendance';
+    // 'penalty_*' and 'attendance_alert' intentionally omitted — features
+    // removed from the UI, so these return null (no navigation target).
     case 'calendar_event':
     case 'meeting_reminder':
       return '/calendar';

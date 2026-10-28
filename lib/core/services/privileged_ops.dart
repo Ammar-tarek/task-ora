@@ -68,6 +68,28 @@ class PrivilegedOps {
   /// Sentinel so callers can distinguish "leave phone unchanged" from "clear it".
   static const Object _unset = Object();
 
+  /// admin-user-ops: activate/deactivate an employee. Global admin only
+  /// (server-enforced). [active] == false bans the Auth user and sets
+  /// profiles.status = 'inactive'; true lifts the ban and restores 'active'.
+  /// No data is deleted. Returns null on success, or a server error message.
+  static Future<String?> setActive({
+    required String userId,
+    required bool active,
+  }) async {
+    try {
+      await _c.functions.invoke(
+        'admin-user-ops',
+        body: {'action': 'set_active', 'userId': userId, 'active': active},
+      );
+      return null;
+    } on FunctionException catch (e) {
+      // Non-2xx: the Edge Function returns { error } in the body.
+      final d = e.details;
+      if (d is Map && d['error'] != null) return d['error'].toString();
+      return 'Operation failed (status ${e.status}).';
+    }
+  }
+
   /// Auth email for a user (service-role read, behind the function's admin gate).
   static Future<String?> fetchEmail(String userId) async {
     final res = await _c.functions.invoke(
