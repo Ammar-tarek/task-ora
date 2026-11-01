@@ -408,9 +408,9 @@
     "semantic_hash": "af17ad3cb3d3d1f2e9c3bb9181bc226b"
   },
   "lib/core/router/app_router.dart": {
-    "mtime": 1793482905.0102143,
-    "seen": 1793483015.7577891,
-    "ast_hash": "17143ce5e8277aa89061ef491ca2cef0",
+    "mtime": 1793485806.6168702,
+    "seen": 1793520734.716795,
+    "ast_hash": "b56f29ff2db970a55ae6cfdf0583f9c2",
     "semantic_hash": ""
   },
   "lib/core/router/app_routes.dart": {
@@ -582,9 +582,9 @@
     "semantic_hash": "da39375b26651aa8e5d06eacba3731e7"
   },
   "lib/core/widgets/bottom_nav_shell.dart": {
-    "mtime": 1793482936.0090966,
-    "seen": 1793483015.7578673,
-    "ast_hash": "93c58f55e3d5f18869d7d908326394b9",
+    "mtime": 1793485843.3310456,
+    "seen": 1793520734.716906,
+    "ast_hash": "aac3c57d03694a35dc77f3b1a72837ec",
     "semantic_hash": ""
   },
   "lib/core/widgets/department_switcher.dart": {
@@ -690,10 +690,10 @@
     "semantic_hash": "8b287d41b629cf1bdbd383ca09c003e8"
   },
   "lib/features/expenses/daily_expenses_screen.dart": {
-    "mtime": 1792848274.6894398,
-    "seen": 1793460547.6010048,
-    "ast_hash": "2c4470995cc4ba2c2032163b2e9da3ce",
-    "semantic_hash": "2c4470995cc4ba2c2032163b2e9da3ce"
+    "mtime": 1793483626.7135262,
+    "seen": 1793520734.7169569,
+    "ast_hash": "da15e7299f08fccea9c60b48560029b8",
+    "semantic_hash": ""
   },
   "lib/features/finance/department_revenue_sheet_screen.dart": {
     "mtime": 1793466074.0183506,
@@ -792,9 +792,9 @@
     "semantic_hash": "5c88a172d5e50d651e473e42286da5f1"
   },
   "lib/features/tasks/task_detail_sheet.dart": {
-    "mtime": 1793480002.5647972,
-    "seen": 1793480088.5210207,
-    "ast_hash": "4e02c37304b2524208b8e619b5942cfc",
+    "mtime": 1793484035.756958,
+    "seen": 1793520734.7170033,
+    "ast_hash": "3102d2272cc95778a124c9d9dd184094",
     "semantic_hash": ""
   },
   "lib/features/tasks/task_month_visibility.dart": {
@@ -2454,9 +2454,9 @@
     "semantic_hash": ""
   },
   "GATES_production_calendar.md": {
-    "mtime": 1793481103.142107,
-    "seen": 1793483015.7584283,
-    "ast_hash": "599c7db5780e25539215693aec8a33f0",
+    "mtime": 1793483028.8725314,
+    "seen": 1793520734.7174418,
+    "ast_hash": "7fbaed6ff176a783b2af51a3f78337dd",
     "semantic_hash": ""
   },
   "lib/core/router/department_gate.dart": {
@@ -2475,6 +2475,36 @@
     "mtime": 1793481031.0460603,
     "seen": 1793481089.4529774,
     "ast_hash": "2541e5e846363a8eae453b6b6c51bf42",
+    "semantic_hash": ""
+  },
+  "PROPOSED_sales_sheet_entries.sql": {
+    "mtime": 1793485610.5334716,
+    "seen": 1793520734.7166476,
+    "ast_hash": "95d150f855d4d10dcdd82025e52bf002",
+    "semantic_hash": ""
+  },
+  "PROPOSED_sales_sheet_seed.sql": {
+    "mtime": 1793485616.3585067,
+    "seen": 1793520734.7166505,
+    "ast_hash": "502c1df3e1f345ed5f2c2f1673cbac2e",
+    "semantic_hash": ""
+  },
+  "lib/core/models/sales_sheet_entry.dart": {
+    "mtime": 1793485722.4214258,
+    "seen": 1793520734.7167306,
+    "ast_hash": "f5b3c04a1a8891702f5ba0884028f5c4",
+    "semantic_hash": ""
+  },
+  "lib/core/repositories/sales_sheet_repository.dart": {
+    "mtime": 1793485722.5549536,
+    "seen": 1793520734.7167795,
+    "ast_hash": "9cdced21196fe9a0c9c473448a6dd47f",
+    "semantic_hash": ""
+  },
+  "lib/features/sales/sales_sheet_screen.dart": {
+    "mtime": 1793485891.251683,
+    "seen": 1793520734.7169745,
+    "ast_hash": "d2ef9a203e1ce074a2989a12557344b5",
     "semantic_hash": ""
   },
   "package-lock.json": {
