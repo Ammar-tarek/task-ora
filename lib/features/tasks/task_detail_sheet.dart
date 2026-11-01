@@ -1905,13 +1905,15 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Insert Link button (admin/manager/super_admin)
-                  if (_perms.canEditFull) ...[
-                    IconButton(
-                      icon: const Icon(Icons.link, color: AppColors.gold, size: 20),
-                      tooltip: 'Insert Link into Comment',
-                      onPressed: _showInsertLinkDialog,
-                    ),
+                  // Insert Link — any commenter (including employees) can add a
+                  // direct link into their comment.
+                  IconButton(
+                    icon: const Icon(Icons.link, color: AppColors.gold, size: 20),
+                    tooltip: 'Insert Link into Comment',
+                    onPressed: _showInsertLinkDialog,
+                  ),
+                  // Internal / visible-to-client toggle — managers/admins only.
+                  if (_perms.canEditFull)
                     IconButton(
                       icon: Icon(
                         _commentIsInternal ? Icons.lock_outline : Icons.public,
@@ -1927,7 +1929,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                         () => _commentIsInternal = !_commentIsInternal,
                       ),
                     ),
-                  ],
                   _sendingComment
                       ? const SizedBox(
                           width: 28,

@@ -1,11 +1,11 @@
 // lib/features/tasks/task_month_visibility.dart
 // Pure month-view visibility for the task board. The board is a month view:
-// normally a task shows only when its monthAnchor equals the active month.
-// Exception: a task the viewer is ASSIGNED to is kept in every month, so an
-// assignee never loses their own task behind the month filter (e.g. a Nov-due
-// task assigned to them while they view Oct) — pending OR accepted. A task they
-// REJECTED (they declined it) follows the normal month filter. All other tasks
-// keep the normal month filter. Pure + unit-tested (no Supabase/Flutter).
+// a task shows only when its monthAnchor equals the active month.
+// Exception: a task still awaiting THIS viewer's Accept/Reject response is kept
+// in every month, so a newly-assigned task is never lost behind the month
+// filter (e.g. a Nov-due task assigned while viewing Oct). Once accepted it
+// follows the normal month filter — so OLD accepted tasks never leak into the
+// current month. All other tasks keep the normal month filter. Pure + tested.
 
 import '../../core/models/task_model.dart';
 
@@ -13,13 +13,12 @@ class TaskMonthVisibility {
   TaskMonthVisibility._();
 
   /// Keep [t] for [activeMonth] when it is anchored there, OR when [viewerId]
-  /// is an assignee of [t] (any response except rejected) — so an assignee
-  /// always sees tasks assigned to them, regardless of the month in view.
+  /// is an assignee of [t] whose response is still PENDING (so they can respond
+  /// from any month). Accepted/rejected/legacy assignments follow the month
+  /// filter — this prevents previous-month tasks appearing in the current month.
   static bool isVisible(TaskModel t, DateTime activeMonth, String? viewerId) {
     if (t.monthAnchor == activeMonth) return true;
-    if (viewerId == null) return false;
-    final a = t.assigneeFor(viewerId);
-    return a != null && a.response != 'rejected';
+    return t.isPendingAssignmentFor(viewerId);
   }
 
   /// Apply [isVisible] across [tasks]. Preserves order; never duplicates a task

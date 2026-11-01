@@ -63,16 +63,16 @@ void main() {
       expect(TaskMonthVisibility.isVisible(t, oct, _me), isFalse);
     });
 
-    test('4. my accepted/legacy out of month → VISIBLE (assignee keeps it); '
-        'rejected → hidden', () {
+    test('4. accepted/rejected/legacy out of month → hidden (month filter); '
+        'only PENDING bypasses so old tasks never leak into the current month', () {
       final accepted =
           _task(id: 'nov-acc', dueDate: '2026-11-03', response: 'accepted');
       final rejected =
           _task(id: 'nov-rej', dueDate: '2026-11-03', response: 'rejected');
-      final legacy = // null response = legacy, still assigned to me
+      final legacy = // null response = legacy, treated as not pending
           _task(id: 'nov-legacy', dueDate: '2026-11-03', response: null);
-      expect(TaskMonthVisibility.isVisible(accepted, oct, _me), isTrue);
-      expect(TaskMonthVisibility.isVisible(legacy, oct, _me), isTrue);
+      expect(TaskMonthVisibility.isVisible(accepted, oct, _me), isFalse);
+      expect(TaskMonthVisibility.isVisible(legacy, oct, _me), isFalse);
       expect(TaskMonthVisibility.isVisible(rejected, oct, _me), isFalse);
     });
 

@@ -230,9 +230,11 @@ class _TaskTableScreenState extends State<TaskTableScreen>
     try {
       final profile = context.read<AuthNotifier>().profile;
       _perms = profile != null ? TaskPermissions(profile) : null;
-      // Build the column list ONCE (after role perms are known) so Manage
-      // Columns toggles persist across reloads instead of resetting.
-      _columns ??= _buildColumns();
+      // Rebuild the column SET each load so it reacts to the workspace/role
+      // (e.g. Marketing hides Priority/Progress/Cost once the scope resolves).
+      // The user's show/hide TOGGLES still persist — they live in _hiddenCols
+      // and are re-applied by _applyHidden, not in the column objects.
+      _columns = _buildColumns();
 
       // Authoritative workspace scope (see task_board_screen): an active
       // department never maps to null ("show all"); unresolved → sentinel → none.

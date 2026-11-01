@@ -804,9 +804,9 @@
     "semantic_hash": ""
   },
   "lib/features/tasks/task_table_screen.dart": {
-    "mtime": 1793540452.6662037,
-    "seen": 1793541532.8688223,
-    "ast_hash": "498ae414bd63936781f9991c97981d63",
+    "mtime": 1793542345.5064952,
+    "seen": 1793542449.829858,
+    "ast_hash": "af6e7771580255fc9fd4dbdb25fcfbd9",
     "semantic_hash": ""
   },
   "lib/features/team/deactivation_policy.dart": {
