@@ -324,10 +324,10 @@
     "semantic_hash": "ffc4168cbb3d4fdf4d2a440ffc9f48f6"
   },
   "lib/core/repositories/company_ledger_repository.dart": {
-    "mtime": 1792848133.9804442,
-    "seen": 1793460547.6008945,
-    "ast_hash": "52d3a3b70f66a9e53c9d607230a96f6a",
-    "semantic_hash": "52d3a3b70f66a9e53c9d607230a96f6a"
+    "mtime": 1793525882.338523,
+    "seen": 1793527024.0650873,
+    "ast_hash": "66b6567ca5f2d6ed2fb1400e4e0bc228",
+    "semantic_hash": ""
   },
   "lib/core/repositories/dashboard_repository.dart": {
     "mtime": 1793104266.175089,
@@ -378,9 +378,9 @@
     "semantic_hash": "8ef43219a9d6875197c95188a9ba47ac"
   },
   "lib/core/repositories/task_repository.dart": {
-    "mtime": 1793478794.5798824,
-    "seen": 1793479205.5227778,
-    "ast_hash": "c5e1ab62ddc80d5f867a96fff715ce59",
+    "mtime": 1793526843.9339738,
+    "seen": 1793527024.0651867,
+    "ast_hash": "047df3f8dbabc978a6f966dcdaabb4fa",
     "semantic_hash": ""
   },
   "lib/core/repositories/task_status_options_repository.dart": {
@@ -690,9 +690,9 @@
     "semantic_hash": "8b287d41b629cf1bdbd383ca09c003e8"
   },
   "lib/features/expenses/daily_expenses_screen.dart": {
-    "mtime": 1793483626.7135262,
-    "seen": 1793520734.7169569,
-    "ast_hash": "da15e7299f08fccea9c60b48560029b8",
+    "mtime": 1793525899.2254019,
+    "seen": 1793527024.0656877,
+    "ast_hash": "e3024710df161d218fdbfc408e722ec9",
     "semantic_hash": ""
   },
   "lib/features/finance/department_revenue_sheet_screen.dart": {
@@ -2505,6 +2505,12 @@
     "mtime": 1793485891.251683,
     "seen": 1793520734.7169745,
     "ast_hash": "d2ef9a203e1ce074a2989a12557344b5",
+    "semantic_hash": ""
+  },
+  "PROPOSED_assign_notification.sql": {
+    "mtime": 1793526853.5690966,
+    "seen": 1793527024.0643654,
+    "ast_hash": "51b769f36b02873b83c7dc009739891b",
     "semantic_hash": ""
   },
   "package-lock.json": {
