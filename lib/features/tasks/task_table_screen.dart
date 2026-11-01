@@ -14,6 +14,7 @@ import '../../core/models/task_model.dart';
 import '../../core/utils/task_permissions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/notion_table.dart';
+import '../../core/constants/departments.dart';
 import '../../core/widgets/team_filter_chip.dart';
 import 'task_detail_sheet.dart';
 
@@ -144,6 +145,9 @@ class _TaskTableScreenState extends State<TaskTableScreen>
 
   List<NotionColumn> _buildColumns() {
     final p = _perms;
+    // Marketing workspace hides Priority / Progress / Cost columns (team request).
+    final isMarketing =
+        _scope?.effectiveDepartment == Department.marketing;
     final cols = <NotionColumn>[
       NotionColumn(
         key: 'title',
@@ -157,7 +161,7 @@ class _TaskTableScreenState extends State<TaskTableScreen>
         icon: Icons.circle_outlined,
         flex: 2,
       ),
-      if (p?.canSeePriority != false)
+      if (!isMarketing && p?.canSeePriority != false)
         NotionColumn(
           key: 'priority',
           label: 'Priority',
@@ -177,14 +181,14 @@ class _TaskTableScreenState extends State<TaskTableScreen>
         icon: Icons.calendar_today_outlined,
         flex: 2,
       ),
-      if (p?.canSeeProgress != false)
+      if (!isMarketing && p?.canSeeProgress != false)
         NotionColumn(
           key: 'progress',
           label: 'Progress',
           icon: Icons.trending_up,
           flex: 2,
         ),
-      if (p?.canSeeCost == true)
+      if (!isMarketing && p?.canSeeCost == true)
         NotionColumn(
           key: 'cost',
           label: 'Cost / Price',
