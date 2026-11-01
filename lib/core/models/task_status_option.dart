@@ -20,7 +20,7 @@ class TaskStatusOption {
 
   factory TaskStatusOption.fromMap(Map<String, dynamic> m) => TaskStatusOption(
     id: m['id'] as String,
-    columnId: m['column_id'] as String,
+    columnId: m['column_id'] as String? ?? '',
     label: m['label'] as String,
     color: m['color'] as String? ?? '#888888',
     position: m['position'] as int? ?? 0,

@@ -420,9 +420,9 @@
     "semantic_hash": ""
   },
   "lib/core/router/workspace_routing.dart": {
-    "mtime": 1793482884.1515498,
-    "seen": 1793483015.7577977,
-    "ast_hash": "b4182753a6ba28180b4284250b87ad5d",
+    "mtime": 1793532359.212433,
+    "seen": 1793534091.6579974,
+    "ast_hash": "eabbf8afdc36f61accccf963a1f69267",
     "semantic_hash": ""
   },
   "lib/core/services/apk_update_service.dart": {
@@ -582,9 +582,9 @@
     "semantic_hash": "da39375b26651aa8e5d06eacba3731e7"
   },
   "lib/core/widgets/bottom_nav_shell.dart": {
-    "mtime": 1793485843.3310456,
-    "seen": 1793520734.716906,
-    "ast_hash": "aac3c57d03694a35dc77f3b1a72837ec",
+    "mtime": 1793532359.5404944,
+    "seen": 1793534091.658066,
+    "ast_hash": "06dedcabc5aef3087c38479afd9d7d71",
     "semantic_hash": ""
   },
   "lib/core/widgets/department_switcher.dart": {
@@ -1158,9 +1158,9 @@
     "semantic_hash": "8da13681f7aa0cfb019459b751586241"
   },
   "test/workspace_routing_test.dart": {
-    "mtime": 1793482959.180891,
-    "seen": 1793483015.758165,
-    "ast_hash": "d3c60c63e4fb8c647c2ef2f576f8e6a8",
+    "mtime": 1793532359.6724348,
+    "seen": 1793534091.6583645,
+    "ast_hash": "2794fd34aa08ad0f2b9fc9d6db0b5147",
     "semantic_hash": ""
   },
   "test/workspace_scope_test.dart": {

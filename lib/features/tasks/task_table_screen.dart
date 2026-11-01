@@ -3,6 +3,7 @@
 // Shown columns and available actions depend on admin / manager / employee / client.
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/utils/load_token.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
@@ -30,6 +31,13 @@ class _TaskTableScreenState extends State<TaskTableScreen>
   bool _loading = true;
   String? _error;
   String _filter = 'All';
+
+  // Column visibility ("Manage Columns"). Built ONCE into _columns so toggles
+  // stick (the old getter rebuilt fresh columns each build → toggles reset).
+  // Hidden column keys are saved per device and apply across all teams.
+  List<NotionColumn>? _columns;
+  Set<String> _hiddenCols = {};
+  static const _colPrefsKey = 'task_table_hidden_cols';
 
   TaskPermissions? _perms;
   TeamFilterNotifier? _teamFilter;
@@ -73,11 +81,12 @@ class _TaskTableScreenState extends State<TaskTableScreen>
       begin: const Offset(0, 0.03),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _pageAnim, curve: Curves.easeOut));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _scope = context.read<WorkspaceScopeNotifier>()..addListener(_onTeamChange);
       _teamFilter = context.read<TeamFilterNotifier>()
         ..loadTeams()
         ..addListener(_onTeamChange);
+      await _loadHiddenCols();
       _load();
     });
   }
@@ -102,9 +111,40 @@ class _TaskTableScreenState extends State<TaskTableScreen>
 
   // ── Role-based columns ────────────────────────────────────────────────────
 
-  List<NotionColumn> get _columns {
+  Future<void> _loadHiddenCols() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList(_colPrefsKey);
+      if (saved != null) _hiddenCols = saved.toSet();
+    } catch (_) {}
+  }
+
+  Future<void> _persistColumns() async {
+    final cols = _columns;
+    if (cols == null) return;
+    // Source of truth = which keys the user turned OFF. 'title' always stays on.
+    _hiddenCols = cols
+        .where((c) => !c.visible && c.key != 'title')
+        .map((c) => c.key)
+        .toSet();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_colPrefsKey, _hiddenCols.toList());
+    } catch (_) {}
+  }
+
+  /// Force each column's visibility to match [_hiddenCols]. Applied on every
+  /// build so the saved choice is authoritative and never reset by a rebuild.
+  List<NotionColumn> _applyHidden(List<NotionColumn> cols) {
+    for (final c in cols) {
+      c.visible = c.key == 'title' || !_hiddenCols.contains(c.key);
+    }
+    return cols;
+  }
+
+  List<NotionColumn> _buildColumns() {
     final p = _perms;
-    return [
+    final cols = <NotionColumn>[
       NotionColumn(
         key: 'title',
         label: 'Task',
@@ -166,6 +206,11 @@ class _TaskTableScreenState extends State<TaskTableScreen>
           flex: 2,
         ),
     ];
+    // Apply saved hidden-column choices. 'title' always stays visible.
+    for (final c in cols) {
+      c.visible = c.key == 'title' || !_hiddenCols.contains(c.key);
+    }
+    return cols;
   }
 
   // ── Load ─────────────────────────────────────────────────────────────────
@@ -181,6 +226,9 @@ class _TaskTableScreenState extends State<TaskTableScreen>
     try {
       final profile = context.read<AuthNotifier>().profile;
       _perms = profile != null ? TaskPermissions(profile) : null;
+      // Build the column list ONCE (after role perms are known) so Manage
+      // Columns toggles persist across reloads instead of resetting.
+      _columns ??= _buildColumns();
 
       // Authoritative workspace scope (see task_board_screen): an active
       // department never maps to null ("show all"); unresolved → sentinel → none.
@@ -421,7 +469,8 @@ class _TaskTableScreenState extends State<TaskTableScreen>
                             ),
                             // Table
                             NotionTable(
-                              columns: _columns,
+                              columns: _applyHidden(_columns ??= _buildColumns()),
+                              onColumnsChanged: _persistColumns,
                               rows: _buildRows(),
                               onRowTap: (id) => _showDetailSheet(context, id),
                               onRowReorder: _perms?.canReorderTasks == true

@@ -57,6 +57,10 @@ class NotionTable extends StatefulWidget {
 
   /// Called with the new ordered list of row IDs after a drag-to-reorder.
   final void Function(List<String> orderedIds)? onRowReorder;
+
+  /// Called after the user toggles column visibility (Manage Columns), so the
+  /// parent can persist which columns are hidden.
+  final VoidCallback? onColumnsChanged;
   final String emptyMessage;
   final IconData emptyIcon;
 
@@ -74,6 +78,7 @@ class NotionTable extends StatefulWidget {
     this.onRowSelect,
     this.onSelectAll,
     this.onRowReorder,
+    this.onColumnsChanged,
     this.emptyMessage = 'No data yet',
     this.emptyIcon = Icons.inbox_outlined,
   });
@@ -131,7 +136,10 @@ class _NotionTableState extends State<NotionTable>
       ),
       builder: (_) => _ColumnOptionsSheet(
         columns: widget.columns,
-        onChanged: () => setState(() {}),
+        onChanged: () {
+          setState(() {});
+          widget.onColumnsChanged?.call();
+        },
       ),
     );
   }
@@ -667,58 +675,110 @@ class _ColumnOptionsSheet extends StatefulWidget {
 }
 
 class _ColumnOptionsSheetState extends State<_ColumnOptionsSheet> {
+  // A draft of the on/off state. Toggles edit the draft ONLY; nothing changes
+  // on the table until the user presses Confirm, so the choice is explicit and
+  // stable (no live reset while toggling).
+  late final Map<String, bool> _draft = {
+    for (final c in widget.columns) c.key: c.visible,
+  };
+
+  void _confirm() {
+    for (final c in widget.columns) {
+      // 'title' (Task) always stays visible.
+      c.visible = c.key == 'title' ? true : (_draft[c.key] ?? true);
+    }
+    widget.onChanged(); // parent persists the choice
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.72,
+        maxHeight: MediaQuery.of(context).size.height * 0.80,
       ),
       child: SafeArea(
-        child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Manage Columns', style: AppTextStyles.headlineSm),
+            const SizedBox(height: 4),
+            Text('Toggle, then press Confirm', style: AppTextStyles.bodySm),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...widget.columns.map((col) {
+                      final locked = col.key == 'title';
+                      return SwitchListTile(
+                        value: locked ? true : (_draft[col.key] ?? true),
+                        onChanged: locked
+                            ? null
+                            : (v) => setState(() => _draft[col.key] = v),
+                        title: Row(
+                          children: [
+                            Icon(col.icon, size: 16, color: AppColors.gold),
+                            const SizedBox(width: 8),
+                            Text(col.label, style: AppTextStyles.bodyMd),
+                            if (locked) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                '(always)',
+                                style: AppTextStyles.bodySm.copyWith(
+                                  color: AppColors.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        activeThumbColor: AppColors.gold,
+                        activeTrackColor: AppColors.primary,
+                        contentPadding: EdgeInsets.zero,
+                      );
+                    }),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Text('Manage Columns', style: AppTextStyles.headlineSm),
-              const SizedBox(height: 4),
-              Text('Toggle which columns are visible', style: AppTextStyles.bodySm),
-              const SizedBox(height: 12),
-              const Divider(),
-              ...widget.columns.map(
-                (col) => SwitchListTile(
-                  value: col.visible,
-                  onChanged: (v) {
-                    setState(() => col.visible = v);
-                    widget.onChanged();
-                  },
-                  title: Row(
-                    children: [
-                      Icon(col.icon, size: 16, color: AppColors.gold),
-                      const SizedBox(width: 8),
-                      Text(col.label, style: AppTextStyles.bodyMd),
-                    ],
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
                   ),
-                  activeThumbColor: AppColors.gold,
-                  activeTrackColor: AppColors.primary,
-                  contentPadding: EdgeInsets.zero,
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: _confirm,
+                      child: const Text('Confirm'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    ),
-  );
+    );
   }
 }

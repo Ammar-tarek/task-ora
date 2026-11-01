@@ -1,7 +1,12 @@
 // lib/core/repositories/task_status_options_repository.dart
-// Manages task status options stored in column_status_options.
-// Self-bootstrapping: creates the backing custom_table + custom_column on
-// first admin access so non-admins never hit a missing-table error.
+// Task status options ("manage columns"), stored in the flat, GLOBAL table
+// public.task_status_options. Everyone signed in can READ (shared across all
+// tasks); admins + managers can WRITE (RLS-enforced). This replaced the old
+// custom_tables/custom_columns backing, whose team-scoped RLS made the feature
+// unstable (only a global admin could use it; others silently fell back).
+//
+// DEPLOYMENT DEPENDENCY: apply PROPOSED_task_status_options.sql. Until then,
+// reads fall back to the built-in list and writes return an error.
 
 import 'package:flutter/material.dart';
 import '../models/task_status_option.dart';
@@ -9,14 +14,11 @@ import '../services/supabase_service.dart';
 
 class TaskStatusOptionsRepository {
   static final _client = SupabaseService.client;
+  static const _table = 'task_status_options';
 
-  static const _systemTableName = '_task_status_system';
-  static const _columnName = 'task_status';
-
-  static String? _cachedColumnId;
   static List<TaskStatusOption>? _cache;
 
-  // Default built-in options seeded on first setup.
+  // Built-in options, used only as a read fallback when the table is missing.
   static const List<List<String>> _defaults = [
     ['not_started', '#6D4C41'],
     ['in_progress', '#1565C0'],
@@ -27,134 +29,16 @@ class TaskStatusOptionsRepository {
     ['on_hold', '#747878'],
   ];
 
-  // ── Bootstrap ───────────────────────────────────────────────────────────────
-
-  /// Find or create the system custom_table + custom_column and seed defaults.
-  /// Call this once from admin context on first use.
-  static Future<void> init(String adminUserId) async {
-    await _getOrCreateColumnId(adminUserId);
-  }
-
-  static Future<String?> _getOrCreateColumnId(String userId) async {
-    if (_cachedColumnId != null) return _cachedColumnId;
-
-    // Step 1 — find / create system table
-    String? tableId;
-    try {
-      final rows = await _client
-          .from('custom_tables')
-          .select('id')
-          .eq('name', _systemTableName)
-          .limit(1);
-      if ((rows as List).isNotEmpty) {
-        tableId = rows.first['id'] as String;
-      } else {
-        final res = await _client
-            .from('custom_tables')
-            .insert({
-              'name': _systemTableName,
-              'icon': '🏷',
-              'color': '#888888',
-              'created_by': userId,
-              'is_archived': false,
-            })
-            .select('id')
-            .single();
-        tableId = res['id'] as String;
-      }
-    } catch (_) {
-      return null;
-    }
-
-    // Step 2 — find / create column
-    try {
-      final cols = await _client
-          .from('custom_columns')
-          .select('id')
-          .eq('table_id', tableId)
-          .eq('name', _columnName)
-          .limit(1);
-
-      String columnId;
-      if ((cols as List).isNotEmpty) {
-        columnId = cols.first['id'] as String;
-      } else {
-        final res = await _client
-            .from('custom_columns')
-            .insert({
-              'table_id': tableId,
-              'name': _columnName,
-              'field_type': 'status',
-              'position': 0,
-              'created_by': userId,
-              'is_required': false,
-              'is_admin_only': false,
-              'is_hidden_from_client': false,
-            })
-            .select('id')
-            .single();
-        columnId = res['id'] as String;
-
-        // Seed the 7 built-in options
-        final seeds = <Map<String, dynamic>>[];
-        for (var i = 0; i < _defaults.length; i++) {
-          seeds.add({
-            'column_id': columnId,
-            'label': _defaults[i][0],
-            'color': _defaults[i][1],
-            'position': i,
-            'is_default': true,
-          });
-        }
-        await _client.from('column_status_options').insert(seeds);
-      }
-
-      _cachedColumnId = columnId;
-      return columnId;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static Future<String?> _findColumnId() async {
-    if (_cachedColumnId != null) return _cachedColumnId;
-    try {
-      final tables = await _client
-          .from('custom_tables')
-          .select('id')
-          .eq('name', _systemTableName)
-          .limit(1);
-      if ((tables as List).isEmpty) return null;
-      final tableId = tables.first['id'] as String;
-
-      final cols = await _client
-          .from('custom_columns')
-          .select('id')
-          .eq('table_id', tableId)
-          .eq('name', _columnName)
-          .limit(1);
-      if ((cols as List).isEmpty) return null;
-
-      _cachedColumnId = cols.first['id'] as String;
-      return _cachedColumnId;
-    } catch (_) {
-      return null;
-    }
-  }
+  /// Kept for call-site compatibility. The flat table + seed migration replace
+  /// the old self-bootstrap, so there is nothing to create here.
+  static Future<void> init(String adminUserId) async {}
 
   // ── Read ────────────────────────────────────────────────────────────────────
 
   static Future<List<TaskStatusOption>> fetchOptions() async {
-    final columnId = await _findColumnId();
-    if (columnId == null) {
-      return _fallback();
-    }
     try {
-      final data = await _client
-          .from('column_status_options')
-          .select()
-          .eq('column_id', columnId)
-          .order('position');
+      final data =
+          await _client.from(_table).select().order('position', ascending: true);
       final list = (data as List)
           .map((m) => TaskStatusOption.fromMap(m as Map<String, dynamic>))
           .toList();
@@ -165,25 +49,21 @@ class TaskStatusOptionsRepository {
     }
   }
 
-  // ── Write (admin only) ───────────────────────────────────────────────────────
+  // ── Write (admin / manager; RLS-enforced) ────────────────────────────────────
 
   static Future<TaskStatusOption?> addOption({
     required String label,
     required String color,
-    required String userId,
+    required String userId, // kept for call-site compatibility
   }) async {
-    final columnId = await _getOrCreateColumnId(userId);
-    if (columnId == null) return null;
     try {
       final existing = _cache ?? await fetchOptions();
       final maxPos = existing.isEmpty
           ? 0
           : existing.map((o) => o.position).reduce((a, b) => a > b ? a : b) + 1;
-
       final res = await _client
-          .from('column_status_options')
+          .from(_table)
           .insert({
-            'column_id': columnId,
             'label': label,
             'color': color,
             'position': maxPos,
@@ -192,7 +72,7 @@ class TaskStatusOptionsRepository {
           .select()
           .single();
       final opt = TaskStatusOption.fromMap(res);
-      _cache = [...(existing), opt];
+      _cache = [...existing, opt];
       return opt;
     } catch (_) {
       return null;
@@ -206,10 +86,10 @@ class TaskStatusOptionsRepository {
   }) async {
     try {
       await _client
-          .from('column_status_options')
+          .from(_table)
           .update({'label': label, 'color': color})
           .eq('id', id);
-      _cache = null; // invalidate
+      _cache = null; // invalidate; next fetch reloads
       return true;
     } catch (_) {
       return false;
@@ -218,7 +98,7 @@ class TaskStatusOptionsRepository {
 
   static Future<bool> deleteOption(String id) async {
     try {
-      await _client.from('column_status_options').delete().eq('id', id);
+      await _client.from(_table).delete().eq('id', id);
       _cache?.removeWhere((o) => o.id == id);
       return true;
     } catch (_) {
@@ -228,8 +108,8 @@ class TaskStatusOptionsRepository {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  /// Returns the display color for a task status value using live cache,
-  /// falling back to static mapping. Used by board / table screens.
+  /// Display color for a task status value — live cache first, then a static
+  /// mapping. Used by the board / table screens.
   static Color colorForStatus(String value) {
     if (_cache != null) {
       for (final opt in _cache!) {

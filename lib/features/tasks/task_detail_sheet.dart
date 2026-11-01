@@ -11,6 +11,7 @@ import '../../core/auth/auth_notifier.dart';
 import '../../core/l10n/app_strings.dart';
 import '../../core/providers/locale_controller.dart';
 import '../../core/providers/workspace_scope_notifier.dart';
+import '../../core/constants/departments.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/repositories/task_repository.dart';
 import '../../core/repositories/team_repository.dart';
@@ -2001,6 +2002,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
   // ── Action buttons ────────────────────────────────────────────────────────
 
+  /// Marketing workspace hides the Increment and Archive task options.
+  bool get _isMarketing =>
+      context.read<WorkspaceScopeNotifier>().effectiveDepartment ==
+      Department.marketing;
+
   Widget _buildActions() {
     final busy = _saving || _deleting || _incrementing || _reviewing;
 
@@ -2208,7 +2214,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           ],
           // Increment — create numbered copies. Locked on a transferred task
           // (it would clone a definition the receiving dept cannot own-edit).
-          if (_task != null && _defEditable) ...[
+          // Hidden in the Marketing workspace (team's request).
+          if (_task != null && _defEditable && !_isMarketing) ...[
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -2249,7 +2256,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               ],
               // Archive / Unarchive toggle for admins & managers (not on a
               // transferred task for a non-admin — definition is locked).
-              if (_perms.canEditFull && _task != null && _defEditable) ...[
+              // Hidden in the Marketing workspace (team's request).
+              if (_perms.canEditFull && _task != null && _defEditable && !_isMarketing) ...[
                 SizedBox(
                   width: 48,
                   child: OutlinedButton(

@@ -15,6 +15,7 @@ import '../../core/repositories/client_repository.dart';
 import '../../core/models/task_model.dart';
 import '../../core/models/profile_model.dart';
 import 'dashboard_quick_actions.dart';
+import '../../core/constants/departments.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/providers/theme_controller.dart';
 import '../../core/providers/locale_controller.dart';
@@ -255,6 +256,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       (a) => a.profile,
     );
     final isAdmin = profile?.isAdmin ?? false;
+    // Marketing workspace hides Quick Actions / Overview / Task Distribution.
+    final isMarketing = context.select<WorkspaceScopeNotifier, bool>(
+      (s) => s.effectiveDepartment == Department.marketing,
+    );
     final now = DateTime.now();
     final greeting = now.hour < 12
         ? (S.isArabic ? 'صباح الخير' : 'Good morning')
@@ -517,6 +522,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                     const SizedBox(height: 24),
 
+                    // Marketing workspace hides these three sections (team's
+                    // request); every other department keeps them.
+                    if (!isMarketing) ...[
                     // ── Quick Actions ───────────────────────────────────────
                     TSectionHeader(title: 'quick_actions'),
                     const SizedBox(height: 12),
@@ -605,6 +613,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     const SizedBox(height: 12),
                     _TaskDistributionBar(stats: _stats),
                     const SizedBox(height: 24),
+                    ],
 
                     // ── Recent Tasks (always visible) ───────────────────────
                     TSectionHeader(
