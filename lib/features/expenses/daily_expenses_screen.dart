@@ -132,6 +132,25 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
         title: const Text('Company Expenses'),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+          if (isAdmin)
+            PopupMenuButton<String>(
+              tooltip: 'More',
+              onSelected: (v) {
+                if (v == 'reset') _confirmReset();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'reset',
+                  child: Row(
+                    children: [
+                      Icon(Icons.restart_alt, size: 18, color: AppColors.statusHigh),
+                      SizedBox(width: 8),
+                      Text('Reset balance to 0'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
       body: !isAdmin
@@ -342,6 +361,56 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
 
   Future<void> _showAddFunds() => _showTxnDialog(isDeposit: true);
   Future<void> _showRecordExpense() => _showTxnDialog(isDeposit: false);
+
+  /// Reset the available company balance to zero. Records a single balancing
+  /// "Balance reset" expense (ledger history is kept). Admin-only + confirmed.
+  Future<void> _confirmReset() async {
+    if (_balance <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Balance is already zero — nothing to reset.')),
+      );
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: const Text('Reset company balance?'),
+        content: Text(
+          'This records a "Balance reset" expense of '
+          '${_balance.toStringAsFixed(2)} EGP so the available balance becomes 0. '
+          'The ledger history is kept. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.statusHigh),
+            child: const Text('Reset', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final err = await CompanyLedgerRepository.resetBalanceToZero(
+      currentBalance: _balance,
+      clientToken: CompanyLedgerRepository.newToken(),
+    );
+    if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: Colors.red.shade800),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Balance reset to 0.')),
+    );
+    _load();
+  }
 
   Future<void> _showTxnDialog({required bool isDeposit}) async {
     final token = CompanyLedgerRepository.newToken(); // one per attempt

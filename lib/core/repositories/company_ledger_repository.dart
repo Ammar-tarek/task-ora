@@ -175,4 +175,24 @@ class CompanyLedgerRepository {
       return e.toString();
     }
   }
+
+  /// Reset the AVAILABLE balance to zero by recording a single balancing expense
+  /// equal to [currentBalance]. The ledger stays append-only, so the full
+  /// history is kept (the reset shows as a "Balance reset" entry) and the
+  /// server's admin + overspend guards still apply. Returns null on success,
+  /// else a message. No DB migration needed — it reuses company_record_expense.
+  static Future<String?> resetBalanceToZero({
+    required double currentBalance,
+    required String clientToken,
+  }) async {
+    if (currentBalance <= 0) {
+      return 'Balance is already zero — nothing to reset.';
+    }
+    return recordExpense(
+      amount: currentBalance,
+      date: DateTime.now().toIso8601String().split('T').first,
+      description: 'Balance reset',
+      clientToken: clientToken,
+    );
+  }
 }

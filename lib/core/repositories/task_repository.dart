@@ -1395,23 +1395,35 @@ class TaskRepository {
         await _client.from('task_assignees').insert(inserts);
       }
 
-      // Notify the employees, team lead (manager), and ALL admins & super admins
+      // Notify each ASSIGNEE (only) with the task title + details. Managers and
+      // admins are notified on accept/reject (respond_to_assignment → fan-out),
+      // not here. One rich notification per assignee; self-assignment is skipped
+      // (mirrors the DB rule). The old title-only DB trigger
+      // trg_notify_task_assigned is dropped by PROPOSED_assign_notification.sql
+      // so the assignee gets a single, detailed ping instead of two.
       try {
         final taskData = await fetchTaskDetail(taskId);
         if (taskData != null) {
           final title = taskData['title'] as String? ?? 'New Task';
-          final teamId = taskData['team_id'] as String?;
-
-          await NotificationRepository.notifyAction(
-            title: 'Task Assigned',
-            body: 'Task "$title" has been assigned to you.',
-            type: 'task_assigned',
-            referenceType: 'task',
-            referenceId: taskId,
-            teamId: teamId,
-            targetUserIds: profileIds,
-            actorId: assignedBy,
-          );
+          final desc = (taskData['description'] as String?)?.trim() ?? '';
+          final due = (taskData['due_date'] as String?)?.trim() ?? '';
+          final priority = (taskData['priority'] as String?)?.trim() ?? '';
+          final buf = StringBuffer('Task: $title');
+          if (desc.isNotEmpty) buf.write('\n$desc');
+          if (due.isNotEmpty) buf.write('\nDue: $due');
+          if (priority.isNotEmpty) buf.write('\nPriority: $priority');
+          final body = buf.toString();
+          for (final pid in profileIds) {
+            if (pid == assignedBy) continue; // no self-ping
+            await NotificationRepository.createNotification(
+              recipientId: pid,
+              type: 'task_assigned',
+              title: 'New task assigned to you',
+              body: body,
+              referenceType: 'task',
+              referenceId: taskId,
+            );
+          }
         }
       } catch (_) {}
 
