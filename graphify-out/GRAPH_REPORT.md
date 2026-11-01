@@ -1,7 +1,7 @@
 # Graph Report - task-ora  (2026-11-01)
 
 ## Corpus Check
-- 351 files · ~218,986 words
+- 351 files · ~219,048 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 62 file(s) not represented in the graph (top: (none) 11, .xml 10, .xcconfig 8)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `2b65ce90`
+- Built from commit: `6465ac49`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -910,7 +910,7 @@ Cohesion: 0.70
 Nodes (4): public.sales_sheet_entries, public.tg_sales_sheet_touch(), sales_sheet_entries_sort_idx, trg_sales_sheet_touch
 
 ## Knowledge Gaps
-- **2359 isolated node(s):** `LedgerEntry`, `CompanyLedgerRepository`, `id`, `type`, `amount` (+2354 more)
+- **2359 isolated node(s):** `WorkspaceRouting`, `isProductionCalendarOnly`, `departmentGateRedirect`, `isAdminProductionCalendarOnly`, `productionRedirect` (+2354 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2963 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **91 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -918,16 +918,16 @@ Nodes (4): public.sales_sheet_entries, public.tg_sales_sheet_touch(), sales_shee
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `AuthNotifier` connect `AuthNotifier` to `Calendar & Attendees`, `Task Board & Filters`, `Task Detail & Assignment`, `package:flutter/material.dart`, `Clients Directory`, `User Management`, `Create User Flow`, `Super Admin Report PDF`, `Dashboard`, `notifications_screen.dart`, `Penalties Management`, `Router & Routes`, `Department Revenue Sheet`, `Workspace Scope`, `Team Members`, `WorkspaceScopeNotifier`, `Auth Session Notifier`, `advanced_analytics_screen.dart`, `task table screen`, `main`, `login screen`, `settings screen`, `roles editor screen`, `user privileges screen`, `archive completed tasks dialog`, `team screen`, `team management screen`, `team privileges notifier`, `signup screen`, `forgot_password_screen.dart`, `core/auth/auth_notifier.dart`, `sales_sheet_screen.dart`, `build`?**
-  _High betweenness centrality (0.045) - this node is a cross-community bridge._
-- **What connects `LedgerEntry`, `CompanyLedgerRepository`, `id` to the rest of the system?**
+  _High betweenness centrality (0.051) - this node is a cross-community bridge._
+- **What connects `WorkspaceRouting`, `isProductionCalendarOnly`, `departmentGateRedirect` to the rest of the system?**
   _2359 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Calendar & Attendees` be split into smaller, more focused modules?**
   _Cohesion score 0.015151515151515152 - nodes in this community are weakly interconnected._
 - **Why does `Win32Window` connect `win32_window.cpp` to `win32_window.cpp`, `utils.cpp`, `Size`, `FlutterWindow`?**
-  _High betweenness centrality (0.013) - this node is a cross-community bridge._
+  _High betweenness centrality (0.014) - this node is a cross-community bridge._
 - **Should `Super Admin Reports` be split into smaller, more focused modules?**
   _Cohesion score 0.015748031496062992 - nodes in this community are weakly interconnected._
+- **Why does `ProfileModel` connect `notification trigger service` to `Auth Session Notifier`, `task permissions`, `Calendar & Attendees`, `Task Board & Filters`, `User Management`, `roles editor screen`, `user privileges screen`, `Create User Flow`, `Dashboard`, `profile model`, `Workspace Scope`, `Team Members`?**
+  _High betweenness centrality (0.011) - this node is a cross-community bridge._
 - **Should `Task Board & Filters` be split into smaller, more focused modules?**
   _Cohesion score 0.01639344262295082 - nodes in this community are weakly interconnected._
-- **Should `Task Detail & Assignment` be split into smaller, more focused modules?**
-  _Cohesion score 0.020618556701030927 - nodes in this community are weakly interconnected._

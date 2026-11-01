@@ -1,9 +1,10 @@
--- PROPOSED (NOT APPLIED) — Seed the Sales Sheet from the source PDF.
--- Apply AFTER PROPOSED_sales_sheet_entries.sql. Idempotent-ish: it only
--- inserts when the table is empty, so re-running will not duplicate rows.
-DO $$
-BEGIN
-IF (SELECT count(*) FROM public.sales_sheet_entries) = 0 THEN
+-- PROPOSED (NOT APPLIED) — (Re)seed the Sales Sheet from the source PDF,
+-- with Arabic names in correct LOGICAL order (fixes the earlier reversed
+-- text). Apply AFTER PROPOSED_sales_sheet_entries.sql.
+-- WARNING: this REPLACES all rows (deletes existing, then re-inserts),
+-- so any rows you added/edited by hand will be lost.
+BEGIN;
+DELETE FROM public.sales_sheet_entries;
 INSERT INTO public.sales_sheet_entries (sort_order, client, link, owner_name, owner_number, status, probability, est_value, last_contact, expected_close) VALUES
 (10, '', 'https://www.facebook.com/share/1ECsFA8bsc/?mibextid=wwXIfr', '', '', 'Lead', 'High', 'EGPxx', 'yyyy/mm/dd', ''),
 (20, '', 'https://www.facebook.com/share/18wJvPaHT2/?mibextid=wwXIfr', '', '', 'Lead', 'Medium', 'EGPxx', '3/5/2025', ''),
@@ -11,22 +12,22 @@ INSERT INTO public.sales_sheet_entries (sort_order, client, link, owner_name, ow
 (40, '', 'https://www.facebook.com/share/1A9ydbApmw/?mibextid=wwXIfr', '', '', 'In Progress', 'High', '8-10k', '3/5/2025', ''),
 (50, '', 'https://www.facebook.com/share/12F3fYpYZC3/?mibextid=wwXIfr', '', '', 'Proposal', 'High', 'EGPxx', '3/8/2025', ''),
 (60, '', 'https://www.facebook.com/share/19yc5ftSqU/?mibextid=wwXIfr', '', '', 'Proposal', 'High', 'EGPxx', 'yyyy/mm/dd', ''),
-(70, 'دوبع معطم', '', 'Owner Name', '', 'Proposal', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(70, 'مطعم عبود', '', 'Owner Name', '', 'Proposal', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (80, 'مطعم الطيبMohamed el tayeb', '', '', '', 'Proposal', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (90, '7days', '', 'Owner Name', '', 'Lead', 'Low', 'EGPxx', 'yyyy/mm/dd', ''),
-(100, 'يزوا تومرضح', '', 'Owner Name', '', 'Lead', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(100, 'حضرموت اوزي', '', 'Owner Name', '', 'Lead', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (110, '', 'https://www.facebook.com/share/1BBH7rcv3B/?mibextid=wwXIfr', '', '', 'Proposal', 'Medium', 'EGPxx', '3/8/2025', ''),
-(120, 'ةديرف و ةحرف', '', 'Owner Name', '', 'Proposal', 'Medium', 'EGPxx', '3/9/2025', ''),
+(120, 'فرحة و فريدة', '', 'Owner Name', '', 'Proposal', 'Medium', 'EGPxx', '3/9/2025', ''),
 (130, '', 'https://www.facebook.com/share/161zZtf656/?mibextid=wwXIfr', '', '', 'In Progress', 'Medium', 'EGPxx', '3/6/2025', ''),
 (140, '', 'https://www.facebook.com/ellebeautyclinic?mibextid=ZbWKwL', '', '', 'In Progress', 'High', 'EGP7٬000٫003', '03/4/2025', ''),
 (150, 'Gogo market', '', 'Owner Name', '', 'Proposal', '', 'EGPxx', '3/9/2025', ''),
-(160, 'هنيزنب نوسينا', '', 'Owner Name', '', 'Proposal', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(170, 'تايولحلل ةكرب', '', 'Owner Name', '', 'Lead', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(160, 'انيسون بنزينه', '', 'Owner Name', '', 'Proposal', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(170, 'بركة للحلويات', '', 'Owner Name', '', 'Lead', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (180, 'Barbie', '', 'Owner Name', '', 'Lead', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (190, 'Mr. Ahmed shabaan', '', 'Owner Name', '', 'Lost', 'High', 'EGPxx', '3/5/2025', ''),
 (200, 'Mrs. Gehad elmasry', '', 'Owner Name', '', 'Proposal', 'High', 'EGPxx', '3/6/2025', ''),
 (210, 'Green club', '', 'Owner Name', '', 'Lead', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(220, 'يوا ريبكلا', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(220, 'الكبير اوي', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (230, 'Crossfit gym ladies', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (240, 'Corner', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (250, 'Eskander dental clinic', '', 'Owner Name', '', '', 'Medium', 'EGPxx', 'yyyy/mm/dd', ''),
@@ -34,11 +35,11 @@ INSERT INTO public.sales_sheet_entries (sort_order, client, link, owner_name, ow
 (270, 'The mood ps & cafe', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (280, 'Shoot''s res & cafe', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (290, 'Dr fady she7ata', '', 'Owner Name', '', '', 'Medium', 'EGPxx', 'yyyy/mm/dd', ''),
-(300, 'يداش ةليعلا تيب', '', '', '', '', 'High', 'EGPxx', 'yyyy/mm/dd', ''),
+(300, 'بيت العيلة شادي', '', '', '', '', 'High', 'EGPxx', 'yyyy/mm/dd', ''),
 (310, 'Time out garden', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (320, 'Elite gym', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (330, 'Arabian nights', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(340, 'rehaT aroN.rD رصن ةنيدم رزيل ندلوج ةدايع', '', '', '', '', 'High', 'EGPxx', 'yyyy/mm/dd', ''),
+(340, 'عيادة جولدن ليزر مدينة نصر Dr.Nora Taher', '', '', '', '', 'High', 'EGPxx', 'yyyy/mm/dd', ''),
 (350, '', 'https://www.facebook.com/share/19K4LZV1L9', '', '1223676650', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (360, '', 'https://www.facebook.com/share/19TdCm6rw4', '', '1060539534', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (370, 'clinic care', 'https://www.facebook.com/share/1JTS9qjo9k/?mibextid=wwXIfr', '', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
@@ -46,22 +47,22 @@ INSERT INTO public.sales_sheet_entries (sort_order, client, link, owner_name, ow
 (390, '', 'https://www.facebook.com/share/19RXwXwvaa/?mibextid=wwXIfr', '', '1091646551', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (400, '', 'https://www.facebook.com/share/1P9djQUfRt', '', '1094970392', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (410, '', 'https://www.facebook.com/share/14sfSe9FuHF', '', '1012126604', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(420, 'ریمس ءامسأ/د', '', 'Owner Name', '1016195040', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(430, 'يبرعلا رھاط/د', '', 'Owner Name', '1050100179', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(440, 'روشاع /د', '', 'Owner Name', '1003357844', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(450, 'نامثع مزاح/د', '', 'Owner Name', '1111311017', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(460, 'معنملادبع ءاعد/د', '', 'Owner Name', '1097835046', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(470, 'دمحم ناضمر/د', '', 'Owner Name', '1001856478', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(480, 'يواطنط فیرش/د', '', 'Owner Name', '109164551', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(420, 'د/أسماء سمیر', '', 'Owner Name', '1016195040', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(430, 'د/طاھر العربي', '', 'Owner Name', '1050100179', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(440, 'د/ عاشور', '', 'Owner Name', '1003357844', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(450, 'د/حازم عثمان', '', 'Owner Name', '1111311017', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(460, 'د/دعاء عبدالمنعم', '', 'Owner Name', '1097835046', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(470, 'د/رمضان محمد', '', 'Owner Name', '1001856478', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(480, 'د/شریف طنطاوي', '', 'Owner Name', '109164551', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (490, '', 'https://www.facebook.com/share/1HZbkbMFMW', '', '1007814982', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (500, '', 'https://www.facebook.com/share/1CxtL7AfZR', '', '1027248416', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (510, '', 'https://www.facebook.com/profile.php?id=100064670380620&mibextid=wwXIfr&mibextid=wwXIfr', '', '1019484538', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(520, 'دلاخ رمع/د', '', 'Owner Name', '1097699007', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(530, 'مصاع/د', '', 'Owner Name', '1019783784', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(520, 'د/عمر خالد', '', 'Owner Name', '1097699007', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(530, 'د/عاصم', '', 'Owner Name', '1019783784', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (540, '', 'https://www.facebook.com/share/1AmqMTFsWc', '', '1001294294', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (550, '', 'https://www.facebook.com/share/1EWviFjirN', '', '1092429164', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (560, '', 'https://www.facebook.com/share/196Wzej5s2/?mibextid=wwXIfr', '', '1008488284', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(570, 'رداقلادبع دلاخ/د', '', 'Owner Name', '1159837757', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(570, 'د/خالد عبدالقادر', '', 'Owner Name', '1159837757', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (580, '', 'https://www.facebook.com/share/14sfSe9FuHF', '', '1095227019', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (590, '', 'https://www.facebook.com/share/14kRHdKxY4H/?mibextid=wwXIfr', '', '1022232357', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (600, 'bucca', 'https://www.facebook.com/share/1D4fQoxKUK/', '', '1080937809', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
@@ -109,7 +110,7 @@ INSERT INTO public.sales_sheet_entries (sort_order, client, link, owner_name, ow
 (1020, '', 'https://www.facebook.com/share/198BrTsUD7', '', '1013194703', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1030, '', 'https://www.facebook.com/share/19Ki77i3HC', '', '1070817371', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1040, '', 'https://www.facebook.com/share/1CPyaN7T2W', '', '1060032475', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(1050, 'تانوفیلتلا عاتب', '', 'Owner Name', '1008161517', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(1050, 'بتاع التلیفونات', '', 'Owner Name', '1008161517', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1060, '', 'https://www.facebook.com/share/1DAaEubUR9', '', '1012093202', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1070, '', 'https://www.facebook.com/share/19MVpnuthD', '', '1020004477', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1080, 'sportive', 'https://www.facebook.com/share/1E2yvGNawt/', '', '1002076641', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
@@ -134,7 +135,7 @@ INSERT INTO public.sales_sheet_entries (sort_order, client, link, owner_name, ow
 (1270, '', 'https://www.facebook.com/share/1BYPKRKZ49', '', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1280, 'A one store', 'https://www.facebook.com/share/1JHheJ7rdA/', '', '1022273122', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1290, '', 'https://www.facebook.com/share/1CWrZ4i7pb', '', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
-(1300, 'ةمیطاف', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
+(1300, 'فاطیمة', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1310, '', 'https://www.facebook.com/share/1C4AXDQ1Mt', '', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1320, '', 'https://www.facebook.com/share/1F4qrvWunu', '', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1330, 'Viola', '', 'Owner Name', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
@@ -153,5 +154,4 @@ INSERT INTO public.sales_sheet_entries (sort_order, client, link, owner_name, ow
 (1460, 'dutti', 'https://www.facebook.com/share/14kVHUKLgHd/', '', '', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1470, '', 'https://www.facebook.com/share/1E854AY2qq', '', '1008999346', '', '', 'EGPxx', 'yyyy/mm/dd', ''),
 (1480, '', 'https://www.facebook.com/share/18TyYA8NJG', '', '', '', '', 'EGPxx', 'yyyy/mm/dd', '');
-END IF;
-END $$;
+COMMIT;

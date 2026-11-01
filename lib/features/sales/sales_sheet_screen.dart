@@ -5,6 +5,7 @@
 // is tappable and opens in the browser.
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -49,6 +50,16 @@ class _SalesSheetScreenState extends State<SalesSheetScreen> {
   bool _isUrl(String s) {
     final t = s.trim();
     return t.startsWith('http://') || t.startsWith('https://');
+  }
+
+  static final _arabic = RegExp(r'[؀-ۿ]');
+  bool _hasArabic(String s) => _arabic.hasMatch(s);
+
+  /// Inter (the app body font) has no Arabic glyphs, so Arabic cells render as
+  /// boxes. Use Cairo (Arabic + Latin) whenever the text contains Arabic.
+  TextStyle _cellStyle(String value, Color color) {
+    final base = AppTextStyles.bodySm.copyWith(color: color);
+    return _hasArabic(value) ? GoogleFonts.cairo(textStyle: base) : base;
   }
 
   Future<void> _open(String url) async {
@@ -128,6 +139,8 @@ class _SalesSheetScreenState extends State<SalesSheetScreen> {
           controller: ctrl,
           autofocus: true,
           maxLines: key == 'client' || key == 'link' ? 3 : 1,
+          // Cairo renders both Arabic and Latin, so typing Arabic is clear.
+          style: GoogleFonts.cairo(),
           decoration: InputDecoration(
             labelText: header,
             hintText: key == 'link' ? 'https://…' : null,
@@ -287,10 +300,9 @@ class _SalesSheetScreenState extends State<SalesSheetScreen> {
               value.isEmpty ? (canEdit ? 'Tap to add' : '—') : value,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodySm.copyWith(
-                color: value.isEmpty
-                    ? AppColors.onSurfaceVariant
-                    : AppColors.onSurface,
+              style: _cellStyle(
+                value,
+                value.isEmpty ? AppColors.onSurfaceVariant : AppColors.onSurface,
               ),
             ),
     );
