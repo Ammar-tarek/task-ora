@@ -22,6 +22,7 @@ import '../../core/models/task_status_option.dart';
 import '../../core/models/client_model.dart';
 import '../../core/models/team_model.dart';
 import '../../core/utils/task_permissions.dart';
+import '../../core/utils/task_handoff_lock.dart';
 import '../../core/services/n8n_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'status_options_manager_sheet.dart';
@@ -33,21 +34,11 @@ class TaskDetailSheet extends StatefulWidget {
   /// When set, shows a "Move to department" action (source manager only).
   final VoidCallback? onMoveDepartment;
 
-  /// When set, shows an "Accept into my department" action (target manager,
-  /// task still in the Waiting List).
-  final VoidCallback? onAcceptHandoff;
-
-  /// When set, shows a "Reject handoff" action (target manager/admin,
-  /// returns task to original department).
-  final VoidCallback? onRejectHandoff;
-
   const TaskDetailSheet({
     super.key,
     required this.taskId,
     this.onUpdated,
     this.onMoveDepartment,
-    this.onAcceptHandoff,
-    this.onRejectHandoff,
   });
 
   @override
@@ -100,6 +91,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
   // Status options loaded from column_status_options
   List<TaskStatusOption> _statusOptions = [];
+
+  // When false, the admin/manager full-edit form shows only the same inputs as
+  // the Create Task sheet (title, description, due date, assignees, comments).
+  // The other definition inputs are hidden; their loaded values are still sent
+  // on save, so nothing is wiped. Flip to true to restore the full editor.
+  static const bool _showAdvancedEditFields = false;
 
   // Built-in statuses employees are allowed to set
   @override
@@ -276,10 +273,36 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   // ── Save ──────────────────────────────────────────────────────────────────
 
   Future<void> _save() async {
-    if (_perms.canEditFull) {
+    // Sending department / non-receiving viewer on a transferred task: no write.
+    if (_senderReadOnly) return;
+    // Receiving manager on a transferred task: assignment only, definition locked.
+    if (_assignmentOnly) {
+      await _saveAssignmentOnly();
+    } else if (_perms.canEditFull) {
       await _saveFullEdit();
     } else if (_perms.canEditStatus) {
       await _saveStatusAndProgress();
+    }
+  }
+
+  /// Receiving manager on a transferred task: persist ONLY the assignee set.
+  /// The task definition is locked (DB-enforced); we never send it here.
+  Future<void> _saveAssignmentOnly() async {
+    setState(() => _saving = true);
+    try {
+      final currentUid = context.read<AuthNotifier>().profile!.id;
+      await TaskRepository.updateTaskAssignees(
+        widget.taskId,
+        _selectedAssigneeIds,
+        assignedBy: currentUid,
+      );
+      if (!mounted) return;
+      widget.onUpdated?.call();
+      Navigator.pop(context);
+    } catch (e) {
+      if (mounted) _showSnack('Could not update assignment: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -957,6 +980,26 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     );
   }
 
+  // ── Handoff (direct-transfer) UI gates — mirror the DB guards/policies ─────
+  // DB is authoritative; these only decide what to show/enable.
+  bool get _viewerGlobalAdmin =>
+      _perms.profile.isAdmin || _perms.profile.isSuperAdmin; // == DB is_global_admin
+  bool get _taskTransferred =>
+      _task != null && (_task!.handoffFromTeamId ?? '').isNotEmpty;
+  String? get _viewerTeam => _perms.profile.teamId;
+  bool get _viewerReceivingSide =>
+      _task?.teamId != null && _viewerTeam != null && _viewerTeam == _task!.teamId;
+  /// Sending department (and any non-receiving, non-admin viewer) on a
+  /// transferred task: strictly read-only.
+  bool get _senderReadOnly =>
+      _taskTransferred && !_viewerGlobalAdmin && !_viewerReceivingSide;
+  /// Task-definition editable: only a global admin on a transferred task; the
+  /// normal role rules apply on any non-transferred task.
+  bool get _defEditable => !_taskTransferred || _viewerGlobalAdmin;
+  /// Receiving-team manager may manage assignment only (no definition edit).
+  bool get _assignmentOnly =>
+      _taskTransferred && !_viewerGlobalAdmin && _viewerReceivingSide && _perms.canEditFull;
+
   /// This viewer's own assignee row (employee), or null.
   TaskAssignee? get _myAssignment {
     final uid = context.read<AuthNotifier>().profile?.id;
@@ -1175,7 +1218,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
   Widget _buildBody() {
     if (_perms.profile.isClient) return _buildClientBody();
-    if (_perms.canEditFull) return _buildFullEditBody();
+    // Transferred task: the sending department (and anyone not on the receiving
+    // team, bar a global admin) is read-only — route to the employee view,
+    // whose actions are gated to close-only below.
+    if (_perms.canEditFull && !_senderReadOnly) return _buildFullEditBody();
     return _buildEmployeeBody();
   }
 
@@ -1269,9 +1315,37 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
         ..._reviewBanner(),
 
+        // Transferred into this department: definition is locked; the manager
+        // may only manage assignment. (DB enforces this too.)
+        if (_assignmentOnly) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.only(bottom: 14),
+            decoration: BoxDecoration(
+              color: AppColors.gold.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.lock_outline, size: 16, color: AppColors.gold),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Transferred task — definition is locked. You can only assign it to your team.',
+                    style: AppTextStyles.bodySm,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         // Title
         TextField(
           controller: _titleCtrl,
+          readOnly: _assignmentOnly,
           decoration: InputDecoration(
             labelText: S.t('title').toUpperCase(),
             hintText: S.t('task_title'),
@@ -1284,6 +1358,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         TextField(
           controller: _descCtrl,
           maxLines: 3,
+          readOnly: _assignmentOnly,
           decoration: InputDecoration(
             labelText: S.t('description').toUpperCase(),
             hintText: S.t('description'),
@@ -1295,8 +1370,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         ),
         const SizedBox(height: 18),
 
-        // Priority
-        _SectionLabel('PRIORITY'),
+        // Advanced definition inputs are hidden so this form mirrors the
+        // Create Task sheet; their loaded values are still saved.
+        if (_showAdvancedEditFields) ...[
+          // Priority
+          _SectionLabel('PRIORITY'),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -1392,6 +1470,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           ),
           const SizedBox(height: 18),
         ],
+        ],
 
         // Due date
         _SectionLabel('DUE DATE'),
@@ -1402,8 +1481,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         ),
         const SizedBox(height: 18),
 
-        // Progress
-        Row(
+        if (_showAdvancedEditFields) ...[
+          // Progress
+          Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _SectionLabel('PROGRESS'),
@@ -1557,6 +1637,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           ),
         ],
         const SizedBox(height: 18),
+        ],
 
         // Assignees
         Row(
@@ -1937,6 +2018,21 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       );
     }
 
+    // Transferred task + read-only viewer (sending department, or anyone not on
+    // the receiving team and not a global admin): close only, no write actions.
+    if (_senderReadOnly) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ),
+      );
+    }
+
     // Employee — assignment response + workflow actions + save deadline.
     if (!_perms.canEditFull) {
       final a = _myAssignment;
@@ -2087,56 +2183,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             ),
             const SizedBox(height: 12),
           ],
-          if (widget.onAcceptHandoff != null || widget.onRejectHandoff != null) ...[
-            Row(
-              children: [
-                if (widget.onAcceptHandoff != null)
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: busy
-                          ? null
-                          : () {
-                              Navigator.pop(context);
-                              widget.onAcceptHandoff!();
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.statusDone,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      icon: const Icon(Icons.check, size: 18, color: Colors.white),
-                      label: const Text(
-                        'Accept Handoff',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                if (widget.onAcceptHandoff != null && widget.onRejectHandoff != null)
-                  const SizedBox(width: 10),
-                if (widget.onRejectHandoff != null)
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: busy
-                          ? null
-                          : () {
-                              Navigator.pop(context);
-                              widget.onRejectHandoff!();
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      icon: const Icon(Icons.close, size: 18, color: Colors.white),
-                      label: const Text(
-                        'Reject Handoff',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (widget.onMoveDepartment != null) ...[
+          // Direct-transfer model: no Accept/Reject Handoff actions. Re-transfer
+          // is blocked for a department once transferred (admin override only).
+          if (widget.onMoveDepartment != null &&
+              (!_taskTransferred || _viewerGlobalAdmin)) ...[
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -2156,8 +2206,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             ),
             const SizedBox(height: 12),
           ],
-          // Increment — create numbered copies (client + department only)
-          if (_task != null) ...[
+          // Increment — create numbered copies. Locked on a transferred task
+          // (it would clone a definition the receiving dept cannot own-edit).
+          if (_task != null && _defEditable) ...[
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -2176,24 +2227,29 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           ],
           Row(
             children: [
-              // Compact icon-only delete — leaves room for Cancel + Save.
-              SizedBox(
-                width: 48,
-                child: OutlinedButton(
-                  onPressed: busy ? null : _delete,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: const BorderSide(color: AppColors.error),
-                    padding: EdgeInsets.zero,
+              // Compact icon-only delete — hidden on a transferred task (a dept
+              // cannot delete it; admin override only). DB enforces this too.
+              if (_task != null &&
+                  TaskHandoffLock.canDelete(_task!, isGlobalAdmin: _viewerGlobalAdmin)) ...[
+                SizedBox(
+                  width: 48,
+                  child: OutlinedButton(
+                    onPressed: busy ? null : _delete,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: const BorderSide(color: AppColors.error),
+                      padding: EdgeInsets.zero,
+                    ),
+                    child: _deleting
+                        ? _Spinner(color: AppColors.error)
+                        : const Icon(Icons.delete_outline, size: 20),
                   ),
-                  child: _deleting
-                      ? _Spinner(color: AppColors.error)
-                      : const Icon(Icons.delete_outline, size: 20),
                 ),
-              ),
-              const SizedBox(width: 10),
-              // Archive / Unarchive toggle for admins & managers
-              if (_perms.canEditFull && _task != null) ...[
+                const SizedBox(width: 10),
+              ],
+              // Archive / Unarchive toggle for admins & managers (not on a
+              // transferred task for a non-admin — definition is locked).
+              if (_perms.canEditFull && _task != null && _defEditable) ...[
                 SizedBox(
                   width: 48,
                   child: OutlinedButton(
@@ -2226,7 +2282,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                 flex: 2,
                 child: ElevatedButton(
                   onPressed: busy ? null : _save,
-                  child: _saving ? _Spinner() : const Text('Save Changes'),
+                  child: _saving
+                      ? _Spinner()
+                      : Text(_assignmentOnly ? 'Save Assignment' : 'Save Changes'),
                 ),
               ),
             ],

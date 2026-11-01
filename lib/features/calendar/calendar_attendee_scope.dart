@@ -36,3 +36,18 @@ class CalendarAttendeeScope {
   }) =>
       eventTeamId != null && attendeeTeamId == eventTeamId;
 }
+
+/// Multi-day coverage: whether a calendar day falls within an event's span
+/// (by calendar date, inclusive of both the start and end day).
+class CalendarDaySpan {
+  CalendarDaySpan._();
+
+  static bool coversDay(DateTime start, DateTime end, DateTime day) {
+    final d = DateTime(day.year, day.month, day.day);
+    final s = DateTime(start.year, start.month, start.day);
+    final e = DateTime(end.year, end.month, end.day);
+    // Guard an inverted range (end before start) → treat as the start day only.
+    final last = e.isBefore(s) ? s : e;
+    return !d.isBefore(s) && !d.isAfter(last);
+  }
+}

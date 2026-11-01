@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../auth/auth_notifier.dart';
+import '../constants/departments.dart';
+import '../providers/workspace_scope_notifier.dart';
+import '../router/workspace_routing.dart';
 import '../l10n/app_strings.dart';
 import '../providers/locale_controller.dart';
 import '../providers/theme_controller.dart';
@@ -127,6 +130,12 @@ class _BottomNavShellState extends State<BottomNavShell> {
       activeIcon: const Icon(Icons.settings_rounded),
       label: S.t('settings'),
     ),
+    // 5 — Sales Sheet (only shown inside the Sales workspace; see build()).
+    const BottomNavigationBarItem(
+      icon: Icon(Icons.table_chart_outlined),
+      activeIcon: Icon(Icons.table_chart_rounded),
+      label: 'Sales Sheet',
+    ),
   ];
 
   // Branch indices per role (indices map to branches 0-4 in StatefulShellRoute).
@@ -139,28 +148,51 @@ class _BottomNavShellState extends State<BottomNavShell> {
     context.select<ThemeController, bool>((t) => t.isDark);
     context.select<LocaleController, Locale>((l) => l.locale);
     final profile = context.select<AuthNotifier, dynamic>((a) => a.profile);
+    final isProductionOnly =
+        context.select<AuthNotifier, bool>((a) => a.isProductionOnly);
+    // Admin / super admin while the Production workspace is in view → also
+    // Calendar-only (but the WorkspaceHeaderBar above lets them switch out).
+    final effectiveDept = context
+        .select<WorkspaceScopeNotifier, Department?>(
+            (s) => s.effectiveDepartment);
+    final adminProd =
+        WorkspaceRouting.isAdminProductionCalendarOnly(profile, effectiveDept);
+    final calendarOnly = isProductionOnly || adminProd;
     final isEmployee = profile?.isEmployee ?? false;
     final isManager = profile?.isManager ?? false;
     final isClient = profile?.isClient ?? false;
     final isDark = AppColors.isDark;
 
     // Build the visible item list and a mapping: visible-index → branch-index.
-    final List<BottomNavigationBarItem> visibleItems;
     final List<int> branchIndices;
 
-    if (isEmployee) {
-      branchIndices = _employeeBranchIndices;
-      visibleItems = branchIndices.map((i) => _allItems[i]).toList();
+    if (calendarOnly) {
+      // Production (scoped user, or admin viewing Production): Calendar only
+      // (branch index 2). The router also hard-blocks every other route, so
+      // this is the only reachable branch; an admin keeps the header bar above
+      // to switch back to another department.
+      branchIndices = [2];
+    } else if (isEmployee) {
+      branchIndices = List.of(_employeeBranchIndices);
     } else if (isManager) {
-      branchIndices = _managerBranchIndices;
-      visibleItems = branchIndices.map((i) => _allItems[i]).toList();
+      branchIndices = List.of(_managerBranchIndices);
     } else if (isClient) {
-      branchIndices = _clientBranchIndices;
-      visibleItems = branchIndices.map((i) => _allItems[i]).toList();
+      branchIndices = List.of(_clientBranchIndices);
     } else {
-      branchIndices = List.generate(_allItems.length, (i) => i);
-      visibleItems = _allItems.toList();
+      // Admin / super admin: Dashboard, Tasks, Calendar, Finance, Settings.
+      branchIndices = [0, 1, 2, 3, 4];
     }
+
+    // Sales Sheet (branch 5): shown ONLY inside the Sales workspace, for staff
+    // (never clients, never the calendar-only Production view), positioned right
+    // next to Dashboard. The data itself is RLS-restricted to Sales staff.
+    final inSales = effectiveDept == Department.sales;
+    if (inSales && !isClient && !calendarOnly && !branchIndices.contains(5)) {
+      final dashAt = branchIndices.indexOf(0);
+      branchIndices.insert(dashAt == -1 ? 0 : dashAt + 1, 5);
+    }
+
+    final visibleItems = branchIndices.map((i) => _allItems[i]).toList();
 
     // Map the shell's current branch index → visible bar index.
     final currentBranchIndex = widget.shell.currentIndex;
@@ -179,7 +211,11 @@ class _BottomNavShellState extends State<BottomNavShell> {
           Expanded(child: widget.shell),
         ],
       ),
-      bottomNavigationBar: SafeArea(
+      // Fewer than 2 destinations (Production = Calendar only): no bottom bar —
+      // BottomNavigationBar requires >= 2 items, and a one-tab bar is noise.
+      bottomNavigationBar: visibleItems.length < 2
+          ? null
+          : SafeArea(
         top: false,
         child: RepaintBoundary(
           child: Container(

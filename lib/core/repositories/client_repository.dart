@@ -472,7 +472,9 @@ class ClientRepository {
     String? clientId,
     String? description,
     String? link,
+    String? location,
     String? teamId,
+    List<String> attendeeIds = const [],
   }) async {
     try {
       final res = await _db.from('events').insert({
@@ -482,15 +484,38 @@ class ClientRepository {
         'client_id': clientId,
         'description': description,
         'link': link,
+        'location': location,
         'created_by': createdBy,
         'team_id': teamId,
       }).select('id').single();
-      return res['id'] as String?;
+      final id = res['id'] as String?;
+      if (id != null && attendeeIds.isNotEmpty) {
+        await _replaceEventAttendees(id, attendeeIds);
+      }
+      return id;
     } on PostgrestException catch (e) {
       if (e.code == '23P01') throw const BookingConflictException();
       return null;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Replace an event's attendees with [profileIds]. RLS lets the event's
+  /// department manager/admin write; it also keeps attendees in the event's
+  /// department (department guard). Attendee rows the UI no longer shows are
+  /// intentionally replaced — callers pass the full desired set.
+  static Future<void> _replaceEventAttendees(
+    String eventId,
+    List<String> profileIds,
+  ) async {
+    await _db.from('event_attendees').delete().eq('event_id', eventId);
+    if (profileIds.isNotEmpty) {
+      await _db.from('event_attendees').insert(
+            profileIds
+                .map((pid) => {'event_id': eventId, 'profile_id': pid})
+                .toList(),
+          );
     }
   }
 
@@ -567,6 +592,8 @@ class ClientRepository {
     String? clientId,
     String? description,
     String? link,
+    String? location,
+    List<String>? attendeeIds,
   }) async {
     // Editing a legacy Studio booking's time can still collide with another
     // booking; the exclusion constraint raises 23P01, surfaced as a conflict.
@@ -580,8 +607,13 @@ class ClientRepository {
             'client_id': clientId,
             'description': description,
             'link': link,
+            'location': location,
           })
           .eq('id', eventId);
+      // Replace attendees only when the caller manages them (null = leave as-is).
+      if (attendeeIds != null) {
+        await _replaceEventAttendees(eventId, attendeeIds);
+      }
     } on PostgrestException catch (e) {
       if (e.code == '23P01') throw const BookingConflictException();
       return;

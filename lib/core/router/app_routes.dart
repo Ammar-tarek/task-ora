@@ -11,4 +11,6 @@ class AppRoutes {
   static const String dashboard = '/dashboard';
   static const String workspaces = '/workspaces';
   static const String expenses = '/expenses';
+  static const String calendar = '/calendar';
+  static const String resolving = '/resolving';
 }

@@ -23,6 +23,7 @@ import '../../core/models/task_model.dart';
 import '../../core/models/team_model.dart';
 import '../../core/models/profile_model.dart';
 import '../../core/utils/task_permissions.dart';
+import '../../core/utils/task_handoff_lock.dart';
 import '../../core/utils/app_time.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/notion_table.dart';
@@ -234,14 +235,6 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   // ── Filtered + sorted list ───────────────────────────────────────────────────
 
-  // Tasks pending a department handoff — shown only in the Waiting List.
-  List<TaskModel> get _waiting {
-    final mine = _tasks.where((t) => t.handoffToTeamId != null).toList();
-    if (_profile?.isAdmin == true) return mine;
-    final myTeam = _profile?.teamId;
-    return mine.where((t) => t.handoffToTeamId == myTeam).toList();
-  }
-
   /// Montage workspace in view (admin scoped to Montage, or a Montage
   /// manager/employee). Montage-only features gate on this.
   bool get _isMontageView {
@@ -446,7 +439,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       if (profile == null) {
         if (attempt < 6 && mounted) {
           await Future.delayed(const Duration(milliseconds: 500));
-          return _load(animate: false, attempt: attempt + 1);
+          await _load(animate: false, attempt: attempt + 1);
+          return;
         }
       }
 
@@ -1556,44 +1550,29 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     if (_loading) return _buildLoadingView();
     if (_error != null) return _buildErrorView();
 
-    final canManage = _profile?.isAdmin == true || _profile?.isManager == true;
-    final waiting = _waiting;
-
-    return Column(
-      children: [
-        if (canManage && waiting.isNotEmpty)
-          _WaitingList(
-            tasks: waiting,
-            teamName: _teamName,
-            onAccept: _acceptHandoff,
-            onReject: _rejectHandoff,
-            onView: _openWaitingDetail,
-          ),
-        Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            layoutBuilder: (current, previous) => Stack(
-              alignment: Alignment.topCenter,
-              children: [...previous, ?current],
-            ),
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.03, 0),
-                  end: Offset.zero,
-                ).animate(anim),
-                child: child,
-              ),
-            ),
-            child: _isTableView
-                ? _buildTableView(key: const ValueKey('table'))
-                : _buildBoardView(key: const ValueKey('board')),
-          ),
+    // Direct-transfer model: no "Waiting List" — a handed-off task lands
+    // directly on the receiving team's board for the manager to assign.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      layoutBuilder: (current, previous) => Stack(
+        alignment: Alignment.topCenter,
+        children: [...previous, ?current],
+      ),
+      transitionBuilder: (child, anim) => FadeTransition(
+        opacity: anim,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.03, 0),
+            end: Offset.zero,
+          ).animate(anim),
+          child: child,
         ),
-      ],
+      ),
+      child: _isTableView
+          ? _buildTableView(key: const ValueKey('table'))
+          : _buildBoardView(key: const ValueKey('board')),
     );
   }
 
@@ -1737,60 +1716,23 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
     );
   }
 
-  String _teamName(String? teamId) {
-    if (teamId == null) return '—';
-    final t = _teams.where((t) => t.id == teamId);
-    return t.isEmpty ? 'Other dept' : t.first.name;
-  }
-
-  void _openWaitingDetail(TaskModel task) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => TaskDetailSheet(
-        taskId: task.id,
-        onUpdated: () => _load(animate: false),
-        onAcceptHandoff: () => _acceptHandoff(task),
-        onRejectHandoff: () => _rejectHandoff(task),
-      ),
-    );
-  }
-
-  Future<void> _acceptHandoff(TaskModel task) async {
-    final targetTeam = task.handoffToTeamId ?? _profile?.teamId;
-    if (targetTeam == null) return;
-    await TaskRepository.acceptHandoff(taskId: task.id, teamId: targetTeam);
-    await _load(animate: false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Task accepted. Open it to assign your team.'),
-          backgroundColor: AppColors.statusDone,
-        ),
-      );
-    }
-  }
-
-  Future<void> _rejectHandoff(TaskModel task) async {
-    await TaskRepository.rejectHandoff(taskId: task.id);
-    await _load(animate: false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Task handoff rejected and returned to original department.',
-          ),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
+  // REMOVED (direct-transfer model): _openWaitingDetail / _acceptHandoff /
+  // _rejectHandoff. There is no pending handoff to accept or reject; the
+  // receiving manager opens the task from their board and assigns it.
 
   Future<void> _moveToDepartment(TaskModel task) async {
+    final isGlobalAdmin =
+        _profile?.isAdmin == true || _profile?.isSuperAdmin == true;
+    // Direct-transfer model: a department may not re-transfer an already
+    // transferred task (admin override only). DB enforces this too.
+    if (!TaskHandoffLock.canHandoff(task, isGlobalAdmin: isGlobalAdmin)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Already transferred — only an admin can route it onward.'),
+        ),
+      );
+      return;
+    }
     final sourceTeam = task.teamId ?? _profile?.teamId;
     List<TeamModel> allTeams = [];
     try {
@@ -2011,6 +1953,26 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
   }
 
   Future<void> _deleteTaskRow(String id) async {
+    final isGlobalAdmin =
+        _profile?.isAdmin == true || _profile?.isSuperAdmin == true;
+    TaskModel? t;
+    for (final x in _tasks) {
+      if (x.id == id) {
+        t = x;
+        break;
+      }
+    }
+    // Transferred task cannot be deleted by a department (admin override only).
+    if (t != null && !TaskHandoffLock.canDelete(t, isGlobalAdmin: isGlobalAdmin)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transferred task can only be deleted by an admin.'),
+          ),
+        );
+      }
+      return;
+    }
     final ok = await TaskRepository.deleteTask(id);
     if (ok) {
       setState(() {
@@ -3501,161 +3463,6 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _WaitingList extends StatelessWidget {
-  const _WaitingList({
-    required this.tasks,
-    required this.teamName,
-    required this.onAccept,
-    required this.onReject,
-    required this.onView,
-  });
-  final List<TaskModel> tasks;
-  final String Function(String?) teamName;
-  final Future<void> Function(TaskModel) onAccept;
-  final Future<void> Function(TaskModel) onReject;
-  final void Function(TaskModel) onView;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.gold.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.inbox_outlined, size: 18, color: AppColors.gold),
-              const SizedBox(width: 8),
-              Text('Waiting List', style: AppTextStyles.labelMd),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                decoration: BoxDecoration(
-                  color: AppColors.gold,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${tasks.length}',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Tasks handed to your department. Accept to assign your team or reject to return.',
-            style: AppTextStyles.bodySm.copyWith(
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...tasks.map(
-            (t) => InkWell(
-              onTap: () => onView(t),
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.outlineVariant),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            t.title,
-                            style: AppTextStyles.labelMd,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              Text(
-                                'From: ${teamName(t.handoffFromTeamId)}',
-                                style: AppTextStyles.bodySm.copyWith(
-                                  color: AppColors.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Tap to view',
-                                style: AppTextStyles.bodySm.copyWith(
-                                  color: AppColors.gold,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    ElevatedButton.icon(
-                      onPressed: () => onAccept(t),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.statusDone,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                      ),
-                      icon: const Icon(
-                        Icons.check,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      label: const Text(
-                        'Accept',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    ElevatedButton.icon(
-                      onPressed: () => onReject(t),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                      ),
-                      icon: const Icon(
-                        Icons.close,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      label: const Text(
-                        'Reject',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

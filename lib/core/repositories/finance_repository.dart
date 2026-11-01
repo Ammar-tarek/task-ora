@@ -123,6 +123,7 @@ class CrmPayment {
   final String status; // 'active' | 'voided'
   final String? reference;
   final String? voidReason;
+  final String? paymentMethod; // 'cash' | 'transfer' | … (crm_payments.payment_method)
 
   const CrmPayment({
     required this.id,
@@ -131,6 +132,7 @@ class CrmPayment {
     required this.status,
     this.reference,
     this.voidReason,
+    this.paymentMethod,
   });
 
   bool get isVoided => status == 'voided';
@@ -142,6 +144,7 @@ class CrmPayment {
     status: m['status'] as String? ?? 'active',
     reference: m['reference_number'] as String?,
     voidReason: m['void_reason'] as String?,
+    paymentMethod: m['payment_method'] as String?,
   );
 }
 
@@ -609,7 +612,8 @@ class FinanceRepository {
     try {
       final data = await _client
           .from('crm_payments')
-          .select('id, amount_paid, payment_date, status, reference_number, void_reason')
+          .select(
+              'id, amount_paid, payment_date, status, reference_number, void_reason, payment_method')
           .eq('crm_entry_id', crmEntryId)
           .order('created_at', ascending: false);
       return (data as List).map((m) => CrmPayment.fromMap(m)).toList();
@@ -617,6 +621,62 @@ class FinanceRepository {
       return [];
     }
   }
+
+  // ── Monthly revenue (Phase C) ──────────────────────────────────────────────
+  // Reads only, via the RLS client. `teamId` scopes to the active workspace
+  // department (null = All Departments). Charges are anchored to entry_date;
+  // each month is queried independently from immutable rows, so navigating
+  // months never overwrites a previous month's data.
+
+  /// All CRM charges whose `entry_date` falls in [year]/[month], optionally
+  /// scoped to one department [teamId]. Grouped per client by [MonthlyRevenue].
+  static Future<List<CrmEntry>> fetchMonthlyEntries({
+    String? teamId,
+    required int year,
+    required int month,
+  }) async {
+    try {
+      var q = _client
+          .from('crm_entries')
+          .select('*, client:client_profiles(company_name), team:teams(name)')
+          .gte('entry_date', _firstOfMonth(year, month))
+          .lt('entry_date', _firstOfNextMonth(year, month));
+      if (teamId != null) q = q.eq('team_id', teamId);
+      final data = await q.order('entry_date', ascending: false);
+      return (data as List).map((m) => CrmEntry.fromMap(m)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// A single client's payment transactions whose `payment_date` falls in
+  /// [year]/[month] (RLS-scoped). Voided rows are returned too; the calc layer
+  /// excludes them so they can still be shown as struck-through if desired.
+  static Future<List<CrmPayment>> fetchClientPaymentsInMonth({
+    required String clientId,
+    required int year,
+    required int month,
+  }) async {
+    try {
+      final data = await _client
+          .from('crm_payments')
+          .select(
+              'id, amount_paid, payment_date, status, reference_number, void_reason, payment_method')
+          .eq('client_id', clientId)
+          .gte('payment_date', _firstOfMonth(year, month))
+          .lt('payment_date', _firstOfNextMonth(year, month))
+          .order('payment_date', ascending: false);
+      return (data as List).map((m) => CrmPayment.fromMap(m)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static String _firstOfMonth(int year, int month) =>
+      '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}-01';
+
+  static String _firstOfNextMonth(int year, int month) =>
+      month == 12 ? _firstOfMonth(year + 1, 1) : _firstOfMonth(year, month + 1);
 
   /// Record a payment via the audited RPC. Returns null on success, or the
   /// error message (e.g. overpayment rejected) on failure — surfaced to the UI.

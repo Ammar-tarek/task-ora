@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/providers/workspace_scope_notifier.dart';
 import '../../core/theme/app_theme.dart';
 
 import '../../features/splash/splash_screen.dart';
@@ -27,27 +28,32 @@ import '../../features/users/user_privileges_screen.dart';
 import '../../features/roles/roles_editor_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/expenses/daily_expenses_screen.dart';
+import '../../features/sales/sales_sheet_screen.dart';
 import '../../features/team/team_screen.dart';
 import '../../features/teams/team_management_screen.dart';
 import '../../features/teams/team_members_screen.dart';
 import '../../features/teams/team_privileges_screen.dart';
 import '../../features/clients/clients_screen.dart';
 import '../../features/clients/client_finance_screen.dart';
+import '../../features/clients/client_detail_screen.dart';
+import '../../core/models/client_model.dart';
 import '../../features/users/create_user_screen.dart';
 import '../../features/super_admin/super_admin_report_screen.dart';
 import '../widgets/bottom_nav_shell.dart';
+import '../widgets/department_gate_screen.dart';
 import '../../features/workspaces/department_workspace_screen.dart';
 import 'workspace_routing.dart';
 
 /// Called from main.dart — receives the AuthNotifier so the router
 /// can listen for changes via [refreshListenable].
-GoRouter makeRouter(AuthNotifier auth) {
+GoRouter makeRouter(AuthNotifier auth, WorkspaceScopeNotifier scope) {
   return GoRouter(
     initialLocation: '/splash',
 
-    // Re-evaluate [redirect] every time AuthNotifier notifies.
-    // This is what makes logout / login automatically push the right route.
-    refreshListenable: auth,
+    // Re-evaluate [redirect] on auth changes AND on workspace-department
+    // switches — the latter is what flips an admin in/out of the Production
+    // Calendar-only workspace.
+    refreshListenable: Listenable.merge([auth, scope]),
 
     redirect: (BuildContext context, GoRouterState state) {
       final loc = state.matchedLocation;
@@ -81,6 +87,42 @@ GoRouter makeRouter(AuthNotifier auth) {
         final role = auth.profile?.role ?? 'employee';
         return (role == 'admin' || role == 'manager') ? '/dashboard' : '/tasks';
       }
+
+      // ③a Department-resolution gate (FAIL CLOSED). A manager/employee with a
+      // team whose department is still loading or has FAILED must not reach the
+      // normal workspace — hold on /resolving (spinner while loading, error +
+      // Retry on failure). Runs BEFORE the production + role guards so a
+      // Production user is never briefly exposed to the full app, and a lookup
+      // failure never opens it. No loop: already-on-/resolving returns null.
+      final deptGate = WorkspaceRouting.departmentGateRedirect(
+        loc,
+        pending: auth.departmentGatePending,
+      );
+      if (deptGate != null) return deptGate;
+      // Resolved / not-required users must never sit on /resolving.
+      if (loc == '/resolving') {
+        return WorkspaceRouting.entryRouteFor(auth.profile);
+      }
+
+      // ③b Production department = Calendar-only workspace. Blocks direct-route
+      // access (not just hidden nav), BEFORE entry-routing and role guards.
+      //   • Scoped user (manager/employee whose team = Production): confined to
+      //     /calendar; no selector (allowWorkspaces false).
+      //   • Admin / super admin while the Production workspace is in view:
+      //     confined to /calendar too, BUT /workspaces stays reachable so they
+      //     can switch back out. Outside Production the admin is unchanged.
+      // Clients and all other departments are unaffected. Navigation only — DB
+      // RLS is unchanged.
+      final adminProd = WorkspaceRouting.isAdminProductionCalendarOnly(
+        auth.profile,
+        scope.effectiveDepartment,
+      );
+      final productionRedirect = WorkspaceRouting.productionRedirect(
+        loc,
+        calendarOnly: auth.isProductionOnly || adminProd,
+        allowWorkspaces: adminProd,
+      );
+      if (productionRedirect != null) return productionRedirect;
 
       // ④ Logged in — redirect away from auth-only screens & root path '/'.
       // Entry point is role-based (see WorkspaceRouting): admins/super admins
@@ -158,6 +200,11 @@ GoRouter makeRouter(AuthNotifier auth) {
 
       // Clients cannot create users.
       if (profile?.isClient == true && loc == '/create-user') {
+        return '/tasks';
+      }
+
+      // Sales Sheet is staff-only (never clients).
+      if (profile?.isClient == true && loc.startsWith('/sales-sheet')) {
         return '/tasks';
       }
 
@@ -255,6 +302,17 @@ GoRouter makeRouter(AuthNotifier auth) {
               ),
             ],
           ),
+          // 5 — Sales Sheet (nav tab shown only in the Sales workspace, next to
+          // Dashboard; see BottomNavShell. RLS restricts the data to Sales staff
+          // + global admins, and writes to Sales managers + global admins.)
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/sales-sheet',
+                builder: (_, _) => const SalesSheetScreen(),
+              ),
+            ],
+          ),
         ],
       ),
 
@@ -262,6 +320,10 @@ GoRouter makeRouter(AuthNotifier auth) {
       GoRoute(
         path: '/workspaces',
         builder: (_, _) => const DepartmentWorkspaceScreen(),
+      ),
+      GoRoute(
+        path: '/resolving',
+        builder: (_, _) => const DepartmentGateScreen(),
       ),
       GoRoute(
         path: '/analytics',
@@ -340,6 +402,15 @@ GoRouter makeRouter(AuthNotifier auth) {
       // Legacy Clients route retired → the Clients module now lives at
       // '/department-clients'. Kept as a safe redirect for saved links.
       GoRoute(path: '/clients', redirect: (_, _) => '/department-clients'),
+      GoRoute(
+        path: '/clients/:id/details',
+        builder: (_, state) => ClientDetailScreen(
+          clientId: state.pathParameters['id'] ?? '',
+          initialClient: state.extra is ClientModel
+              ? state.extra as ClientModel
+              : null,
+        ),
+      ),
       GoRoute(
         path: '/clients/:id/finance',
         builder: (_, state) =>

@@ -109,11 +109,9 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
   ];
 
   void _goBack() {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRoutes.dashboard);
-    }
+    // Company Expenses is opened from the departments page via context.go
+    // (no back stack), so always return to the departments workspace page.
+    context.go(AppRoutes.workspaces);
   }
 
   @override

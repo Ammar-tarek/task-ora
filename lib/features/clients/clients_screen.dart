@@ -11,6 +11,7 @@ import '../../core/providers/team_privileges_notifier.dart';
 import '../../core/providers/workspace_scope_notifier.dart';
 import '../../core/repositories/client_repository.dart';
 import '../../core/repositories/team_repository.dart';
+import 'client_search.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/load_token.dart';
 
@@ -32,6 +33,10 @@ class _ClientsScreenState extends State<ClientsScreen> {
   WorkspaceScopeNotifier? _scope;
   // Drop stale results if the workspace changes before a load finishes.
   final _loadTok = LoadToken();
+  // Client-side name search. Narrows only the already-RLS-scoped [_clients];
+  // it never refetches, so it can never widen department visibility.
+  final _searchCtrl = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
@@ -57,6 +62,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
   @override
   void dispose() {
     _scope?.removeListener(_onScopeChanged);
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -116,23 +122,11 @@ class _ClientsScreenState extends State<ClientsScreen> {
               canCreate: canCreate,
               onCreate: () => _showCreateSheet(context),
             )
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: _clients.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (_, i) => _ClientCard(
-                  client: _clients[i],
-                  isAdmin: isAdmin,
-                  onTap: () =>
-                      context.push('/clients/${_clients[i].id}/finance'),
-                  onEdit: () => _showEditSheet(context, _clients[i]),
-                  onDelete: isAdmin
-                      ? () => _confirmDeleteClient(_clients[i])
-                      : null,
-                ),
-              ),
+          : Column(
+              children: [
+                _buildSearchField(),
+                Expanded(child: _buildClientList(isAdmin)),
+              ],
             ),
       floatingActionButton: canCreate
           ? FloatingActionButton.extended(
@@ -148,6 +142,70 @@ class _ClientsScreenState extends State<ClientsScreen> {
               ),
             )
           : null,
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) => setState(() => _query = v),
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Search clients by name',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.clear),
+                  tooltip: 'Clear search',
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _query = '');
+                  },
+                ),
+          filled: true,
+          fillColor: AppColors.surfaceContainerLowest,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClientList(bool isAdmin) {
+    // Narrow the already-loaded (RLS + department scoped) list; no refetch.
+    final visible = ClientSearch.filter(_clients, _query);
+    if (visible.isEmpty) {
+      return _NoSearchResults(
+        query: _query.trim(),
+        onClear: () {
+          _searchCtrl.clear();
+          setState(() => _query = '');
+        },
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: visible.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (_, i) => _ClientCard(
+          client: visible[i],
+          isAdmin: isAdmin,
+          onTap: () => context.push(
+            '/clients/${visible[i].id}/details',
+            extra: visible[i],
+          ),
+          onEdit: () => _showEditSheet(context, visible[i]),
+          onDelete: isAdmin ? () => _confirmDeleteClient(visible[i]) : null,
+        ),
+      ),
     );
   }
 
@@ -236,6 +294,62 @@ class _ClientsScreenState extends State<ClientsScreen> {
 }
 
 // ── Empty state ────────────────────────────────────────────────────────────────
+// Shown when clients exist but none match the current search query. Distinct
+// from _EmptyClients (no clients at all) so the two states never blur together.
+class _NoSearchResults extends StatelessWidget {
+  const _NoSearchResults({required this.query, required this.onClear});
+  final String query;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    // AlwaysScrollable keeps the parent RefreshIndicator/scroll gestures sane
+    // and lets the centered message sit in an otherwise empty list area.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.search_off,
+                      size: 64, color: AppColors.outlineVariant),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No clients match “$query”',
+                    style: AppTextStyles.headlineSm.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Try a different name, or clear the search.',
+                    style: AppTextStyles.bodyMd.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  OutlinedButton.icon(
+                    onPressed: onClear,
+                    icon: const Icon(Icons.clear),
+                    label: const Text('Clear search'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _EmptyClients extends StatelessWidget {
   const _EmptyClients({required this.canCreate, required this.onCreate});
   final bool canCreate;

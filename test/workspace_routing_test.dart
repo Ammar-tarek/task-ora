@@ -2,6 +2,7 @@
 // M2 — role-based entry point + /workspaces guard. Pure, no Flutter bindings.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:task_ora/core/constants/departments.dart';
 import 'package:task_ora/core/models/profile_model.dart';
 import 'package:task_ora/core/router/workspace_routing.dart';
 
@@ -61,6 +62,179 @@ void main() {
 
     test('no profile → login', () {
       expect(WorkspaceRouting.guardWorkspaces(null), '/login');
+    });
+  });
+
+  group('isProductionCalendarOnly (Production = Calendar-only)', () {
+    test('production manager and employee → true', () {
+      expect(
+        WorkspaceRouting.isProductionCalendarOnly(
+            _p(role: 'manager'), Department.production),
+        isTrue,
+      );
+      expect(
+        WorkspaceRouting.isProductionCalendarOnly(
+            _p(role: 'employee'), Department.production),
+        isTrue,
+      );
+    });
+
+    test('admin / super admin / client → false even in Production', () {
+      expect(
+        WorkspaceRouting.isProductionCalendarOnly(
+            _p(role: 'admin'), Department.production),
+        isFalse,
+      );
+      expect(
+        WorkspaceRouting.isProductionCalendarOnly(
+            _p(role: 'admin', superAdmin: true), Department.production),
+        isFalse,
+      );
+      expect(
+        WorkspaceRouting.isProductionCalendarOnly(
+            _p(role: 'client'), Department.production),
+        isFalse,
+      );
+    });
+
+    test('other departments → false (isolation)', () {
+      for (final d in const [
+        Department.marketing,
+        Department.montage,
+        Department.sales,
+        Department.studio,
+      ]) {
+        expect(
+          WorkspaceRouting.isProductionCalendarOnly(_p(role: 'employee'), d),
+          isFalse,
+          reason: d.toString(),
+        );
+      }
+    });
+
+    test('null department or null profile → false', () {
+      expect(
+        WorkspaceRouting.isProductionCalendarOnly(_p(role: 'employee'), null),
+        isFalse,
+      );
+      expect(
+        WorkspaceRouting.isProductionCalendarOnly(null, Department.production),
+        isFalse,
+      );
+    });
+  });
+
+  group('productionRedirect (direct-route block)', () {
+    test('not restricted → null (no redirect)', () {
+      expect(
+        WorkspaceRouting.productionRedirect('/dashboard', calendarOnly: false),
+        isNull,
+      );
+    });
+
+    test('restricted + already under /calendar → null', () {
+      expect(
+        WorkspaceRouting.productionRedirect('/calendar', calendarOnly: true),
+        isNull,
+      );
+      expect(
+        WorkspaceRouting.productionRedirect('/calendar/enhanced',
+            calendarOnly: true),
+        isNull,
+      );
+    });
+
+    test('restricted + any other route → /calendar', () {
+      for (final loc in const [
+        '/dashboard',
+        '/tasks',
+        '/tasks/table',
+        '/finance',
+        '/settings',
+        '/workspaces',
+        '/analytics',
+        '/expenses',
+        '/users',
+        '/teams',
+        '/notifications',
+      ]) {
+        expect(
+          WorkspaceRouting.productionRedirect(loc, calendarOnly: true),
+          '/calendar',
+          reason: loc,
+        );
+      }
+    });
+  });
+
+  group('isAdminProductionCalendarOnly (admin viewing Production)', () {
+    test('admin / super admin viewing Production → true', () {
+      expect(
+        WorkspaceRouting.isAdminProductionCalendarOnly(
+            _p(role: 'admin'), Department.production),
+        isTrue,
+      );
+      expect(
+        WorkspaceRouting.isAdminProductionCalendarOnly(
+            _p(role: 'admin', superAdmin: true), Department.production),
+        isTrue,
+      );
+    });
+
+    test('admin viewing another department or All (null) → false', () {
+      expect(
+        WorkspaceRouting.isAdminProductionCalendarOnly(
+            _p(role: 'admin'), Department.marketing),
+        isFalse,
+      );
+      expect(
+        WorkspaceRouting.isAdminProductionCalendarOnly(_p(role: 'admin'), null),
+        isFalse,
+      );
+    });
+
+    test('non-admin (manager/employee/client) → false here', () {
+      expect(
+        WorkspaceRouting.isAdminProductionCalendarOnly(
+            _p(role: 'manager'), Department.production),
+        isFalse,
+      );
+      expect(
+        WorkspaceRouting.isAdminProductionCalendarOnly(
+            _p(role: 'client'), Department.production),
+        isFalse,
+      );
+    });
+
+    test('null profile → false', () {
+      expect(
+        WorkspaceRouting.isAdminProductionCalendarOnly(
+            null, Department.production),
+        isFalse,
+      );
+    });
+  });
+
+  group('productionRedirect — admin keeps the /workspaces escape', () {
+    test('admin calendar-only: /workspaces stays reachable', () {
+      expect(
+        WorkspaceRouting.productionRedirect('/workspaces',
+            calendarOnly: true, allowWorkspaces: true),
+        isNull,
+      );
+    });
+    test('admin calendar-only: other routes still → /calendar', () {
+      expect(
+        WorkspaceRouting.productionRedirect('/dashboard',
+            calendarOnly: true, allowWorkspaces: true),
+        '/calendar',
+      );
+    });
+    test('scoped user (no escape): /workspaces → /calendar', () {
+      expect(
+        WorkspaceRouting.productionRedirect('/workspaces', calendarOnly: true),
+        '/calendar',
+      );
     });
   });
 }

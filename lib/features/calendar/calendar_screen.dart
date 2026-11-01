@@ -182,6 +182,9 @@ bool _isSameDay(DateTime a, DateTime b) =>
 
 DateTime _weekStart(DateTime d) => d.subtract(Duration(days: d.weekday - 1));
 
+String _fmtDate(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
 // ── View enum ──────────────────────────────────────────────────────────────────
 enum _CalView { month, week, day }
 
@@ -286,11 +289,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
-  List<CalEvent> _eventsForDay(DateTime day) => _displayEvents.where((e) {
-    final d = DateTime(day.year, day.month, day.day);
-    final s = DateTime(e.start.year, e.start.month, e.start.day);
-    return s == d;
-  }).toList()..sort((a, b) => a.start.compareTo(b.start));
+  List<CalEvent> _eventsForDay(DateTime day) => _displayEvents
+      .where((e) => CalendarDaySpan.coversDay(e.start, e.end, day))
+      .toList()
+    ..sort((a, b) => a.start.compareTo(b.start));
 
   void _navigate(int delta) => setState(() {
     if (_view == _CalView.month) {
@@ -1971,8 +1973,12 @@ class _AddEventSheetState extends State<_AddEventSheet> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _linkCtrl = TextEditingController();
+  final _locationCtrl = TextEditingController();
   // Chosen START-time reminder offsets (minutes before start). Phase 1.
   final Set<int> _reminderOffsets = {};
+  // Dept-scoped attendees (Phase 2A).
+  List<Map<String, String>> _employees = [];
+  final Set<String> _selectedEmployeeIds = {};
 
   // Department ownership (events.team_id) is DERIVED from the active workspace —
   // no in-form picker. Admins switch department via the WorkspaceHeaderBar
@@ -2000,6 +2006,64 @@ class _AddEventSheetState extends State<_AddEventSheet> {
     _endTime = DateTime(d.year, d.month, d.day, 11);
     _resolveTeam();
     _fetchClients();
+    _fetchEmployees();
+  }
+
+  /// Attendees = active, non-client members of the owning department team only
+  /// (profiles.team_id = [_teamId]). RLS also restricts the read.
+  Future<void> _fetchEmployees() async {
+    if (_teamId == null) {
+      if (mounted) setState(() => _employees = []);
+      return;
+    }
+    try {
+      final data = await SupabaseService.client
+          .from('profiles')
+          .select('id, full_name')
+          .eq('team_id', _teamId!)
+          .neq('role', 'client')
+          .eq('status', 'active')
+          .order('full_name');
+      final members = (data as List)
+          .map((m) => {
+                'id': m['id'] as String,
+                'name': m['full_name'] as String? ?? '',
+              })
+          .toList();
+      if (mounted) {
+        setState(() {
+          _employees = members;
+          final eligible = members.map((e) => e['id']).toSet();
+          _selectedEmployeeIds.removeWhere((id) => !eligible.contains(id));
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _employees = []);
+    }
+  }
+
+  Future<void> _pickDate(bool isStart) async {
+    final base = isStart ? _startTime : _endTime;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: base,
+      firstDate: DateTime(base.year - 1),
+      lastDate: DateTime(base.year + 2),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isStart) {
+        _startTime = DateTime(picked.year, picked.month, picked.day,
+            _startTime.hour, _startTime.minute);
+        // Keep end on/after start.
+        if (_endTime.isBefore(_startTime)) {
+          _endTime = _startTime.add(const Duration(hours: 1));
+        }
+      } else {
+        _endTime = DateTime(picked.year, picked.month, picked.day,
+            _endTime.hour, _endTime.minute);
+      }
+    });
   }
 
   /// Derive the owning department/team from the ACTIVE workspace (never an
@@ -2024,6 +2088,7 @@ class _AddEventSheetState extends State<_AddEventSheet> {
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _linkCtrl.dispose();
+    _locationCtrl.dispose();
     super.dispose();
   }
 
@@ -2104,6 +2169,7 @@ class _AddEventSheetState extends State<_AddEventSheet> {
     setState(() => _saving = true);
 
     try {
+      final locationText = _locationCtrl.text.trim();
       final newId = await ClientRepository.createEvent(
         title: title,
         start: _startTime,
@@ -2113,8 +2179,10 @@ class _AddEventSheetState extends State<_AddEventSheet> {
             ? null
             : _descCtrl.text.trim(),
         link: linkText.isEmpty ? null : linkText,
+        location: locationText.isEmpty ? null : locationText,
         createdBy: profile?.id ?? '',
         teamId: teamId,
+        attendeeIds: _selectedEmployeeIds.toList(),
       );
       if (newId != null && _reminderOffsets.isNotEmpty) {
         final remErr = await ClientRepository.setStartReminderOffsets(
@@ -2194,6 +2262,55 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                   label: _dept?.label,
                   isAdmin: _isAdmin,
                   isStudio: _dept == Department.studio,
+                ),
+                const SizedBox(height: 12),
+
+                // Start / End dates — multi-day events supported.
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _pickDate(true),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Start date',
+                            prefixIcon: const Icon(Icons.event, size: 18),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: Text(_fmtDate(_startTime),
+                              style: AppTextStyles.bodyMd),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _pickDate(false),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'End date',
+                            prefixIcon:
+                                const Icon(Icons.event_outlined, size: 18),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: Text(_fmtDate(_endTime),
+                              style: AppTextStyles.bodyMd),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
 
@@ -2339,6 +2456,30 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                 ),
                 const SizedBox(height: 12),
 
+                TextField(
+                  controller: _locationCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Location (optional)',
+                    prefixIcon: const Icon(Icons.place_outlined, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                _AttendeePicker(
+                  members: _employees,
+                  selected: _selectedEmployeeIds,
+                  hasTeam: _teamId != null,
+                  onChanged: (s) => setState(() {
+                    _selectedEmployeeIds
+                      ..clear()
+                      ..addAll(s);
+                  }),
+                ),
+                const SizedBox(height: 12),
+
                 _ReminderOffsetPicker(
                   selected: _reminderOffsets,
                   onChanged: (s) => setState(() {
@@ -2402,6 +2543,10 @@ class _EditEventSheetState extends State<_EditEventSheet> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _descCtrl;
   late final TextEditingController _linkCtrl;
+  late final TextEditingController _locationCtrl;
+  // Dept-scoped attendees (Phase 2A), preloaded from the event.
+  List<Map<String, String>> _employees = [];
+  final Set<String> _selectedEmployeeIds = {};
 
   List<ClientModel> _clients = [];
   ClientModel? _selectedClient;
@@ -2426,9 +2571,12 @@ class _EditEventSheetState extends State<_EditEventSheet> {
     _titleCtrl = TextEditingController(text: e.title);
     _descCtrl = TextEditingController(text: e.description ?? '');
     _linkCtrl = TextEditingController(text: e.link ?? '');
+    _locationCtrl = TextEditingController(text: e.roomName ?? '');
     _startTime = e.start;
     _endTime = e.end;
+    _selectedEmployeeIds.addAll(e.attendeeIds);
     _loadReminders();
+    _fetchEmployees();
     // Resolve the event's own department client_type filter from its team_id.
     final scope = context.read<WorkspaceScopeNotifier>();
     final dept = scope.state.departmentForTeamId(e.teamId);
@@ -2443,7 +2591,62 @@ class _EditEventSheetState extends State<_EditEventSheet> {
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _linkCtrl.dispose();
+    _locationCtrl.dispose();
     super.dispose();
+  }
+
+  /// Attendees = members of THIS EVENT's department team (events.team_id).
+  /// Legacy null-team events get an empty pool (existing attendees preserved).
+  Future<void> _fetchEmployees() async {
+    final teamId = widget.event.teamId;
+    if (teamId == null) {
+      if (mounted) setState(() => _employees = []);
+      return;
+    }
+    try {
+      final data = await SupabaseService.client
+          .from('profiles')
+          .select('id, full_name')
+          .eq('team_id', teamId)
+          .neq('role', 'client')
+          .eq('status', 'active')
+          .order('full_name');
+      if (mounted) {
+        setState(() {
+          _employees = (data as List)
+              .map((m) => {
+                    'id': m['id'] as String,
+                    'name': m['full_name'] as String? ?? '',
+                  })
+              .toList();
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _employees = []);
+    }
+  }
+
+  Future<void> _pickDate(bool isStart) async {
+    final base = isStart ? _startTime : _endTime;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: base,
+      firstDate: DateTime(base.year - 2),
+      lastDate: DateTime(base.year + 2),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isStart) {
+        _startTime = DateTime(picked.year, picked.month, picked.day,
+            _startTime.hour, _startTime.minute);
+        if (_endTime.isBefore(_startTime)) {
+          _endTime = _startTime.add(const Duration(hours: 1));
+        }
+      } else {
+        _endTime = DateTime(picked.year, picked.month, picked.day,
+            _endTime.hour, _endTime.minute);
+      }
+    });
   }
 
   /// Load this event's start-reminder offsets. Distinguishes a real empty list
@@ -2543,6 +2746,10 @@ class _EditEventSheetState extends State<_EditEventSheet> {
         clientId: _selectedClient?.id,
         description: description,
         link: link,
+        location: _locationCtrl.text.trim().isEmpty
+            ? null
+            : _locationCtrl.text.trim(),
+        attendeeIds: _selectedEmployeeIds.toList(),
       );
       // Only persist reminders when we actually loaded the current ones. If the
       // load failed (or is still running), leave the event's reminders UNCHANGED
@@ -2761,6 +2968,79 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
+                ),
+                const SizedBox(height: 12),
+
+                // Start / End dates — multi-day events supported.
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _pickDate(true),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Start date',
+                            prefixIcon: const Icon(Icons.event, size: 18),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: Text(_fmtDate(_startTime),
+                              style: AppTextStyles.bodyMd),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _pickDate(false),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'End date',
+                            prefixIcon:
+                                const Icon(Icons.event_outlined, size: 18),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: Text(_fmtDate(_endTime),
+                              style: AppTextStyles.bodyMd),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _locationCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Location (optional)',
+                    prefixIcon: const Icon(Icons.place_outlined, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                _AttendeePicker(
+                  members: _employees,
+                  selected: _selectedEmployeeIds,
+                  hasTeam: widget.event.teamId != null,
+                  onChanged: (s) => setState(() {
+                    _selectedEmployeeIds
+                      ..clear()
+                      ..addAll(s);
+                  }),
                 ),
                 const SizedBox(height: 12),
 
@@ -3285,6 +3565,72 @@ class _ReminderOffsetPicker extends StatelessWidget {
             );
           }).toList(),
         ),
+      ],
+    );
+  }
+}
+
+/// Multi-select attendee picker scoped to the event's department members.
+class _AttendeePicker extends StatelessWidget {
+  const _AttendeePicker({
+    required this.members,
+    required this.selected,
+    required this.hasTeam,
+    required this.onChanged,
+  });
+  final List<Map<String, String>> members;
+  final Set<String> selected;
+  final bool hasTeam;
+  final ValueChanged<Set<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.group_outlined, size: 18, color: AppColors.gold),
+            const SizedBox(width: 6),
+            Text('Attendees', style: AppTextStyles.labelMd),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (members.isEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              hasTeam
+                  ? 'No members in this department yet.'
+                  : 'Pick a department first to choose attendees.',
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: members.map((e) {
+              final sel = selected.contains(e['id']);
+              return FilterChip(
+                label: Text(e['name']!, style: AppTextStyles.bodySm),
+                selected: sel,
+                onSelected: (v) {
+                  final next = {...selected};
+                  if (v) {
+                    next.add(e['id']!);
+                  } else {
+                    next.remove(e['id']!);
+                  }
+                  onChanged(next);
+                },
+                selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                checkmarkColor: AppColors.primary,
+              );
+            }).toList(),
+          ),
       ],
     );
   }

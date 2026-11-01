@@ -3,7 +3,10 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../constants/departments.dart';
 import '../models/profile_model.dart';
+import '../router/department_gate.dart';
+import '../router/workspace_routing.dart';
 import '../services/supabase_service.dart';
 import '../services/biometric_service.dart';
 import '../services/push_notification_service.dart';
@@ -18,6 +21,17 @@ const String kEmailConfirmationRequired = 'EMAIL_CONFIRMATION_REQUIRED';
 class AuthNotifier extends ChangeNotifier {
   AuthStatus _status = AuthStatus.loading;
   ProfileModel? _profile;
+  /// The current user's department, resolved from teams.department via
+  /// profiles.team_id at login. Drives department-scoped navigation gating
+  /// (e.g. Production = Calendar-only). Null for admins/clients/no-team, or
+  /// a known team with no recognized department. Meaningful only when
+  /// [_deptState] == resolved.
+  Department? _department;
+
+  /// Lifecycle of the department lookup. Fail CLOSED: while this is loading or
+  /// failed for a user who REQUIRES resolution (manager/employee with a team),
+  /// the router holds them on /resolving instead of the normal workspace.
+  DepartmentResolution _deptState = DepartmentResolution.notRequired;
   String? _error;
   bool _isBiometricVerified = false;
 
@@ -30,6 +44,25 @@ class AuthNotifier extends ChangeNotifier {
 
   AuthStatus get status => _status;
   ProfileModel? get profile => _profile;
+  Department? get department => _department;
+  DepartmentResolution get departmentResolution => _deptState;
+
+  /// True ONLY once the department is RESOLVED and the user is a Production
+  /// manager/employee. A loading/failed lookup never returns true here — the
+  /// router's department gate holds such users on /resolving instead.
+  bool get isProductionOnly =>
+      _deptState == DepartmentResolution.resolved &&
+      WorkspaceRouting.isProductionCalendarOnly(_profile, _department);
+
+  /// The router must hold the user on /resolving: a manager/employee with a team
+  /// whose department is still loading or has failed. Fail CLOSED — this is what
+  /// closes the previous fail-open hole.
+  bool get departmentGatePending =>
+      DepartmentGate.isPending(_profile, _deptState);
+
+  /// Pending specifically because the lookup failed (show error + Retry).
+  bool get departmentResolveFailed =>
+      DepartmentGate.isFailed(_profile, _deptState);
   String? get error => _error;
   bool get isLoggedIn => _status == AuthStatus.authenticated;
   bool get isBiometricVerified => _isBiometricVerified;
@@ -47,6 +80,8 @@ class AuthNotifier extends ChangeNotifier {
           _fetchProfile();
         } else if (event == AuthChangeEvent.signedOut) {
           _profile = null;
+          _department = null;
+          _deptState = DepartmentResolution.notRequired;
           _isBiometricVerified = false;
           _status = AuthStatus.unauthenticated;
           // Preserve a forced-sign-out message (e.g. deactivated account) if
@@ -181,6 +216,13 @@ class AuthNotifier extends ChangeNotifier {
         }
         _error = null;
 
+        // Resolve the user's department (teams.department) for department-scoped
+        // navigation gating (Production = Calendar-only). Awaited so the router's
+        // first post-auth redirect already sees a definite state. Fail CLOSED:
+        // a loading/failed lookup holds the user on /resolving (see router + the
+        // DepartmentGate), never grants the full workspace.
+        await _resolveDepartment();
+
         // Update last_login_at (fire-and-forget)
         try {
           SupabaseService.client
@@ -206,6 +248,47 @@ class AuthNotifier extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  /// Resolve the current user's department from teams.department (via team_id),
+  /// using the AUTHENTICATED Supabase client so the existing teams RLS applies
+  /// (members may read their own team; no service-role access). Fail CLOSED:
+  ///   * admin / super admin / client / no-team  → notRequired (no gate)
+  ///   * manager/employee with a team            → loading → resolved | failed
+  /// A thrown lookup OR a missing row → failed (BLOCKING), never silent full
+  /// access. Emits a loading notify first so the router can hold on /resolving.
+  Future<void> _resolveDepartment() async {
+    final p = _profile;
+    if (!DepartmentGate.isRequired(p)) {
+      _department = null;
+      _deptState = DepartmentResolution.notRequired;
+      return;
+    }
+    _department = null;
+    _deptState = DepartmentResolution.loading;
+    notifyListeners(); // observable loading → router shows /resolving spinner
+    try {
+      final t = await SupabaseService.client
+          .from('teams')
+          .select('department,name')
+          .eq('id', p!.teamId!)
+          .maybeSingle();
+      if (t == null) {
+        // Row missing despite a non-null team_id → do NOT fall through to the
+        // full workspace. Hold on the error state until a retry succeeds.
+        _deptState = DepartmentResolution.failed;
+      } else {
+        _department = Departments.fromLabel(t['department'] as String?) ??
+            Departments.fromLabel(t['name'] as String?);
+        _deptState = DepartmentResolution.resolved;
+      }
+    } catch (_) {
+      _deptState = DepartmentResolution.failed;
+    }
+    notifyListeners();
+  }
+
+  /// Retry a failed/transient department lookup (called by the resolving screen).
+  Future<void> retryDepartmentResolution() => _resolveDepartment();
 
   // ── Public methods ─────────────────────────────────────────────────────────
 
@@ -428,6 +511,8 @@ class AuthNotifier extends ChangeNotifier {
       await SupabaseService.auth.signOut();
     } catch (_) {}
     _profile = null;
+    _department = null;
+    _deptState = DepartmentResolution.notRequired;
     _isBiometricVerified = false;
     _status = AuthStatus.unauthenticated;
     _error = null;

@@ -37,7 +37,7 @@ void main() async {
 
   // Create the router exactly once — must live outside the widget tree
   // to avoid duplicate-navigator-key assertions on rebuilds.
-  final router = makeRouter(auth);
+  final router = makeRouter(auth, workspaceScope);
   LocalNotificationService.setRouter(router);
 
   runApp(

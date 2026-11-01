@@ -411,12 +411,14 @@ class TaskRepository {
   }
 
   static Future<List<TaskModel>> _fetchAll({String? teamId}) async {
-    // Manager view: own team tasks PLUS tasks handed off to their team (waiting list).
+    // Manager view (direct-transfer model): own team's tasks (team_id) PLUS
+    // tasks this team has handed off (handoff_from_team_id) so the sending
+    // manager keeps SELECT-only visibility. RLS still enforces both.
     try {
       final base = _client.from('tasks').select(_taskSelect);
       final query = teamId != null
           ? base
-                .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId')
+                .or('team_id.eq.$teamId,handoff_from_team_id.eq.$teamId')
                 .order('created_at', ascending: false)
           : base.order('created_at', ascending: false);
       final data = await query;
@@ -426,7 +428,7 @@ class TaskRepository {
         final base = _client.from('tasks').select('*');
         final query = teamId != null
             ? base
-                  .or('team_id.eq.$teamId,handoff_to_team_id.eq.$teamId')
+                  .or('team_id.eq.$teamId,handoff_from_team_id.eq.$teamId')
                   .order('created_at', ascending: false)
             : base.order('created_at', ascending: false);
         final data = await query;
@@ -587,145 +589,11 @@ class TaskRepository {
     }
   }
 
-  /// Target manager accepts a handoff into their department. The task becomes a
-  /// normal team task visible to that team.
-  static Future<void> acceptHandoff({
-    required String taskId,
-    required String teamId,
-  }) async {
-    // 1. Fetch task details BEFORE clearing handoff_to_team_id
-    final taskData = await fetchTaskDetail(taskId);
-    final title = taskData?['title'] as String? ?? 'Task';
-    final fromTeamId = taskData?['handoff_from_team_id'] as String?;
-
-    // Secure accept via RPC: validates caller is dest-team manager/admin,
-    // handoff state and concurrency; writes audit. No service-role fallback.
-    await _client.rpc('accept_handoff', params: {'p_task_id': taskId});
-
-    // 2. Notify source & target managers, leads, and admins that handoff was accepted
-    try {
-      final toTeam = await TeamRepository.fetchById(teamId);
-      final recipients = <String>{};
-
-      if (toTeam?.teamLeadId != null) {
-        recipients.add(toTeam!.teamLeadId!);
-      }
-
-      final targetManagers = await _client
-          .from('profiles')
-          .select('id')
-          .eq('team_id', teamId)
-          .eq('role', 'manager');
-      for (final row in (targetManagers as List)) {
-        recipients.add(row['id'] as String);
-      }
-
-      if (fromTeamId != null) {
-        final fromTeam = await TeamRepository.fetchById(fromTeamId);
-        if (fromTeam?.teamLeadId != null) {
-          recipients.add(fromTeam!.teamLeadId!);
-        }
-        final sourceManagers = await _client
-            .from('profiles')
-            .select('id')
-            .eq('team_id', fromTeamId)
-            .eq('role', 'manager');
-        for (final row in (sourceManagers as List)) {
-          recipients.add(row['id'] as String);
-        }
-      }
-
-      final adminRows = await _client
-          .from('profiles')
-          .select('id')
-          .eq('role', 'admin');
-      for (final row in (adminRows as List)) {
-        recipients.add(row['id'] as String);
-      }
-
-      for (final recipientId in recipients) {
-        await NotificationRepository.createNotification(
-          recipientId: recipientId,
-          type: 'handoff_accepted',
-          title: 'Department Switch Accepted',
-          body:
-              'Task "$title" handoff was accepted into ${toTeam?.name ?? "target"} department.',
-          referenceType: 'task',
-          referenceId: taskId,
-        );
-      }
-    } catch (_) {}
-  }
-
-  /// Target manager or admin rejects a handoff. The task turns back to the original department.
-  static Future<void> rejectHandoff({required String taskId}) async {
-    // 1. Fetch task details BEFORE clearing handoff fields
-    final taskData = await fetchTaskDetail(taskId);
-    final title = taskData?['title'] as String? ?? 'Task';
-    final fromTeamId = taskData?['handoff_from_team_id'] as String?;
-    final toTeamId = taskData?['handoff_to_team_id'] as String?;
-
-    // Secure reject via RPC: validates caller is dest-team manager/admin,
-    // handoff state and concurrency; returns task to source; writes audit.
-    await _client.rpc('reject_handoff', params: {'p_task_id': taskId});
-
-    // 2. Notify source & target managers, leads, and admins that handoff was rejected
-    try {
-      final fromTeam = fromTeamId != null
-          ? await TeamRepository.fetchById(fromTeamId)
-          : null;
-      final recipients = <String>{};
-
-      if (fromTeamId != null) {
-        if (fromTeam?.teamLeadId != null) {
-          recipients.add(fromTeam!.teamLeadId!);
-        }
-        final sourceManagers = await _client
-            .from('profiles')
-            .select('id')
-            .eq('team_id', fromTeamId)
-            .eq('role', 'manager');
-        for (final row in (sourceManagers as List)) {
-          recipients.add(row['id'] as String);
-        }
-      }
-
-      if (toTeamId != null) {
-        final toTeam = await TeamRepository.fetchById(toTeamId);
-        if (toTeam?.teamLeadId != null) {
-          recipients.add(toTeam!.teamLeadId!);
-        }
-        final targetManagers = await _client
-            .from('profiles')
-            .select('id')
-            .eq('team_id', toTeamId)
-            .eq('role', 'manager');
-        for (final row in (targetManagers as List)) {
-          recipients.add(row['id'] as String);
-        }
-      }
-
-      final adminRows = await _client
-          .from('profiles')
-          .select('id')
-          .eq('role', 'admin');
-      for (final row in (adminRows as List)) {
-        recipients.add(row['id'] as String);
-      }
-
-      for (final recipientId in recipients) {
-        await NotificationRepository.createNotification(
-          recipientId: recipientId,
-          type: 'handoff_rejected',
-          title: 'Department Switch Rejected',
-          body:
-              'Task "$title" handoff was rejected and returned to ${fromTeam?.name ?? "original"} department.',
-          referenceType: 'task',
-          referenceId: taskId,
-        );
-      }
-    } catch (_) {}
-  }
+  // REMOVED (direct-transfer model): acceptHandoff / rejectHandoff. handoff_task
+  // now transfers ownership immediately (team_id = receiving team), so there is
+  // no pending accept/reject step and the accept_handoff/reject_handoff RPCs are
+  // dropped by PROPOSED_handoff_rpcs.sql. The receiving manager assigns the task
+  // from their board; the sending team keeps SELECT-only visibility.
 
   static Future<List<TaskModel>> _fetchEmployeeTasks(
     ProfileModel profile,

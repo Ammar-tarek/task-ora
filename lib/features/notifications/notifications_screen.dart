@@ -10,7 +10,6 @@ import '../../core/auth/auth_notifier.dart';
 import '../../core/l10n/app_strings.dart';
 import '../../core/providers/locale_controller.dart';
 import '../../core/repositories/notification_repository.dart';
-import '../../core/repositories/task_repository.dart';
 import '../../core/services/notification_route.dart';
 import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -125,47 +124,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _load();
   }
 
-  Future<void> _acceptHandoff(String taskId) async {
-    final profile = context.read<AuthNotifier>().profile;
-    if (profile == null) return;
-
-    try {
-      final task = await TaskRepository.fetchTaskDetail(taskId);
-      if (task == null) return;
-      final targetTeam =
-          task['handoff_to_team_id'] as String? ?? profile.teamId;
-      if (targetTeam != null) {
-        await TaskRepository.acceptHandoff(taskId: taskId, teamId: targetTeam);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Task handoff accepted!'),
-              backgroundColor: AppColors.statusDone,
-            ),
-          );
-        }
-        _load();
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _rejectHandoff(String taskId) async {
-    final profile = context.read<AuthNotifier>().profile;
-    if (profile == null) return;
-
-    try {
-      await TaskRepository.rejectHandoff(taskId: taskId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Task handoff rejected and returned to department.'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-      _load();
-    } catch (_) {}
-  }
+  // Direct-transfer model: a department task switch is informational only.
+  // There is no accept/reject step — tapping the notification opens the task.
 
   /// Mark the notification as read, then navigate to its referenced page.
   void _onNotificationTap(AppNotification n) {
@@ -268,14 +228,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     child: _NotifCard(
                       notif: n,
                       onTap: () => _onNotificationTap(n),
-                      onAcceptHandoff:
-                          (n.type == 'task_handoff' && n.referenceId != null)
-                          ? () => _acceptHandoff(n.referenceId!)
-                          : null,
-                      onRejectHandoff:
-                          (n.type == 'task_handoff' && n.referenceId != null)
-                          ? () => _rejectHandoff(n.referenceId!)
-                          : null,
                     ),
                   );
                 },
@@ -289,14 +241,10 @@ class _NotifCard extends StatelessWidget {
   const _NotifCard({
     required this.notif,
     required this.onTap,
-    this.onAcceptHandoff,
-    this.onRejectHandoff,
   });
 
   final AppNotification notif;
   final VoidCallback onTap;
-  final VoidCallback? onAcceptHandoff;
-  final VoidCallback? onRejectHandoff;
 
   IconData get _icon {
     switch (notif.type) {
@@ -438,50 +386,6 @@ class _NotifCard extends StatelessWidget {
                   ),
               ],
             ),
-            if (onAcceptHandoff != null || onRejectHandoff != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (onAcceptHandoff != null)
-                    ElevatedButton.icon(
-                      onPressed: onAcceptHandoff,
-                      icon: const Icon(Icons.check_circle_outline, size: 16),
-                      label: const Text('Accept'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.statusDone,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        textStyle: AppTextStyles.labelMd.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  if (onAcceptHandoff != null && onRejectHandoff != null)
-                    const SizedBox(width: 8),
-                  if (onRejectHandoff != null)
-                    ElevatedButton.icon(
-                      onPressed: onRejectHandoff,
-                      icon: const Icon(Icons.cancel_outlined, size: 16),
-                      label: const Text('Reject'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        textStyle: AppTextStyles.labelMd.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
           ],
         ),
       ),

@@ -26,6 +26,7 @@ import '../../core/repositories/finance_repository.dart';
 import '../../core/services/revenue_create_scope.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/currency.dart';
+import 'monthly_revenue_screen.dart';
 
 class DepartmentRevenueSheetScreen extends StatefulWidget {
   const DepartmentRevenueSheetScreen({super.key});
@@ -101,6 +102,13 @@ class _DepartmentRevenueSheetScreenState
       appBar: AppBar(
         title: const Text('Department Revenue'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.calendar_month_outlined),
+            tooltip: 'Monthly revenue',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MonthlyRevenueScreen()),
+            ),
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
           const SizedBox(width: 4),
         ],
