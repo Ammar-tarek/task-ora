@@ -1,17 +1,17 @@
 # Graph Report - task-ora  (2026-11-01)
 
 ## Corpus Check
-- 352 files · ~219,778 words
+- 352 files · ~219,804 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 62 file(s) not represented in the graph (top: (none) 11, .xml 10, .xcconfig 8)
 
 ## Summary
-- 4001 nodes · 5440 edges · 256 communities (164 shown, 92 thin omitted)
+- 4001 nodes · 5441 edges · 256 communities (166 shown, 90 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 32 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ff7e977e`
+- Built from commit: `395b970a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -148,7 +148,7 @@
 - package.json
 - with
 - Task Handoff — Direct Transfer (Option A): Security Review & Test Matrix
-- widget_test.dart
+- package:flutter/material.dart
 - web notification stub
 - with
 - Changelog
@@ -239,7 +239,7 @@
 - task_audit_insert_test.dart
 - PROPOSED_task_status_options.sql
 - PROPOSED_sales_sheet_entries.sql
-- _AdminDashboardScreenState
+- build
 - _EditEmployeeSheetState
 - _UserCardState
 - build
@@ -277,7 +277,7 @@
 - **Service-role key removal & replacement flow** — isolation_final_report_service_role_key, blockers_service_role_removal_admin_user_ops, blockers_service_role_removal_admin_reset_app, backend_security_plan_key_rotation, department_isolation_audit_b2_service_role_reads [EXTRACTED 0.90]
 - **DB-level department isolation enforcement** — department_isolation_audit_rls, department_migration_assessment_security_definer_helpers, department_migration_assessment_guard_trigger, department_migration_assessment_teams_as_departments, department_isolation_audit_workspace_scope_notifier [INFERRED 0.80]
 
-## Communities (256 total, 92 thin omitted)
+## Communities (256 total, 90 thin omitted)
 
 ### Community 0 - "Calendar & Attendees"
 Cohesion: 0.02
@@ -341,7 +341,7 @@ Nodes (39): SuperAdminReportData, _applyFilter, build, _buildAttendancePerEmploy
 
 ### Community 15 - "Client Finance"
 Cohesion: 0.05
-Nodes (39): CrmEntry, asClient, build, canManage, _client, clientId, color, _confirmDeleteClient (+31 more)
+Nodes (39): CrmEntry, asClient, build, canManage, _Chip, _client, clientId, color (+31 more)
 
 ### Community 16 - "Client Repository & Reminders"
 Cohesion: 0.04
@@ -349,7 +349,7 @@ Nodes (40): adminDb, attendeeIds, attendeeNames, CalEventData, clientId, clientN
 
 ### Community 17 - "Dashboard"
 Cohesion: 0.05
-Nodes (40): actions, _barSegment, _cashbackWisdoms, _clientCount, createState, dispose, _employees, _EmptyState (+32 more)
+Nodes (42): actions, AdminDashboardScreen, _AdminDashboardScreenState, _barSegment, _cashbackWisdoms, _clientCount, createState, dispose (+34 more)
 
 ### Community 18 - "Notion Table Widget"
 Cohesion: 0.04
@@ -392,8 +392,8 @@ Cohesion: 0.06
 Nodes (30): TaskModel, activeCount, assigned, assignmentRejected, AssignmentRejection, at, awaitingAcceptance, awaitingReview (+22 more)
 
 ### Community 28 - "WorkspaceScopeNotifier"
-Cohesion: 0.08
-Nodes (31): TeamFilterNotifier, WorkspaceScopeNotifier, build, DepartmentGateScreen, _apply, build, DepartmentSwitcher, _row (+23 more)
+Cohesion: 0.09
+Nodes (26): TeamFilterNotifier, WorkspaceScopeNotifier, _apply, build, DepartmentSwitcher, _row, build, WorkspaceHeaderBar (+18 more)
 
 ### Community 29 - "Local Notifications"
 Cohesion: 0.07
@@ -421,7 +421,7 @@ Nodes (24): build, _buildBody, _buildCard, _buildSetupRequired, createState, des
 
 ### Community 35 - "task table screen"
 Cohesion: 0.06
-Nodes (30): _applyHidden, build, _buildColumns, _buildRows, _colPrefsKey, _columns, _CommentsCountBadge, count (+22 more)
+Nodes (32): _applyHidden, build, _buildColumns, _buildRows, _colPrefsKey, _columns, _CommentsCountBadge, count (+24 more)
 
 ### Community 36 - "public.events"
 Cohesion: 0.12
@@ -464,8 +464,8 @@ Cohesion: 0.09
 Nodes (20): ArchiveCompletedTasksDialog, _ArchiveCompletedTasksDialogState, build, _buildBody, _bulletPoint, _counting, createState, _dateRange (+12 more)
 
 ### Community 46 - "team screen"
-Cohesion: 0.09
-Nodes (17): build, _openClient, _addEmployee, build, _busy, createState, _InactiveBadge, initState (+9 more)
+Cohesion: 0.11
+Nodes (14): _addEmployee, _busy, createState, _InactiveBadge, initState, _load, _loading, _loadTok (+6 more)
 
 ### Community 47 - "company ledger repository"
 Cohesion: 0.08
@@ -795,6 +795,10 @@ Nodes (24): name, runs-on, steps, GITHUB_TOKEN, jobs, build-and-release, name, o
 Cohesion: 0.17
 Nodes (11): 1. Role mapping (as approved), 2. Requirement → DB enforcer (verified mapping), 3. Role × action matrix on a TRANSFERRED task (src→dst), 4. Decisions (RESOLVED and implemented), 5. UI implementation (DONE — analyzes clean), 6. Migration execution order (AWAITING your per-file confirmation), 7. Verification evidence (this session), 8. Assumptions (distinct from verified) (+3 more)
 
+### Community 132 - "package:flutter/material.dart"
+Cohesion: 0.12
+Nodes (6): build, DepartmentGateScreen, build, _chip, TeamFilterChip, main
+
 ### Community 135 - "with"
 Cohesion: 0.09
 Nodes (20): name, runs-on, steps, jobs, build-ios, name, on, workflow_dispatch (+12 more)
@@ -877,7 +881,7 @@ Nodes (11): background_color, description, display, gcm_sender_id, icons, name, 
 
 ### Community 181 - "State"
 Cohesion: 0.10
-Nodes (30): _ColumnOptionsSheet, _ColumnOptionsSheetState, NotionTable, _NotionTableState, _AddEventSheet, _AddEventSheetState, CalendarScreen, _CalendarScreenState (+22 more)
+Nodes (28): _ColumnOptionsSheet, _ColumnOptionsSheetState, NotionTable, _NotionTableState, _AddEventSheet, _AddEventSheetState, CalendarScreen, _CalendarScreenState (+20 more)
 
 ### Community 182 - "Section Definitions"
 Cohesion: 0.20
@@ -935,25 +939,29 @@ Nodes (8): addRow, _client, deleteRow, _editable, fetchAll, SalesSheetRepository
 Cohesion: 0.70
 Nodes (4): public.sales_sheet_entries, public.tg_sales_sheet_touch(), sales_sheet_entries_sort_idx, trg_sales_sheet_touch
 
+### Community 250 - "build"
+Cohesion: 0.50
+Nodes (3): build, _openClient, build
+
 ## Knowledge Gaps
-- **2369 isolated node(s):** `TaskStatusOption`, `id`, `columnId`, `label`, `color` (+2364 more)
+- **2369 isolated node(s):** `_tasks`, `_loadTok`, `_loading`, `_error`, `_filter` (+2364 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2973 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **92 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **90 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `AuthNotifier` connect `AuthNotifier` to `Calendar & Attendees`, `Task Board & Filters`, `Task Detail & Assignment`, `Clients Directory`, `User Management`, `Create User Flow`, `Super Admin Report PDF`, `Dashboard`, `notifications_screen.dart`, `Penalties Management`, `Router & Routes`, `Department Revenue Sheet`, `Workspace Scope`, `WorkspaceScopeNotifier`, `Auth Session Notifier`, `advanced_analytics_screen.dart`, `task table screen`, `main`, `login screen`, `settings screen`, `roles editor screen`, `user privileges screen`, `archive completed tasks dialog`, `team screen`, `team management screen`, `State`, `_TaskBoardScreenState`, `_ClientsScreenState`, `team privileges notifier`, `signup screen`, `splash_screen.dart`, `_CreateTaskSheetState`, `archived_tasks_screen.dart`, `core/auth/auth_notifier.dart`, `sales_sheet_screen.dart`, `_AdminDashboardScreenState`, `_EditEmployeeSheetState`, `_UserCardState`, `build`?**
-  _High betweenness centrality (0.052) - this node is a cross-community bridge._
-- **What connects `TaskStatusOption`, `id`, `columnId` to the rest of the system?**
+- **Why does `AuthNotifier` connect `AuthNotifier` to `Calendar & Attendees`, `Task Board & Filters`, `Task Detail & Assignment`, `package:flutter/material.dart`, `Clients Directory`, `User Management`, `Create User Flow`, `Super Admin Report PDF`, `Dashboard`, `notifications_screen.dart`, `Penalties Management`, `Router & Routes`, `Department Revenue Sheet`, `Workspace Scope`, `WorkspaceScopeNotifier`, `Auth Session Notifier`, `advanced_analytics_screen.dart`, `task table screen`, `main`, `login screen`, `settings screen`, `roles editor screen`, `user privileges screen`, `archive completed tasks dialog`, `team screen`, `team management screen`, `State`, `_TaskBoardScreenState`, `_ClientsScreenState`, `team privileges notifier`, `signup screen`, `splash_screen.dart`, `_CreateTaskSheetState`, `archived_tasks_screen.dart`, `core/auth/auth_notifier.dart`, `sales_sheet_screen.dart`, `_EditEmployeeSheetState`, `_UserCardState`, `build`?**
+  _High betweenness centrality (0.035) - this node is a cross-community bridge._
+- **What connects `_tasks`, `_loadTok`, `_loading` to the rest of the system?**
   _2369 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Calendar & Attendees` be split into smaller, more focused modules?**
   _Cohesion score 0.015151515151515152 - nodes in this community are weakly interconnected._
-- **Why does `ProfileModel` connect `notification trigger service` to `Auth Session Notifier`, `task permissions`, `Calendar & Attendees`, `Task Board & Filters`, `User Management`, `roles editor screen`, `user privileges screen`, `Create User Flow`, `Dashboard`, `profile model`, `Workspace Scope`, `Team Members`?**
-  _High betweenness centrality (0.016) - this node is a cross-community bridge._
+- **Why does `Win32Window` connect `win32_window.cpp` to `win32_window.cpp`, `utils.cpp`, `FlutterWindow`, `Size`?**
+  _High betweenness centrality (0.010) - this node is a cross-community bridge._
 - **Should `Super Admin Reports` be split into smaller, more focused modules?**
   _Cohesion score 0.015748031496062992 - nodes in this community are weakly interconnected._
-- **Why does `Win32Window` connect `win32_window.cpp` to `win32_window.cpp`, `utils.cpp`, `FlutterWindow`, `Size`?**
-  _High betweenness centrality (0.012) - this node is a cross-community bridge._
+- **Why does `WorkspaceScopeNotifier` connect `WorkspaceScopeNotifier` to `Calendar & Attendees`, `monthly_revenue_screen.dart`, `Task Board & Filters`, `Task Detail & Assignment`, `advanced_analytics_screen.dart`, `task table screen`, `Clients Directory`, `settings screen`, `_CreateTaskSheetState`, `department workspace screen`, `team screen`, `Dashboard`, `State`, `Department Revenue Sheet`, `_ClientsScreenState`, `Workspace Scope`, `build`, `_TaskBoardScreenState`?**
+  _High betweenness centrality (0.006) - this node is a cross-community bridge._
 - **Should `Task Board & Filters` be split into smaller, more focused modules?**
   _Cohesion score 0.01639344262295082 - nodes in this community are weakly interconnected._
