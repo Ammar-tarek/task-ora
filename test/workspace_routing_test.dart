@@ -150,7 +150,6 @@ void main() {
         '/tasks',
         '/tasks/table',
         '/finance',
-        '/settings',
         '/workspaces',
         '/analytics',
         '/expenses',
@@ -164,6 +163,17 @@ void main() {
           reason: loc,
         );
       }
+    });
+
+    test('restricted + /settings → null (profile + sign out reachable)', () {
+      expect(
+        WorkspaceRouting.productionRedirect('/settings', calendarOnly: true),
+        isNull,
+      );
+      expect(
+        WorkspaceRouting.productionRedirect('/settings/x', calendarOnly: true),
+        isNull,
+      );
     });
   });
 

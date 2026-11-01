@@ -71,6 +71,11 @@ class WorkspaceRouting {
         location.startsWith('${AppRoutes.calendar}/')) {
       return null;
     }
+    // Settings stays reachable so a Production manager/employee can see their
+    // profile and sign out (Settings also has no other-department data).
+    if (location == '/settings' || location.startsWith('/settings/')) {
+      return null;
+    }
     if (allowWorkspaces && location == AppRoutes.workspaces) return null;
     return AppRoutes.calendar;
   }

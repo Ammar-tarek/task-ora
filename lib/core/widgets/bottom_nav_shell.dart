@@ -167,11 +167,11 @@ class _BottomNavShellState extends State<BottomNavShell> {
     final List<int> branchIndices;
 
     if (calendarOnly) {
-      // Production (scoped user, or admin viewing Production): Calendar only
-      // (branch index 2). The router also hard-blocks every other route, so
-      // this is the only reachable branch; an admin keeps the header bar above
-      // to switch back to another department.
-      branchIndices = [2];
+      // Production (scoped user, or admin viewing Production): Calendar +
+      // Settings (branch 2 + 4). The router hard-blocks every OTHER route;
+      // Settings stays reachable so the user can see their profile and sign
+      // out. An admin also keeps the header bar above to switch departments.
+      branchIndices = [2, 4];
     } else if (isEmployee) {
       branchIndices = List.of(_employeeBranchIndices);
     } else if (isManager) {
