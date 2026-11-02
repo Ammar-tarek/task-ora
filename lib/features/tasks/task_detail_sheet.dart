@@ -484,23 +484,21 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     }
   }
 
-  /// Employee-permitted save: only the deadline.
-  Future<void> _saveDeadline() async {
-    setState(() => _saving = true);
+  /// Assignee pulls a submitted task back OUT of review → In Progress, so they
+  /// can keep working before a manager reviews it.
+  Future<void> _withdrawReview() async {
+    setState(() => _reviewing = true);
     try {
-      final err = await TaskRepository.updateDeadline(
-        widget.taskId,
-        _dueDate?.toIso8601String().split('T').first,
-      );
+      final err = await TaskRepository.withdrawFromReview(widget.taskId);
       if (err != null) {
         _showSnack(err, isError: true);
         return;
       }
-      _showSnack('Deadline saved');
+      _showSnack('Withdrawn from review');
       widget.onUpdated?.call();
       if (mounted) Navigator.pop(context);
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) setState(() => _reviewing = false);
     }
   }
 
@@ -1821,12 +1819,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         ),
         const SizedBox(height: 18),
 
-        // Deadline — the ONLY task field an employee may edit (backend-guarded).
+        // Deadline — read-only for employees (set by management).
         _SectionLabel('DEADLINE'),
-        const SizedBox(height: 8),
-        _DatePickerRow(
-          date: _dueDate,
-          onPick: (d) => setState(() => _dueDate = d),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(_task?.dueDateDisplay ?? '—', style: AppTextStyles.bodyMd),
         ),
         const SizedBox(height: 8),
         const Divider(),
@@ -2122,24 +2120,33 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                 ),
                 const SizedBox(height: 10),
               ],
-            ],
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: busy ? null : () => Navigator.pop(context),
-                    child: const Text('Close'),
+              // Withdraw (retreat) a submitted task back to In Progress — the
+              // assignee may pull it out of review before a manager reviews it.
+              if (s == 'employee_done') ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : _withdrawReview,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.statusInProgress,
+                      side: const BorderSide(color: AppColors.statusInProgress),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: _reviewing
+                        ? _Spinner(color: AppColors.statusInProgress)
+                        : const Icon(Icons.undo, size: 18),
+                    label: const Text('Withdraw from Review'),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: busy ? null : _saveDeadline,
-                    child: _saving ? _Spinner() : const Text('Save Deadline'),
-                  ),
-                ),
+                const SizedBox(height: 10),
               ],
+            ],
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: busy ? null : () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
             ),
           ],
         ),
@@ -2187,6 +2194,25 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          // After approval: a manager/admin can REOPEN a completed task by
+          // requesting changes again (reason required). Needs the relaxed
+          // review_task RPC (PROPOSED_review_changes_after_approve.sql).
+          if (_task != null && _task!.status == 'completed') ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : _requestChanges,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                icon: const Icon(Icons.undo, size: 18),
+                label: const Text('Request Changes'),
+              ),
             ),
             const SizedBox(height: 12),
           ],

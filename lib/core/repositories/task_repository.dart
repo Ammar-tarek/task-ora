@@ -17,7 +17,7 @@ class TaskRepository {
 
   // ── Task select fragment (reused across methods) ────────────────────────────
   static const _taskSelect =
-      '*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, response, responded_at, response_reason, profile:profiles!task_assignees_profile_id_fkey(full_name))';
+      '*, client:client_profiles(company_name), task_assignees(profile_id, is_lead, response, responded_at, response_reason, assigned_by, profile:profiles!task_assignees_profile_id_fkey(full_name), assigner:profiles!task_assignees_assigned_by_fkey(full_name))';
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Role-aware fetch (primary entry point)
@@ -603,11 +603,14 @@ class TaskRepository {
     try {
       final assigneeRows = await _client
           .from('task_assignees')
-          .select('task_id')
+          .select('task_id, response')
           .eq('profile_id', profile.id);
 
+      // Hide tasks the employee REJECTED (their row is kept, marked rejected,
+      // so managers see it — but the rejecting employee should not).
       final ids = (assigneeRows as List)
-          .map((r) => r['task_id'] as String)
+          .where((r) => (r as Map)['response'] != 'rejected')
+          .map((r) => (r as Map)['task_id'] as String)
           .toList();
       if (ids.isEmpty) return [];
 
@@ -1014,6 +1017,22 @@ class TaskRepository {
   /// Employee workflow action: move an accepted task to 'in_progress'.
   /// Returns null on success, else an error message.
   static Future<String?> startWork(String taskId) async {
+    try {
+      await _client
+          .from('tasks')
+          .update({'status': 'in_progress'})
+          .eq('id', taskId);
+      return null;
+    } on PostgrestException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Assignee retreats a submitted task back OUT of review → 'in_progress'.
+  /// RLS (tasks_employee_update) limits this to the assignee/creator.
+  static Future<String?> withdrawFromReview(String taskId) async {
     try {
       await _client
           .from('tasks')

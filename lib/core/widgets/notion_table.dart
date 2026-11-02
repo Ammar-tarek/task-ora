@@ -32,7 +32,11 @@ class NotionRow {
   final String id;
   final Map<String, Widget> cells;
 
-  const NotionRow({required this.id, required this.cells});
+  /// Optional row background tint (e.g. a rejected task that needs reassignment
+  /// is shown red). Null = normal zebra striping.
+  final Color? accentColor;
+
+  const NotionRow({required this.id, required this.cells, this.accentColor});
 }
 
 /// Notion-style database table widget.
@@ -373,9 +377,10 @@ class _NotionTableState extends State<NotionTable>
         decoration: BoxDecoration(
           color: isSelected
               ? AppColors.gold.withValues(alpha: 0.1)
-              : (index.isEven
-                  ? AppColors.surfaceContainerLowest
-                  : AppColors.background),
+              : (row.accentColor ??
+                  (index.isEven
+                      ? AppColors.surfaceContainerLowest
+                      : AppColors.background)),
           border: Border(
             bottom: BorderSide(color: AppColors.outlineVariant, width: 0.5),
           ),

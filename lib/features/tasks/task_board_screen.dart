@@ -362,6 +362,8 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
 
   List<NotionColumn> get _columns {
     final p = _perms;
+    // Employees see "Assigned By" (who assigned) instead of "Assignee".
+    final isEmployee = p?.profile.isEmployee ?? false;
     return [
       NotionColumn(
         key: 'title',
@@ -382,19 +384,36 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
           icon: Icons.flag_outlined,
           flex: 2,
         ),
-      if (p?.canSeeAssignees != false)
+      // Employees: Deadline first, then "Assigned By" (who assigned it to them).
+      // Managers/admins keep the normal Assignee then Due order.
+      if (isEmployee) ...[
         NotionColumn(
-          key: 'assignee',
-          label: S.t('assignee'),
-          icon: Icons.person_outline,
+          key: 'due',
+          label: 'Deadline',
+          icon: Icons.calendar_today_outlined,
           flex: 2,
         ),
-      NotionColumn(
-        key: 'due',
-        label: S.t('due'),
-        icon: Icons.calendar_today_outlined,
-        flex: 2,
-      ),
+        NotionColumn(
+          key: 'assigned_by',
+          label: 'Assigned By',
+          icon: Icons.person_pin_outlined,
+          flex: 2,
+        ),
+      ] else ...[
+        if (p?.canSeeAssignees != false)
+          NotionColumn(
+            key: 'assignee',
+            label: S.t('assignee'),
+            icon: Icons.person_outline,
+            flex: 2,
+          ),
+        NotionColumn(
+          key: 'due',
+          label: S.t('due'),
+          icon: Icons.calendar_today_outlined,
+          flex: 2,
+        ),
+      ],
       if (p?.canSeeProgress != false)
         NotionColumn(
           key: 'progress',
@@ -567,6 +586,13 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
             ],
           ),
         'due': Text(t.dueDateDisplay, style: dataStyle),
+        if (_perms?.profile.isEmployee == true)
+          'assigned_by': Text(
+            t.assignedByName,
+            style: bodyStyle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         if (_perms?.canSeeProgress != false)
           'progress': _ProgressCell(pct: t.completionPercentage),
         if (_perms?.canSeeCost == true)
@@ -580,7 +606,14 @@ class _TaskBoardScreenState extends State<TaskBoardScreen>
       for (final cc in _customColumns) {
         cells[cc.key] = Text('—', style: bodyStyle);
       }
-      return NotionRow(id: t.id, cells: cells);
+      // Rejected task awaiting reassignment → red for managers/admins.
+      final flagRed =
+          (_perms?.profile.isAdminOrManager ?? false) && t.needsReassignment;
+      return NotionRow(
+        id: t.id,
+        cells: cells,
+        accentColor: flagRed ? AppColors.error.withValues(alpha: 0.12) : null,
+      );
     }).toList();
   }
 
@@ -2681,13 +2714,21 @@ class _KanbanCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
+            // A rejected task awaiting reassignment is shown RED (managers/admins
+            // only see these; employees never have a rejected task in their list).
             color: isSelected
                 ? AppColors.gold.withValues(alpha: 0.12)
-                : AppColors.surfaceContainerLowest,
+                : (task.needsReassignment
+                    ? AppColors.error.withValues(alpha: 0.10)
+                    : AppColors.surfaceContainerLowest),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isSelected ? AppColors.gold : AppColors.outlineVariant,
-              width: isSelected ? 1.5 : 1.0,
+              color: isSelected
+                  ? AppColors.gold
+                  : (task.needsReassignment
+                      ? AppColors.error
+                      : AppColors.outlineVariant),
+              width: isSelected || task.needsReassignment ? 1.5 : 1.0,
             ),
             boxShadow: [
               BoxShadow(

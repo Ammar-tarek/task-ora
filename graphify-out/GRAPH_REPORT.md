@@ -1,7 +1,7 @@
 # Graph Report - task-ora  (2026-11-01)
 
 ## Corpus Check
-- 354 files · ~220,633 words
+- 354 files · ~220,671 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 62 file(s) not represented in the graph (top: (none) 11, .xml 10, .xcconfig 8)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a1f8fa37`
+- Built from commit: `3f12461d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -951,7 +951,7 @@ Cohesion: 0.50
 Nodes (3): CalendarEventScope, eventTypeForDepartment, isBookingDepartment
 
 ## Knowledge Gaps
-- **2369 isolated node(s):** `_addRoom`, `assigneeInitials`, `attendeeIds`, `attendeeNames`, `build` (+2364 more)
+- **2369 isolated node(s):** `_CommentLinkMatch`, `taskId`, `onUpdated`, `onMoveDepartment`, `_task` (+2364 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2975 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **92 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -959,16 +959,16 @@ Nodes (3): CalendarEventScope, eventTypeForDepartment, isBookingDepartment
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `AuthNotifier` connect `AuthNotifier` to `Calendar & Attendees`, `Task Board & Filters`, `Task Detail & Assignment`, `package:flutter/material.dart`, `_TaskDetailSheetState`, `Clients Directory`, `User Management`, `Create User Flow`, `Super Admin Report PDF`, `Dashboard`, `notifications_screen.dart`, `Penalties Management`, `Router & Routes`, `Department Revenue Sheet`, `Workspace Scope`, `WorkspaceScopeNotifier`, `Auth Session Notifier`, `advanced_analytics_screen.dart`, `task table screen`, `main`, `login screen`, `settings screen`, `roles editor screen`, `user privileges screen`, `archive completed tasks dialog`, `team screen`, `team management screen`, `State`, `_TaskBoardScreenState`, `_ClientsScreenState`, `team privileges notifier`, `signup screen`, `splash_screen.dart`, `_CreateTaskSheetState`, `archived_tasks_screen.dart`, `core/auth/auth_notifier.dart`, `sales_sheet_screen.dart`, `forgot_password_screen.dart`, `_EditEmployeeSheetState`, `_UserCardState`?**
-  _High betweenness centrality (0.046) - this node is a cross-community bridge._
-- **What connects `_addRoom`, `assigneeInitials`, `attendeeIds` to the rest of the system?**
+  _High betweenness centrality (0.037) - this node is a cross-community bridge._
+- **What connects `_CommentLinkMatch`, `taskId`, `onUpdated` to the rest of the system?**
   _2369 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Calendar & Attendees` be split into smaller, more focused modules?**
   _Cohesion score 0.015151515151515152 - nodes in this community are weakly interconnected._
-- **Why does `Win32Window` connect `win32_window.cpp` to `win32_window.cpp`, `utils.cpp`, `FlutterWindow`, `Size`?**
-  _High betweenness centrality (0.014) - this node is a cross-community bridge._
+- **Why does `ProfileModel` connect `notification trigger service` to `Auth Session Notifier`, `task permissions`, `Calendar & Attendees`, `Task Board & Filters`, `User Management`, `roles editor screen`, `user privileges screen`, `Create User Flow`, `Dashboard`, `profile model`, `Workspace Scope`, `Team Members`?**
+  _High betweenness centrality (0.016) - this node is a cross-community bridge._
 - **Should `Super Admin Reports` be split into smaller, more focused modules?**
   _Cohesion score 0.015748031496062992 - nodes in this community are weakly interconnected._
 - **Why does `WorkspaceScopeNotifier` connect `WorkspaceScopeNotifier` to `Calendar & Attendees`, `build`, `Task Board & Filters`, `Task Detail & Assignment`, `package:flutter/material.dart`, `_TaskDetailSheetState`, `Clients Directory`, `Dashboard`, `Department Revenue Sheet`, `Workspace Scope`, `task table screen`, `settings screen`, `team screen`, `State`, `_TaskBoardScreenState`, `_ClientsScreenState`, `department workspace screen`, `_CreateTaskSheetState`, `monthly_revenue_screen.dart`, `build`?**
-  _High betweenness centrality (0.012) - this node is a cross-community bridge._
+  _High betweenness centrality (0.011) - this node is a cross-community bridge._
 - **Should `Task Board & Filters` be split into smaller, more focused modules?**
   _Cohesion score 0.01639344262295082 - nodes in this community are weakly interconnected._

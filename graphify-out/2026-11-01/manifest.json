@@ -2519,6 +2519,18 @@
     "ast_hash": "56ed40aa5a0f09245c2787c226f4b384",
     "semantic_hash": ""
   },
+  "PROPOSED_handoff_assignee_response_fix.sql": {
+    "mtime": 1793544108.3681743,
+    "seen": 1793544773.3552063,
+    "ast_hash": "4681539c8926217d9ee4963d42e3b8e1",
+    "semantic_hash": ""
+  },
+  "PROPOSED_handoff_status_reset_and_history.sql": {
+    "mtime": 1793544682.8412066,
+    "seen": 1793544773.3552115,
+    "ast_hash": "24db88963489152895dbe4f006647251",
+    "semantic_hash": ""
+  },
   "package-lock.json": {
     "mtime": 1792249364.9459097,
     "seen": 1793473657.0100074,

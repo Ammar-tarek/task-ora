@@ -53,7 +53,8 @@ class TaskPermissions {
 
   // ── Actions ─────────────────────────────────────────────────────────────────
 
-  bool get canCreateTask => !profile.isClient;
+  /// Only admins and managers may create tasks (employees cannot).
+  bool get canCreateTask => profile.isAdminOrManager;
   bool get canDeleteTask => profile.isAdminOrManager;
 
   /// Employees can drag tasks to reorder their personal work queue.

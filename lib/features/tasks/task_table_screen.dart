@@ -148,6 +148,8 @@ class _TaskTableScreenState extends State<TaskTableScreen>
     // Marketing workspace hides Priority / Progress / Cost columns (team request).
     final isMarketing =
         _scope?.effectiveDepartment == Department.marketing;
+    // Employees see "Assigned By" (who assigned) instead of "Assignee".
+    final isEmployee = p?.profile.isEmployee ?? false;
     final cols = <NotionColumn>[
       NotionColumn(
         key: 'title',
@@ -168,19 +170,36 @@ class _TaskTableScreenState extends State<TaskTableScreen>
           icon: Icons.flag_outlined,
           flex: 2,
         ),
-      if (p?.canSeeAssignees != false)
+      // Employees: Deadline first, then "Assigned By" (who assigned it to them).
+      // Managers/admins keep the normal Assignee then Due order.
+      if (isEmployee) ...[
         NotionColumn(
-          key: 'assignee',
-          label: 'Assignee',
-          icon: Icons.person_outline,
+          key: 'due',
+          label: 'Deadline',
+          icon: Icons.calendar_today_outlined,
           flex: 2,
         ),
-      NotionColumn(
-        key: 'due',
-        label: 'Due',
-        icon: Icons.calendar_today_outlined,
-        flex: 2,
-      ),
+        NotionColumn(
+          key: 'assigned_by',
+          label: 'Assigned By',
+          icon: Icons.person_pin_outlined,
+          flex: 2,
+        ),
+      ] else ...[
+        if (p?.canSeeAssignees != false)
+          NotionColumn(
+            key: 'assignee',
+            label: 'Assignee',
+            icon: Icons.person_outline,
+            flex: 2,
+          ),
+        NotionColumn(
+          key: 'due',
+          label: 'Due',
+          icon: Icons.calendar_today_outlined,
+          flex: 2,
+        ),
+      ],
       if (!isMarketing && p?.canSeeProgress != false)
         NotionColumn(
           key: 'progress',
@@ -312,6 +331,13 @@ class _TaskTableScreenState extends State<TaskTableScreen>
             ],
           ),
         'due': Text(t.dueDateDisplay, style: dataStyle),
+        if (_perms?.profile.isEmployee == true)
+          'assigned_by': Text(
+            t.assignedByName,
+            style: bodyStyle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         if (_perms?.canSeeProgress != false)
           'progress': Row(
             mainAxisSize: MainAxisSize.min,
@@ -349,7 +375,14 @@ class _TaskTableScreenState extends State<TaskTableScreen>
             overflow: TextOverflow.ellipsis,
           ),
       };
-      return NotionRow(id: t.id, cells: cells);
+      // A rejected task awaiting reassignment is shown RED to managers/admins.
+      final flagRed =
+          (_perms?.profile.isAdminOrManager ?? false) && t.needsReassignment;
+      return NotionRow(
+        id: t.id,
+        cells: cells,
+        accentColor: flagRed ? AppColors.error.withValues(alpha: 0.12) : null,
+      );
     }).toList();
   }
 

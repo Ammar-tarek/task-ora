@@ -792,21 +792,21 @@
     "semantic_hash": "5c88a172d5e50d651e473e42286da5f1"
   },
   "lib/features/tasks/task_detail_sheet.dart": {
-    "mtime": 1793540092.254336,
-    "seen": 1793541532.8688183,
-    "ast_hash": "5a9e0de7659b351a52dd895bc5ae2fa3",
+    "mtime": 1793546089.3597908,
+    "seen": 1793547107.0878136,
+    "ast_hash": "b67d0e6826b383f2e4d59f18d6b105e5",
     "semantic_hash": ""
   },
   "lib/features/tasks/task_month_visibility.dart": {
-    "mtime": 1793539597.2176702,
-    "seen": 1793541532.8688204,
-    "ast_hash": "b254f02ba88689d55ee118052404fd3b",
+    "mtime": 1793546778.0147288,
+    "seen": 1793547107.0878167,
+    "ast_hash": "13148d3aa303d1dab64b0fa1e3b59ffd",
     "semantic_hash": ""
   },
   "lib/features/tasks/task_table_screen.dart": {
-    "mtime": 1793542345.5064952,
-    "seen": 1793542449.829858,
-    "ast_hash": "af6e7771580255fc9fd4dbdb25fcfbd9",
+    "mtime": 1793546061.5181422,
+    "seen": 1793547107.087819,
+    "ast_hash": "8f7abd6f6873105e57ab25d479c4520a",
     "semantic_hash": ""
   },
   "lib/features/team/deactivation_policy.dart": {
@@ -1128,9 +1128,9 @@
     "semantic_hash": "59c3b2a98ee764032a8b47927dc13d7a"
   },
   "test/task_month_visibility_test.dart": {
-    "mtime": 1793539606.264485,
-    "seen": 1793541532.8689818,
-    "ast_hash": "5765ce9fa6ea37e3e3cd1289a5742cff",
+    "mtime": 1793546778.1146579,
+    "seen": 1793547107.0879798,
+    "ast_hash": "e772deb049d1281031ca9b546dadbcda",
     "semantic_hash": ""
   },
   "test/tavatar_test.dart": {

@@ -209,8 +209,25 @@ class TaskModel {
     return DateTime(local.year, local.month);
   }
 
-  String get leadAssigneeName =>
-      assignees.isEmpty ? '—' : assignees.first.fullName;
+  /// Display name of the current assignee, IGNORING rejected rows (a rejected
+  /// assignee is kept in the data only to flag the task red). So a task whose
+  /// only assignee rejected it reads as unassigned ('—').
+  String get leadAssigneeName {
+    final active = assignees.where((a) => a.response != 'rejected');
+    return active.isEmpty ? '—' : active.first.fullName;
+  }
+
+  /// Who assigned this task to the viewer. Employees see only their own
+  /// assignee row, so first() is theirs. '—' when unknown.
+  String get assignedByName =>
+      assignees.isEmpty ? '—' : (assignees.first.assignerName ?? '—');
+
+  /// A task an employee REJECTED that is now awaiting reassignment: it has a
+  /// rejected assignee and no active (pending/accepted/legacy) one. Shown RED
+  /// to managers/admins until it is reassigned to someone else.
+  bool get needsReassignment =>
+      assignees.any((a) => a.response == 'rejected') &&
+      !assignees.any((a) => a.response != 'rejected');
 
   /// This profile's assignment row, or null if they are not an assignee.
   TaskAssignee? assigneeFor(String profileId) {
@@ -282,6 +299,9 @@ class TaskAssignee {
   final String? respondedAt;
   final String? responseReason;
 
+  /// Name of whoever assigned this row (task_assignees.assigned_by → profile).
+  final String? assignerName;
+
   const TaskAssignee({
     required this.profileId,
     required this.fullName,
@@ -289,6 +309,7 @@ class TaskAssignee {
     this.response,
     this.respondedAt,
     this.responseReason,
+    this.assignerName,
   });
 
   /// True when this assignee has not yet accepted/rejected (and is not legacy).
@@ -297,6 +318,7 @@ class TaskAssignee {
 
   factory TaskAssignee.fromMap(Map<String, dynamic> m) {
     final profile = m['profile'] as Map<String, dynamic>?;
+    final assigner = m['assigner'] as Map<String, dynamic>?;
     return TaskAssignee(
       profileId: m['profile_id'] as String? ?? '',
       fullName: profile?['full_name'] as String? ?? 'Unknown',
@@ -304,6 +326,7 @@ class TaskAssignee {
       response: m['response'] as String?,
       respondedAt: m['responded_at'] as String?,
       responseReason: m['response_reason'] as String?,
+      assignerName: assigner?['full_name'] as String?,
     );
   }
 }
