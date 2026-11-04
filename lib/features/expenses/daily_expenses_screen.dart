@@ -35,7 +35,13 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
     _year = now.year;
     _month = now.month;
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
-    RealtimeService.instance.listen(const ['company_ledger'], _onRealtime);
+    // Balance = collected department revenue − company expenses. Deposits come
+    // from crm_payments (one per installment); crm_entries carries status, so
+    // refresh on any of the three changing.
+    RealtimeService.instance.listen(
+      const ['company_ledger', 'crm_payments', 'crm_entries'],
+      _onRealtime,
+    );
   }
 
   void _onRealtime() {
@@ -254,32 +260,20 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
   }
 
   Widget _buildActions() {
-    return Row(
-      children: [
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: _showAddFunds,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.statusDone,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            icon: const Icon(Icons.add_card, size: 18, color: Colors.white),
-            label: const Text('Add Funds', style: TextStyle(color: Colors.white)),
-          ),
+    // Deposits come from collected department revenue (recorded in the
+    // department revenue sheets), so there is no manual "Add Funds" here —
+    // only company expenses are entered on this page.
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _showRecordExpense,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          padding: const EdgeInsets.symmetric(vertical: 12),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: _showRecordExpense,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            icon: const Icon(Icons.remove_circle_outline, size: 18, color: AppColors.gold),
-            label: const Text('Record Expense', style: TextStyle(color: AppColors.gold)),
-          ),
-        ),
-      ],
+        icon: const Icon(Icons.remove_circle_outline, size: 18, color: AppColors.gold),
+        label: const Text('Record Expense', style: TextStyle(color: AppColors.gold)),
+      ),
     );
   }
 
@@ -321,6 +315,8 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
                 DataColumn(label: Text('Date')),
                 DataColumn(label: Text('Type')),
                 DataColumn(label: Text('Description')),
+                DataColumn(label: Text('Department')),
+                DataColumn(label: Text('Recorded By')),
                 DataColumn(label: Text('Amount'), numeric: true),
                 DataColumn(label: Text('Balance'), numeric: true),
               ],
@@ -328,7 +324,22 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
                 final sign = e.isDeposit ? '+' : '−';
                 final color = e.isDeposit ? AppColors.statusDone : AppColors.statusHigh;
                 return DataRow(cells: [
-                  DataCell(Text(e.date, style: AppTextStyles.bodySm)),
+                  DataCell(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(e.date, style: AppTextStyles.bodySm),
+                        if (e.timeLabel.isNotEmpty)
+                          Text(
+                            e.timeLabel,
+                            style: AppTextStyles.dataSm.copyWith(
+                              color: AppColors.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                   DataCell(_TypePill(isDeposit: e.isDeposit)),
                   DataCell(
                     ConstrainedBox(
@@ -340,6 +351,14 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
                       ),
                     ),
                   ),
+                  DataCell(Text(
+                    (e.department?.trim().isNotEmpty ?? false) ? e.department! : '—',
+                    style: AppTextStyles.bodySm,
+                  )),
+                  DataCell(Text(
+                    (e.recordedBy?.trim().isNotEmpty ?? false) ? e.recordedBy! : '—',
+                    style: AppTextStyles.bodySm,
+                  )),
                   DataCell(Text(
                     '$sign${e.amount.toStringAsFixed(2)}',
                     style: AppTextStyles.dataSm.copyWith(color: color),
@@ -359,8 +378,7 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
 
   // ── Dialogs ────────────────────────────────────────────────────────────────
 
-  Future<void> _showAddFunds() => _showTxnDialog(isDeposit: true);
-  Future<void> _showRecordExpense() => _showTxnDialog(isDeposit: false);
+  Future<void> _showRecordExpense() => _showTxnDialog();
 
   /// Reset the available company balance to zero. Records a single balancing
   /// "Balance reset" expense (ledger history is kept). Admin-only + confirmed.
@@ -412,12 +430,11 @@ class _DailyExpensesScreenState extends State<DailyExpensesScreen> {
     _load();
   }
 
-  Future<void> _showTxnDialog({required bool isDeposit}) async {
+  Future<void> _showTxnDialog() async {
     final token = CompanyLedgerRepository.newToken(); // one per attempt
     final saved = await showDialog<bool>(
       context: context,
       builder: (_) => _TxnDialog(
-        isDeposit: isDeposit,
         clientToken: token,
         currentBalance: _balance,
       ),
@@ -497,11 +514,9 @@ class _AdminOnlyNotice extends StatelessWidget {
 
 class _TxnDialog extends StatefulWidget {
   const _TxnDialog({
-    required this.isDeposit,
     required this.clientToken,
     required this.currentBalance,
   });
-  final bool isDeposit;
   final String clientToken;
   final double currentBalance;
 
@@ -533,19 +548,12 @@ class _TxnDialogState extends State<_TxnDialog> {
     final amount = double.parse(_amountCtrl.text.trim());
     final date = _date.toIso8601String().substring(0, 10);
     final desc = _descCtrl.text.trim();
-    final err = widget.isDeposit
-        ? await CompanyLedgerRepository.addFunds(
-            amount: amount,
-            date: date,
-            description: desc.isEmpty ? null : desc,
-            clientToken: widget.clientToken,
-          )
-        : await CompanyLedgerRepository.recordExpense(
-            amount: amount,
-            date: date,
-            description: desc,
-            clientToken: widget.clientToken,
-          );
+    final err = await CompanyLedgerRepository.recordExpense(
+      amount: amount,
+      date: date,
+      description: desc,
+      clientToken: widget.clientToken,
+    );
     if (!mounted) return;
     if (err != null) {
       setState(() {
@@ -559,10 +567,9 @@ class _TxnDialogState extends State<_TxnDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final deposit = widget.isDeposit;
     return AlertDialog(
       backgroundColor: AppColors.surfaceContainerLowest,
-      title: Text(deposit ? 'Add Funds' : 'Record Expense'),
+      title: const Text('Record Expense'),
       content: SizedBox(
         width: 400,
         child: Form(
@@ -571,18 +578,16 @@ class _TxnDialogState extends State<_TxnDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (!deposit) ...[
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Available: ${widget.currentBalance.toStringAsFixed(2)} EGP',
-                      style: AppTextStyles.bodySm.copyWith(
-                        color: AppColors.onSurfaceVariant,
-                      ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Available: ${widget.currentBalance.toStringAsFixed(2)} EGP',
+                    style: AppTextStyles.bodySm.copyWith(
+                      color: AppColors.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                ],
+                ),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _amountCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -594,7 +599,7 @@ class _TxnDialogState extends State<_TxnDialog> {
                     final n = double.tryParse((v ?? '').trim());
                     if (n == null) return 'Enter a valid number';
                     if (n <= 0) return 'Amount must be greater than zero';
-                    if (!deposit && n > widget.currentBalance) {
+                    if (n > widget.currentBalance) {
                       return 'Exceeds available balance';
                     }
                     return null;
@@ -604,11 +609,11 @@ class _TxnDialogState extends State<_TxnDialog> {
                 TextFormField(
                   controller: _descCtrl,
                   maxLines: 2,
-                  decoration: InputDecoration(
-                    labelText: deposit ? 'Description (optional)' : 'Description',
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
                   ),
                   validator: (v) {
-                    if (!deposit && (v == null || v.trim().isEmpty)) {
+                    if (v == null || v.trim().isEmpty) {
                       return 'Required';
                     }
                     return null;
@@ -660,7 +665,7 @@ class _TxnDialogState extends State<_TxnDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
-              : Text(deposit ? 'Add Funds' : 'Record Expense'),
+              : const Text('Record Expense'),
         ),
       ],
     );

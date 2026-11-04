@@ -1,5 +1,6 @@
 // lib/features/settings/settings_screen.dart
 
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -676,15 +677,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // About & Updates
             _SectionTitle(title: S.t('about_updates')),
-            _SettingsTile(
-              icon: Icons.system_update_outlined,
-              title: S.t('check_updates'),
-              subtitle: 'v1.6.2+8',
-              onTap: () => ApkUpdateService.checkForUpdates(
-                context,
-                isManual: true,
+            // In-app update check is Android-only (sideload APK). On iOS the
+            // App Store handles updates, so the tile is hidden.
+            if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+              _SettingsTile(
+                icon: Icons.system_update_outlined,
+                title: S.t('check_updates'),
+                subtitle: 'v1.6.2+8',
+                onTap: () => ApkUpdateService.checkForUpdates(
+                  context,
+                  isManual: true,
+                ),
               ),
-            ),
             _SettingsTile(
               icon: Icons.privacy_tip_outlined,
               title: S.t('privacy_policy'),

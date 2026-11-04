@@ -749,7 +749,7 @@ class TaskRepository {
           .from('tasks')
           .select('''
             *,
-            task_assignees(profile_id, is_lead, response, responded_at, response_reason, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url)),
+            task_assignees(profile_id, is_lead, response, responded_at, response_reason, submitted_at, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url)),
             task_comments(id, content, is_internal, created_at, author:profiles(full_name)),
             task_attachments(id, file_name, file_url, file_type, is_client_visible),
             task_approvals(id, employee_done_at, client_decision, client_reviewed_at, review_decision, review_reason, reviewed_at, reviewer_id)
@@ -765,7 +765,7 @@ class TaskRepository {
           .from('tasks')
           .select('''
             *,
-            task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url)),
+            task_assignees(profile_id, is_lead, response, submitted_at, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url)),
             task_comments(id, content, is_internal, created_at, author:profiles(full_name))
           ''')
           .eq('id', taskId)
@@ -778,7 +778,7 @@ class TaskRepository {
       final data = await _client
           .from('tasks')
           .select(
-            '*, task_assignees(profile_id, is_lead, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url))',
+            '*, task_assignees(profile_id, is_lead, response, submitted_at, profile:profiles!task_assignees_profile_id_fkey(full_name, avatar_url))',
           )
           .eq('id', taskId)
           .single();
@@ -969,6 +969,20 @@ class TaskRepository {
   static Future<String?> submitForReview(String taskId) async {
     try {
       await _client.rpc('submit_task_for_review', params: {'p_task_id': taskId});
+      return null;
+    } on PostgrestException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Assignee pulls THEIR OWN submission back out before the task reaches review
+  /// (used while teammates have not submitted yet). Returns null on success.
+  static Future<String?> unsubmitForReview(String taskId) async {
+    try {
+      await _client
+          .rpc('unsubmit_task_for_review', params: {'p_task_id': taskId});
       return null;
     } on PostgrestException catch (e) {
       return e.message;

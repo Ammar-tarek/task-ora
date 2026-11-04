@@ -185,7 +185,7 @@ class TaskModel {
         'Nov',
         'Dec',
       ];
-      return '${months[dt.month - 1]} ${dt.day}';
+      return '${months[dt.month - 1]} ${dt.day}, ${AppTime.hm(dt)}';
     } catch (_) {
       return dueDate!;
     }
@@ -202,10 +202,9 @@ class TaskModel {
         : createdAt;
     final parsed = DateTime.tryParse(raw);
     if (parsed == null) return null;
-    // due_date is a plain calendar date (no timezone); created_at is a UTC
-    // timestamp that must be shifted to Egypt time to match displayed dates.
-    final usedDue = dueDate != null && dueDate!.trim().isNotEmpty;
-    final local = usedDue ? parsed : AppTime.cairo(parsed);
+    // Both due_date and created_at are UTC instants; shift to Egypt time so the
+    // month bucket matches the date the user sees.
+    final local = AppTime.cairo(parsed);
     return DateTime(local.year, local.month);
   }
 
@@ -299,6 +298,11 @@ class TaskAssignee {
   final String? respondedAt;
   final String? responseReason;
 
+  /// When this assignee submitted THEIR part for review (task_assignees
+  /// .submitted_at). Null = not yet submitted. The task only reaches review
+  /// once every active assignee has this set.
+  final String? submittedAt;
+
   /// Name of whoever assigned this row (task_assignees.assigned_by → profile).
   final String? assignerName;
 
@@ -309,12 +313,16 @@ class TaskAssignee {
     this.response,
     this.respondedAt,
     this.responseReason,
+    this.submittedAt,
     this.assignerName,
   });
 
   /// True when this assignee has not yet accepted/rejected (and is not legacy).
   bool get isPendingResponse => response == 'pending';
   bool get hasRejectedAssignment => response == 'rejected';
+
+  /// True when this assignee already submitted their part for review.
+  bool get hasSubmitted => submittedAt != null;
 
   factory TaskAssignee.fromMap(Map<String, dynamic> m) {
     final profile = m['profile'] as Map<String, dynamic>?;
@@ -326,6 +334,7 @@ class TaskAssignee {
       response: m['response'] as String?,
       respondedAt: m['responded_at'] as String?,
       responseReason: m['response_reason'] as String?,
+      submittedAt: m['submitted_at'] as String?,
       assignerName: assigner?['full_name'] as String?,
     );
   }

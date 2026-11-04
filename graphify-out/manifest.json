@@ -246,10 +246,10 @@
     "semantic_hash": "966597244d1a185ab8dacd40990a869c"
   },
   "lib/core/models/task_model.dart": {
-    "mtime": 1793111197.0887818,
-    "seen": 1793460547.6008713,
-    "ast_hash": "9fc3b8a1ed88e527e0b01067f14f61bd",
-    "semantic_hash": "9fc3b8a1ed88e527e0b01067f14f61bd"
+    "mtime": 1793648626.5072222,
+    "seen": 1793649671.9138284,
+    "ast_hash": "149daeb59c3277cceb9f1dbd41c7cc7b",
+    "semantic_hash": ""
   },
   "lib/core/models/task_status_option.dart": {
     "mtime": 1793535477.376644,
@@ -378,9 +378,9 @@
     "semantic_hash": "8ef43219a9d6875197c95188a9ba47ac"
   },
   "lib/core/repositories/task_repository.dart": {
-    "mtime": 1793526843.9339738,
-    "seen": 1793527024.0651867,
-    "ast_hash": "047df3f8dbabc978a6f966dcdaabb4fa",
+    "mtime": 1793644824.702043,
+    "seen": 1793649671.9139338,
+    "ast_hash": "4e46667d63c55dfe313a4d195144a83c",
     "semantic_hash": ""
   },
   "lib/core/repositories/task_status_options_repository.dart": {
@@ -570,10 +570,10 @@
     "semantic_hash": "054b0d6da98c1e4fd0962845f19ceed9"
   },
   "lib/core/utils/task_permissions.dart": {
-    "mtime": 1784845325.37093,
-    "seen": 1793460547.6009665,
-    "ast_hash": "08f33f494cf2db8cbb429c3b8b4821f7",
-    "semantic_hash": "08f33f494cf2db8cbb429c3b8b4821f7"
+    "mtime": 1793644403.1477585,
+    "seen": 1793649671.9140892,
+    "ast_hash": "a6d49e2cf84412a9db71960fdf931652",
+    "semantic_hash": ""
   },
   "lib/core/widgets/apk_download_banner.dart": {
     "mtime": 1788450004.5018148,
@@ -594,9 +594,9 @@
     "semantic_hash": "192163da741f3353cd2c393881df35f0"
   },
   "lib/core/widgets/notion_table.dart": {
-    "mtime": 1793541327.8938327,
-    "seen": 1793541532.8687263,
-    "ast_hash": "1d74602a1fd8b48dc6bbda0413baf609",
+    "mtime": 1793644858.0199685,
+    "seen": 1793649671.9141123,
+    "ast_hash": "28e450264289b13e29d66d1e538bff57",
     "semantic_hash": ""
   },
   "lib/core/widgets/team_filter_chip.dart": {
@@ -780,9 +780,9 @@
     "semantic_hash": "32df7582a3fb6915e8ab3f0fb23832fe"
   },
   "lib/features/tasks/task_board_screen.dart": {
-    "mtime": 1793479997.897525,
-    "seen": 1793480088.521008,
-    "ast_hash": "7049f94bbc60fcaa6b692671328ee853",
+    "mtime": 1793649229.2992182,
+    "seen": 1793649671.9142835,
+    "ast_hash": "300f784f192936aeff004fc732027228",
     "semantic_hash": ""
   },
   "lib/features/tasks/task_detail_screen.dart": {
@@ -792,9 +792,9 @@
     "semantic_hash": "5c88a172d5e50d651e473e42286da5f1"
   },
   "lib/features/tasks/task_detail_sheet.dart": {
-    "mtime": 1793546089.3597908,
-    "seen": 1793547107.0878136,
-    "ast_hash": "b67d0e6826b383f2e4d59f18d6b105e5",
+    "mtime": 1793644481.0693765,
+    "seen": 1793649671.9142923,
+    "ast_hash": "e3a93eae5aacae8a92be90ba97eb3cf9",
     "semantic_hash": ""
   },
   "lib/features/tasks/task_month_visibility.dart": {
@@ -804,9 +804,9 @@
     "semantic_hash": ""
   },
   "lib/features/tasks/task_table_screen.dart": {
-    "mtime": 1793546061.5181422,
-    "seen": 1793547107.087819,
-    "ast_hash": "8f7abd6f6873105e57ab25d479c4520a",
+    "mtime": 1793644858.081894,
+    "seen": 1793649671.914301,
+    "ast_hash": "71db35d2521b5f8347fd11a5900ec0a7",
     "semantic_hash": ""
   },
   "lib/features/team/deactivation_policy.dart": {
@@ -2529,6 +2529,30 @@
     "mtime": 1793544682.8412066,
     "seen": 1793544773.3552115,
     "ast_hash": "24db88963489152895dbe4f006647251",
+    "semantic_hash": ""
+  },
+  "PROPOSED_profiles_read_assigner.sql": {
+    "mtime": 1793649410.5254228,
+    "seen": 1793649671.9136267,
+    "ast_hash": "6821abd4a709ac6c35621aff19deb880",
+    "semantic_hash": ""
+  },
+  "PROPOSED_reject_keeps_row_for_red_flag.sql": {
+    "mtime": 1793644799.3249304,
+    "seen": 1793649671.913633,
+    "ast_hash": "6709589574b5d2e15d2f85ce1d372094",
+    "semantic_hash": ""
+  },
+  "PROPOSED_respond_assignment_notify_and_keep.sql": {
+    "mtime": 1793648070.1144207,
+    "seen": 1793649671.9136379,
+    "ast_hash": "7894b95e702e83ca75cd47f8281f4e0c",
+    "semantic_hash": ""
+  },
+  "PROPOSED_review_changes_after_approve.sql": {
+    "mtime": 1793644498.9139357,
+    "seen": 1793649671.9136417,
+    "ast_hash": "6b561c9079e0ecea2dd9c5dd638c0d5f",
     "semantic_hash": ""
   },
   "package-lock.json": {

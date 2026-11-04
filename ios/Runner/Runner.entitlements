@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Firebase Cloud Messaging / APNs push. Xcode's automatic signing sets the
+	     correct environment (development for dev builds, production for Archive /
+	     TestFlight / App Store) when the Push Notifications capability is on. -->
+	<key>aps-environment</key>
+	<string>development</string>
+	<!-- Read the connected Wi-Fi SSID on iOS 13+ (office Wi-Fi attendance). -->
+	<key>com.apple.developer.networking.wifi-info</key>
+	<true/>
+</dict>
+</plist>

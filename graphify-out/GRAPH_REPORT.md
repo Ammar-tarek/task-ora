@@ -1,17 +1,17 @@
-# Graph Report - task-ora  (2026-11-01)
+# Graph Report - task-ora  (2026-11-02)
 
 ## Corpus Check
-- 354 files · ~220,671 words
+- 358 files · ~222,735 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 62 file(s) not represented in the graph (top: (none) 11, .xml 10, .xcconfig 8)
 
 ## Summary
-- 4005 nodes · 5447 edges · 259 communities (167 shown, 92 thin omitted)
+- 4020 nodes · 5474 edges · 259 communities (162 shown, 97 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 32 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3f12461d`
+- Built from commit: `f061107b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -28,7 +28,7 @@
 - Task Model
 - Task Repository
 - Create User Flow
-- ../models/profile_model.dart
+- department_service.dart
 - Company Cash Ledger
 - Super Admin Report PDF
 - Client Finance
@@ -79,20 +79,20 @@
 - AuthNotifier
 - signup screen
 - team_privileges_model.dart
-- splash_screen.dart
+- ../models/profile_model.dart
 - task permissions
 - push notification service
 - department workspace screen
 - app settings repository
 - team repository
 - package:task_ora/core/models/profile_model.dart
-- public.client_task_visibility
+- PROPOSED_isolation_migration.sql
 - client model
 - package:flutter_test/flutter_test.dart
 - index
 - windows/flutter/generated_plugin_registrant.cc
 - apk update service
-- ../../core/models/profile_model.dart
+- task_month_visibility_test.dart
 - user privileges model
 - dashboard repository
 - supabase service
@@ -102,11 +102,11 @@
 - realtime service
 - privileged ops
 - supabase service
-- task_month_visibility_test.dart
-- department_gate_test.dart
+- montage_monthly_progress_test.dart
+- static const String
 - analytics repository
 - static const String
-- montage_monthly_progress_test.dart
+- company_ledger_test.dart
 - workspace_routing.dart
 - notification trigger service
 - team model
@@ -148,7 +148,7 @@
 - package.json
 - with
 - Task Handoff — Direct Transfer (Option A): Security Review & Test Matrix
-- package:flutter/material.dart
+- dashboard_quick_actions_test.dart
 - web notification stub
 - with
 - Changelog
@@ -181,7 +181,7 @@
 - Section Definitions
 - _TaskBoardScreenState
 - _ClientsScreenState
-- bottom_nav_shell.dart
+- package:flutter/material.dart
 - task_handoff_lock.dart
 - tavatar_test.dart
 - revenue_monthly_test.dart
@@ -236,23 +236,22 @@
 - _EditClientSheet
 - firebase-messaging-sw.js
 - sales_sheet_repository.dart
-- task_audit_insert_test.dart
+- deactivation_policy_test.dart
 - PROPOSED_task_status_options.sql
 - PROPOSED_sales_sheet_entries.sql
-- build
+- _SuperAdminReportScreenState
 - _EditEmployeeSheetState
 - _UserCardState
-- bool get
+- _UserManagementScreenState
 - WindowClassRegistrar::GetWindowClass
-- calendar_event_scope.dart
 - ClickableCommentText
 - _TaskDetailSheetState
 
 ## God Nodes (most connected - your core abstractions)
 1. `AuthNotifier` - 124 edges
-2. `public.profiles` - 67 edges
+2. `public.profiles` - 69 edges
 3. `WorkspaceScopeNotifier` - 54 edges
-4. `public.tasks` - 25 edges
+4. `public.tasks` - 28 edges
 5. `dependencies` - 25 edges
 6. `TeamFilterNotifier` - 23 edges
 7. `LocaleController` - 23 edges
@@ -280,7 +279,7 @@
 - **Service-role key removal & replacement flow** — isolation_final_report_service_role_key, blockers_service_role_removal_admin_user_ops, blockers_service_role_removal_admin_reset_app, backend_security_plan_key_rotation, department_isolation_audit_b2_service_role_reads [EXTRACTED 0.90]
 - **DB-level department isolation enforcement** — department_isolation_audit_rls, department_migration_assessment_security_definer_helpers, department_migration_assessment_guard_trigger, department_migration_assessment_teams_as_departments, department_isolation_audit_workspace_scope_notifier [INFERRED 0.80]
 
-## Communities (259 total, 92 thin omitted)
+## Communities (259 total, 97 thin omitted)
 
 ### Community 0 - "Calendar & Attendees"
 Cohesion: 0.02
@@ -320,19 +319,19 @@ Nodes (52): Backend Security Plan (remove client service-role key), service_role
 
 ### Community 9 - "Task Model"
 Cohesion: 0.04
-Nodes (50): archivedAt, archivedBy, assigneeFor, assignees, authorName, boardColumnId, boardId, clientId (+42 more)
+Nodes (52): archivedAt, archivedBy, assignedByName, assigneeFor, assignees, assignerName, authorName, boardColumnId (+44 more)
 
 ### Community 10 - "Task Repository"
 Cohesion: 0.04
-Nodes (44): addComment, archiveCompletedTasks, archiveMultipleTasks, archiveTask, archiveTasksByFilter, assignEmployees, buildAuditInsert, _client (+36 more)
+Nodes (45): addComment, archiveCompletedTasks, archiveMultipleTasks, archiveTask, archiveTasksByFilter, assignEmployees, buildAuditInsert, _client (+37 more)
 
 ### Community 11 - "Create User Flow"
 Cohesion: 0.04
 Nodes (48): _Banner, build, _buildEmptyEmployees, _buildHeaderCard, _buildNewAccountForm, _buildPromoteTab, _buildTabSelector, color (+40 more)
 
-### Community 12 - "../models/profile_model.dart"
-Cohesion: 0.14
-Nodes (9): accessibleDepartments, canAccess, canAccessExpenses, DepartmentService, isGlobal, departmentTeamIdFor, RevenueCreateScope, departmentTeamIdFor (+1 more)
+### Community 12 - "department_service.dart"
+Cohesion: 0.29
+Nodes (5): accessibleDepartments, canAccess, canAccessExpenses, DepartmentService, isGlobal
 
 ### Community 13 - "Company Cash Ledger"
 Cohesion: 0.04
@@ -344,7 +343,7 @@ Nodes (39): SuperAdminReportData, _applyFilter, build, _buildAttendancePerEmploy
 
 ### Community 15 - "Client Finance"
 Cohesion: 0.05
-Nodes (40): CrmEntry, asClient, build, canManage, _client, clientId, color, _confirmDeleteClient (+32 more)
+Nodes (43): CrmEntry, asClient, build, canManage, _Chip, _client, ClientFinanceScreen, _ClientFinanceScreenState (+35 more)
 
 ### Community 16 - "Client Repository & Reminders"
 Cohesion: 0.04
@@ -356,7 +355,7 @@ Nodes (40): actions, _barSegment, _cashbackWisdoms, _clientCount, createState, d
 
 ### Community 18 - "Notion Table Widget"
 Cohesion: 0.04
-Nodes (44): _animCtrl, build, _buildAddRow, _buildArchiveBackground, _buildDismissBackground, _buildDraggableRow, _buildEmptyState, _buildHeader (+36 more)
+Nodes (47): accentColor, _animCtrl, build, _buildAddRow, _buildArchiveBackground, _buildDismissBackground, _buildDraggableRow, _buildEmptyState (+39 more)
 
 ### Community 19 - "notifications_screen.dart"
 Cohesion: 0.10
@@ -368,7 +367,7 @@ Nodes (34): _AddPenaltyDialog, _AddPenaltyDialogState, _amountCtrl, approvedBy, 
 
 ### Community 21 - "Shared UI Widgets"
 Cohesion: 0.06
-Nodes (34): TPriorityBadge, TStatusChip, _AgendaEventTile, _AgendaForDay, _AttendeePicker, _CurrentTimeLine, _DeptContextChip, _DetailRow (+26 more)
+Nodes (34): TPriorityBadge, TSectionHeader, _AgendaEventTile, _AgendaForDay, _AttendeePicker, _CurrentTimeLine, _DeptContextChip, _DetailRow (+26 more)
 
 ### Community 22 - "Router & Routes"
 Cohesion: 0.04
@@ -376,27 +375,27 @@ Nodes (9): build, _FinanceRouter, icon, makeRouter, message, _PrivilegeDeniedScr
 
 ### Community 23 - "Department Revenue Sheet"
 Cohesion: 0.06
-Nodes (28): _buildTable, _buildTotals, color, columnLabels, _confirmCancel, _confirmVoid, createState, DepartmentRevenueSheetScreen (+20 more)
+Nodes (31): build, _buildTable, _buildTotals, color, columnLabels, _confirmCancel, _confirmVoid, createState (+23 more)
 
 ### Community 24 - "DB Schema: notify/teams"
-Cohesion: 0.12
-Nodes (32): public.get_profile_by_email(), public.guard_profile_privileged_fields(), public.init_client_task_visibility(), public.is_global_admin(), public.archive_completed_tasks(), public.assert_super_admin(), public.get_profile_by_email(), public.ai_interactions (+24 more)
+Cohesion: 0.14
+Nodes (35): public.list_active_teams(), public.notify_action(), public.ai_interactions, public.app_versions, public.cell_audit_log, public.client_profiles, public.client_task_column_visibility, public.client_task_visibility (+27 more)
 
 ### Community 25 - "Workspace Scope"
 Cohesion: 0.06
 Nodes (27): activeClientTypeFilter, activeDepartmentTeamId, allTeams, _auth, authorizedDepartments, canAccessExpenses, canSwitch, copyWith (+19 more)
 
 ### Community 26 - "Team Members"
-Cohesion: 0.06
-Nodes (31): _addFoundUser, _adding, build, _buildEmptyMembers, createState, dispose, _emailCtrl, _emailRegex (+23 more)
+Cohesion: 0.05
+Nodes (39): DashboardQuickActions, showAnalytics, showClients, showTeam, visibleKeys, canChangeStatus, canManage, DeactivationPolicy (+31 more)
 
 ### Community 27 - "Team Performance"
 Cohesion: 0.06
 Nodes (30): TaskModel, activeCount, assigned, assignmentRejected, AssignmentRejection, at, awaitingAcceptance, awaitingReview (+22 more)
 
 ### Community 28 - "WorkspaceScopeNotifier"
-Cohesion: 0.10
-Nodes (25): TeamFilterNotifier, WorkspaceScopeNotifier, _apply, DepartmentSwitcher, build, TeamFilterChip, build, WorkspaceHeaderBar (+17 more)
+Cohesion: 0.09
+Nodes (28): TeamFilterNotifier, WorkspaceScopeNotifier, _apply, build, DepartmentSwitcher, build, WorkspaceHeaderBar, didChangeDependencies (+20 more)
 
 ### Community 29 - "Local Notifications"
 Cohesion: 0.07
@@ -407,48 +406,48 @@ Cohesion: 0.07
 Nodes (28): amount, applyPenalty, approvedByName, approvePenalty, _client, createPenalty, date, deletePenalty (+20 more)
 
 ### Community 31 - "Finance Migrations M1-M3"
-Cohesion: 0.11
-Nodes (18): idx_crm_entries_source_type, idx_crm_entries_team_id, idx_crm_payments_status, public.crm_entry_corrections, public.crm_payment_audit, crm_entry_amount_guard, crm_payment_overpay_guard, crm_payment_status_sync (+10 more)
+Cohesion: 0.12
+Nodes (17): idx_crm_entries_source_type, idx_crm_entries_team_id, idx_crm_payments_status, public.crm_entry_corrections, public.crm_payment_audit, crm_entry_amount_guard, crm_payment_overpay_guard, crm_payment_status_sync (+9 more)
 
 ### Community 32 - "Auth Session Notifier"
 Cohesion: 0.05
 Nodes (31): authenticateBiometrics, AuthStatus, _checkSession, completeBiometricPrompt, _department, departmentGatePending, departmentResolution, departmentResolveFailed (+23 more)
 
 ### Community 33 - "advanced_analytics_screen.dart"
-Cohesion: 0.08
-Nodes (23): LocaleController, AdvancedAnalyticsScreen, _AdvancedAnalyticsScreenState, build, createState, _dept, dispose, _empty (+15 more)
+Cohesion: 0.10
+Nodes (18): AdvancedAnalyticsScreen, _AdvancedAnalyticsScreenState, createState, _dept, dispose, _empty, initState, _isAdmin (+10 more)
 
 ### Community 34 - "Team Privileges"
-Cohesion: 0.07
+Cohesion: 0.08
 Nodes (24): build, _buildBody, _buildCard, _buildSetupRequired, createState, description, icon, initState (+16 more)
 
 ### Community 35 - "task table screen"
 Cohesion: 0.06
-Nodes (30): _applyHidden, build, _buildColumns, _buildRows, _colPrefsKey, _columns, _CommentsCountBadge, count (+22 more)
+Nodes (32): _applyHidden, build, _buildColumns, _buildRows, _colPrefsKey, _columns, _CommentsCountBadge, count (+24 more)
 
 ### Community 36 - "public.events"
 Cohesion: 0.12
-Nodes (22): event_reminders_pending_idx, events_team_id_idx, public.event_reminders, public.cleanup_event_reminders(), public.notify_event_created(), public.send_event_reminders(), public.tg_event_reset_reminders(), trg_event_reset_reminders (+14 more)
+Nodes (21): event_reminders_pending_idx, events_team_id_idx, public.event_reminders, public.cleanup_event_reminders(), public.notify_event_created(), public.send_event_reminders(), public.tg_event_reset_reminders(), trg_event_reset_reminders (+13 more)
 
 ### Community 37 - "main"
-Cohesion: 0.07
+Cohesion: 0.08
 Nodes (17): TeamPrivilegesNotifier, _load, auth, build, CbToDoApp, _CbToDoAppState, createState, didChangeAppLifecycleState (+9 more)
 
 ### Community 38 - "login screen"
-Cohesion: 0.10
+Cohesion: 0.11
 Nodes (16): _biometricAvailable, _biometricLogin, build, _checkBiometricAvailable, createState, dispose, _emailCtrl, _errorMsg (+8 more)
 
 ### Community 39 - "settings screen"
 Cohesion: 0.06
-Nodes (25): ThemeController, _biometricEnabled, build, createState, dispose, _emailDigest, icon, initState (+17 more)
+Nodes (30): LocaleController, ThemeController, build, build, build, _biometricEnabled, build, createState (+22 more)
 
 ### Community 40 - "roles editor screen"
 Cohesion: 0.08
 Nodes (25): _allUsers, canChangeRole, _changeRole, _counts, createState, _error, initState, _isAdmin (+17 more)
 
 ### Community 41 - "public.tasks"
-Cohesion: 0.09
-Nodes (23): public.guard_transferred_task_assignees(), public.handoff_task(), public.create_crm_from_task(), public.guard_task_status_transition(), public.notify_fanout(), public.notify_task_status(), public.review_task(), public.submit_task_for_review() (+15 more)
+Cohesion: 0.07
+Nodes (24): public.guard_transferred_task_assignees(), public.handoff_task(), public.handoff_task(), public.respond_to_assignment(), public.respond_to_assignment(), public.review_task(), public.create_crm_from_task(), public.guard_task_status_transition() (+16 more)
 
 ### Community 42 - "user privileges screen"
 Cohesion: 0.08
@@ -503,8 +502,8 @@ Cohesion: 0.10
 Nodes (13): main, main, _profile, _team, _admin, allTeams, main, scope (+5 more)
 
 ### Community 55 - "PUBLIC"
-Cohesion: 0.10
-Nodes (18): public.handoff_task(), public.list_active_teams(), public.notify_action(), on_attendance_compute_status, public.mark_daily_absentees(), public.tr_compute_attendance_status(), public.send_manual_attendance_reminders(), attendance_reminders_date_idx (+10 more)
+Cohesion: 0.15
+Nodes (13): on_attendance_compute_status, public.mark_daily_absentees(), public.tr_compute_attendance_status(), public.send_manual_attendance_reminders(), attendance_reminders_date_idx, attendance_reminders_emp_idx, on_attendance_checkin_link_reminder, public.attendance_reminders (+5 more)
 
 ### Community 56 - "status options manager sheet"
 Cohesion: 0.11
@@ -523,8 +522,8 @@ Cohesion: 0.10
 Nodes (19): _client, createUser, deactivateEmployee, fetchAll, fetchByEmail, fetchById, fetchByTeam, fetchEmail (+11 more)
 
 ### Community 60 - "AuthNotifier"
-Cohesion: 0.10
-Nodes (22): AuthNotifier, build, _checking, _checkStatus, createState, PendingApprovalScreen, _PendingApprovalScreenState, _signOut (+14 more)
+Cohesion: 0.06
+Nodes (34): AuthNotifier, build, _checking, _checkStatus, createState, PendingApprovalScreen, _PendingApprovalScreenState, _signOut (+26 more)
 
 ### Community 61 - "signup screen"
 Cohesion: 0.11
@@ -534,21 +533,21 @@ Nodes (18): build, _awaitingEmailConfirmation, build, _buildEmailConfirmationVie
 Cohesion: 0.13
 Nodes (14): canCreateEmployees, canManageAttendance, canManageClients, canManageExpenses, canManagePenalties, canManageTasks, canViewFinance, copyWith (+6 more)
 
-### Community 63 - "splash_screen.dart"
-Cohesion: 0.14
-Nodes (10): build, _checkBiometricStatus, createState, _ctrl, didChangeDependencies, dispose, _fade, initState (+2 more)
+### Community 63 - "../models/profile_model.dart"
+Cohesion: 0.29
+Nodes (4): departmentTeamIdFor, RevenueCreateScope, departmentTeamIdFor, TaskCreateScope
 
 ### Community 64 - "task permissions"
 Cohesion: 0.11
 Nodes (18): canAddComment, canCreateTask, canDeleteTask, canEditAdminFields, canEditFull, canEditProgress, canEditStatus, canReorderTasks (+10 more)
 
 ### Community 65 - "push notification service"
-Cohesion: 0.12
+Cohesion: 0.11
 Nodes (10): _currentUserId, _firebaseMessagingBackgroundHandler, init, _initialized, instance, PushNotificationService, requestNotificationPermission, start (+2 more)
 
 ### Community 66 - "department workspace screen"
 Cohesion: 0.11
-Nodes (12): build, children, _CompanyOverviewBanner, departmentCount, DepartmentWorkspaceScreen, icon, _iconFor, label (+4 more)
+Nodes (11): build, children, _CompanyOverviewBanner, departmentCount, icon, _iconFor, label, onTap (+3 more)
 
 ### Community 67 - "app settings repository"
 Cohesion: 0.11
@@ -560,11 +559,11 @@ Nodes (15): _client, create, deactivate, delete, fetchAll, fetchAllAdmin, fetchA
 
 ### Community 69 - "package:task_ora/core/models/profile_model.dart"
 Cohesion: 0.12
-Nodes (8): main, _p, main, _p, main, _p, main, _p
+Nodes (9): _isProductionOnly, main, _p, main, _p, main, _p, main (+1 more)
 
-### Community 70 - "public.client_task_visibility"
-Cohesion: 0.29
-Nodes (3): public.get_profile_by_email(), public.init_client_task_visibility(), public.client_task_visibility
+### Community 70 - "PROPOSED_isolation_migration.sql"
+Cohesion: 0.12
+Nodes (9): public.get_profile_by_email(), public.guard_profile_privileged_fields(), public.init_client_task_visibility(), public.is_global_admin(), public.archive_completed_tasks(), public.assert_super_admin(), public.get_profile_by_email(), public.get_profile_by_email() (+1 more)
 
 ### Community 71 - "client model"
 Cohesion: 0.12
@@ -572,19 +571,19 @@ Nodes (15): address, ClientModel, clientType, companyName, contactPerson, contra
 
 ### Community 72 - "package:flutter_test/flutter_test.dart"
 Cohesion: 0.09
-Nodes (8): main, _e, main, main, main, main, main, main
+Nodes (7): main, main, main, main, main, main, main
 
 ### Community 73 - "index"
 Cohesion: 0.30
 Nodes (12): DELETE_ORDER, ALLOWED_ORIGINS, corsHeaders(), handle(), withCors(), Caller, getCaller(), httpError() (+4 more)
 
 ### Community 75 - "apk update service"
-Cohesion: 0.12
+Cohesion: 0.13
 Nodes (10): ApkUpdateService, _buildReleaseNotes, checkForUpdates, _checking, _isNewerVersion, _openApk, _showErrorDialog, _showLoadingDialog (+2 more)
 
-### Community 76 - "../../core/models/profile_model.dart"
-Cohesion: 0.18
-Nodes (8): DashboardQuickActions, showAnalytics, showClients, showTeam, visibleKeys, canChangeStatus, canManage, DeactivationPolicy
+### Community 76 - "task_month_visibility_test.dart"
+Cohesion: 0.29
+Nodes (5): main, _me, oct, _other, _task
 
 ### Community 77 - "user privileges model"
 Cohesion: 0.13
@@ -622,13 +621,13 @@ Nodes (11): _c, createUser, deleteUser, fetchEmail, listActiveTeams, notifyActio
 Cohesion: 0.15
 Nodes (8): _anonKey, auth, client, currentSession, currentUser, initialize, SupabaseService, _url
 
-### Community 86 - "task_month_visibility_test.dart"
-Cohesion: 0.13
-Nodes (9): main, _task, main, _task, main, _me, oct, _other (+1 more)
+### Community 86 - "montage_monthly_progress_test.dart"
+Cohesion: 0.12
+Nodes (10): _compute, _done, i, main, _now, _t, main, _task (+2 more)
 
-### Community 87 - "department_gate_test.dart"
-Cohesion: 0.22
-Nodes (5): _isProductionOnly, main, _p, main, _p
+### Community 87 - "static const String"
+Cohesion: 0.33
+Nodes (4): confirmedStatus, managerCanConfirm, MontageCompletion, pendingStatus
 
 ### Community 88 - "analytics repository"
 Cohesion: 0.15
@@ -637,10 +636,6 @@ Nodes (12): AnalyticsRepository, assignees, _client, completion, dueDate, fetchT
 ### Community 89 - "static const String"
 Cohesion: 0.22
 Nodes (8): AppRoutes, calendar, dashboard, expenses, login, resolving, tasks, workspaces
-
-### Community 90 - "montage_monthly_progress_test.dart"
-Cohesion: 0.25
-Nodes (6): _compute, _done, i, main, _now, _t
 
 ### Community 91 - "workspace_routing.dart"
 Cohesion: 0.22
@@ -668,7 +663,7 @@ Nodes (7): public.send_attendance_reminders(), public.event_recipient_ids(), pub
 
 ### Community 97 - "monthly_revenue_screen.dart"
 Cohesion: 0.05
-Nodes (38): CrmPayment, _amt, clientId, clientName, _ClientRevenueCard, color, createState, dispose (+30 more)
+Nodes (41): CrmPayment, _amt, clientId, ClientMonthlyPaymentsScreen, _ClientMonthlyPaymentsScreenState, clientName, _ClientRevenueCard, color (+33 more)
 
 ### Community 98 - "super admin pdf exporter"
 Cohesion: 0.18
@@ -731,8 +726,8 @@ Cohesion: 0.14
 Nodes (12): createState, dispose, _emailCtrl, _error, ForgotPasswordScreen, _ForgotPasswordScreenState, _FormView, _loading (+4 more)
 
 ### Community 113 - "currency"
-Cohesion: 0.15
-Nodes (10): code, compact, egp, egpCompact, _grouped, Money, confirmedStatus, managerCanConfirm (+2 more)
+Cohesion: 0.29
+Nodes (6): code, compact, egp, egpCompact, _grouped, Money
 
 ### Community 114 - "calendar attendee scope"
 Cohesion: 0.29
@@ -783,8 +778,8 @@ Cohesion: 0.40
 Nodes (4): compilerOptions, allowJs, lib, strict
 
 ### Community 128 - "build"
-Cohesion: 0.14
-Nodes (5): _onNotificationTap, initState, build, build, _enterDepartment
+Cohesion: 0.17
+Nodes (4): _onNotificationTap, initState, build, build
 
 ### Community 129 - "package.json"
 Cohesion: 0.67
@@ -797,10 +792,6 @@ Nodes (24): name, runs-on, steps, GITHUB_TOKEN, jobs, build-and-release, name, o
 ### Community 131 - "Task Handoff — Direct Transfer (Option A): Security Review & Test Matrix"
 Cohesion: 0.17
 Nodes (11): 1. Role mapping (as approved), 2. Requirement → DB enforcer (verified mapping), 3. Role × action matrix on a TRANSFERRED task (src→dst), 4. Decisions (RESOLVED and implemented), 5. UI implementation (DONE — analyzes clean), 6. Migration execution order (AWAITING your per-file confirmation), 7. Verification evidence (this session), 8. Assumptions (distinct from verified) (+3 more)
-
-### Community 132 - "package:flutter/material.dart"
-Cohesion: 0.20
-Nodes (5): build, DepartmentGateScreen, build, _row, _chip
 
 ### Community 135 - "with"
 Cohesion: 0.09
@@ -839,12 +830,12 @@ Cohesion: 0.13
 Nodes (14): client, estValue, expectedClose, fromMap, id, lastContact, link, ownerName (+6 more)
 
 ### Community 147 - "n8n_service.dart"
-Cohesion: 0.18
+Cohesion: 0.20
 Nodes (6): getWebhookUrl, N8nService, notifyTaskUpdate, _prefKey, saveWebhookUrl, _statusLabel
 
 ### Community 150 - "bool get"
-Cohesion: 0.22
-Nodes (6): isArabic, _kAppLang, _load, _locale, setLanguage, toggleLanguage
+Cohesion: 0.12
+Nodes (11): isArabic, _kAppLang, _load, _locale, setLanguage, toggleLanguage, _dark, isDark (+3 more)
 
 ### Community 173 - "Supabase"
 Cohesion: 0.11
@@ -879,16 +870,16 @@ Cohesion: 0.17
 Nodes (11): background_color, description, display, gcm_sender_id, icons, name, orientation, prefer_related_applications (+3 more)
 
 ### Community 181 - "State"
-Cohesion: 0.09
-Nodes (34): _ColumnOptionsSheet, _ColumnOptionsSheetState, NotionTable, _NotionTableState, _AddEventSheet, _AddEventSheetState, CalendarScreen, _CalendarScreenState (+26 more)
+Cohesion: 0.16
+Nodes (16): _ColumnOptionsSheet, _ColumnOptionsSheetState, _AddEventSheet, _AddEventSheetState, CalendarScreen, _CalendarScreenState, _DayBody, _DayBodyState (+8 more)
 
 ### Community 182 - "Section Definitions"
 Cohesion: 0.20
 Nodes (9): 1. Query Performance (query), 2. Connection Management (conn), 3. Security & RLS (security), 4. Schema Design (schema), 5. Concurrency & Locking (lock), 6. Data Access Patterns (data), 7. Monitoring & Diagnostics (monitor), 8. Advanced Features (advanced) (+1 more)
 
-### Community 185 - "bottom_nav_shell.dart"
-Cohesion: 0.12
-Nodes (11): _allItems, BottomNavShell, _BottomNavShellState, build, _clientBranchIndices, createState, dispose, _employeeBranchIndices (+3 more)
+### Community 185 - "package:flutter/material.dart"
+Cohesion: 0.07
+Nodes (20): CalendarEventScope, eventTypeForDepartment, isBookingDepartment, _allItems, BottomNavShell, _BottomNavShellState, build, _clientBranchIndices (+12 more)
 
 ### Community 186 - "task_handoff_lock.dart"
 Cohesion: 0.15
@@ -938,37 +929,25 @@ Nodes (8): addRow, _client, deleteRow, _editable, fetchAll, SalesSheetRepository
 Cohesion: 0.70
 Nodes (4): public.sales_sheet_entries, public.tg_sales_sheet_touch(), sales_sheet_entries_sort_idx, trg_sales_sheet_touch
 
-### Community 250 - "build"
-Cohesion: 0.50
-Nodes (3): build, _openClient, build
-
-### Community 253 - "bool get"
-Cohesion: 0.29
-Nodes (5): _dark, isDark, _kDarkMode, _load, setDark
-
-### Community 256 - "calendar_event_scope.dart"
-Cohesion: 0.50
-Nodes (3): CalendarEventScope, eventTypeForDepartment, isBookingDepartment
-
 ## Knowledge Gaps
-- **2369 isolated node(s):** `_CommentLinkMatch`, `taskId`, `onUpdated`, `onMoveDepartment`, `_task` (+2364 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2975 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **92 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **2373 isolated node(s):** `TaskAssignee`, `TaskEditLog`, `id`, `title`, `description` (+2368 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2984 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **97 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `AuthNotifier` connect `AuthNotifier` to `Calendar & Attendees`, `Task Board & Filters`, `Task Detail & Assignment`, `package:flutter/material.dart`, `_TaskDetailSheetState`, `Clients Directory`, `User Management`, `Create User Flow`, `Super Admin Report PDF`, `Dashboard`, `notifications_screen.dart`, `Penalties Management`, `Router & Routes`, `Department Revenue Sheet`, `Workspace Scope`, `WorkspaceScopeNotifier`, `Auth Session Notifier`, `advanced_analytics_screen.dart`, `task table screen`, `main`, `login screen`, `settings screen`, `roles editor screen`, `user privileges screen`, `archive completed tasks dialog`, `team screen`, `team management screen`, `State`, `_TaskBoardScreenState`, `_ClientsScreenState`, `team privileges notifier`, `signup screen`, `splash_screen.dart`, `_CreateTaskSheetState`, `archived_tasks_screen.dart`, `core/auth/auth_notifier.dart`, `sales_sheet_screen.dart`, `forgot_password_screen.dart`, `_EditEmployeeSheetState`, `_UserCardState`?**
-  _High betweenness centrality (0.037) - this node is a cross-community bridge._
-- **What connects `_CommentLinkMatch`, `taskId`, `onUpdated` to the rest of the system?**
-  _2369 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `AuthNotifier` connect `AuthNotifier` to `Calendar & Attendees`, `Task Board & Filters`, `Task Detail & Assignment`, `_TaskDetailSheetState`, `Clients Directory`, `User Management`, `Create User Flow`, `Super Admin Report PDF`, `Dashboard`, `notifications_screen.dart`, `Penalties Management`, `Router & Routes`, `Department Revenue Sheet`, `Workspace Scope`, `WorkspaceScopeNotifier`, `Auth Session Notifier`, `advanced_analytics_screen.dart`, `task table screen`, `main`, `login screen`, `settings screen`, `roles editor screen`, `user privileges screen`, `archive completed tasks dialog`, `team screen`, `team management screen`, `State`, `_TaskBoardScreenState`, `_ClientsScreenState`, `package:flutter/material.dart`, `team privileges notifier`, `signup screen`, `_CreateTaskSheetState`, `archived_tasks_screen.dart`, `core/auth/auth_notifier.dart`, `sales_sheet_screen.dart`, `forgot_password_screen.dart`, `_SuperAdminReportScreenState`, `_EditEmployeeSheetState`, `_UserCardState`, `_UserManagementScreenState`?**
+  _High betweenness centrality (0.050) - this node is a cross-community bridge._
+- **What connects `TaskAssignee`, `TaskEditLog`, `id` to the rest of the system?**
+  _2373 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Calendar & Attendees` be split into smaller, more focused modules?**
   _Cohesion score 0.015151515151515152 - nodes in this community are weakly interconnected._
-- **Why does `ProfileModel` connect `notification trigger service` to `Auth Session Notifier`, `task permissions`, `Calendar & Attendees`, `Task Board & Filters`, `User Management`, `roles editor screen`, `user privileges screen`, `Create User Flow`, `Dashboard`, `profile model`, `Workspace Scope`, `Team Members`?**
-  _High betweenness centrality (0.016) - this node is a cross-community bridge._
+- **Why does `WorkspaceScopeNotifier` connect `WorkspaceScopeNotifier` to `Calendar & Attendees`, `monthly_revenue_screen.dart`, `Task Board & Filters`, `package:flutter/material.dart`, `Task Detail & Assignment`, `_TaskDetailSheetState`, `Clients Directory`, `settings screen`, `_CreateTaskSheetState`, `task table screen`, `department workspace screen`, `team screen`, `Dashboard`, `State`, `Department Revenue Sheet`, `_ClientsScreenState`, `Workspace Scope`, `_TaskBoardScreenState`?**
+  _High betweenness centrality (0.013) - this node is a cross-community bridge._
 - **Should `Super Admin Reports` be split into smaller, more focused modules?**
   _Cohesion score 0.015748031496062992 - nodes in this community are weakly interconnected._
-- **Why does `WorkspaceScopeNotifier` connect `WorkspaceScopeNotifier` to `Calendar & Attendees`, `build`, `Task Board & Filters`, `Task Detail & Assignment`, `package:flutter/material.dart`, `_TaskDetailSheetState`, `Clients Directory`, `Dashboard`, `Department Revenue Sheet`, `Workspace Scope`, `task table screen`, `settings screen`, `team screen`, `State`, `_TaskBoardScreenState`, `_ClientsScreenState`, `department workspace screen`, `_CreateTaskSheetState`, `monthly_revenue_screen.dart`, `build`?**
-  _High betweenness centrality (0.011) - this node is a cross-community bridge._
+- **Why does `ProfileModel` connect `notification trigger service` to `Auth Session Notifier`, `task permissions`, `Calendar & Attendees`, `Task Board & Filters`, `User Management`, `roles editor screen`, `user privileges screen`, `Create User Flow`, `Dashboard`, `profile model`, `Workspace Scope`, `Team Members`?**
+  _High betweenness centrality (0.012) - this node is a cross-community bridge._
 - **Should `Task Board & Filters` be split into smaller, more focused modules?**
   _Cohesion score 0.01639344262295082 - nodes in this community are weakly interconnected._

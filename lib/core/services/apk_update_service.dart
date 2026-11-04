@@ -27,7 +27,10 @@ class ApkUpdateService {
     bool showNoUpdateToast = false, // Backwards compatibility: treated as isManual
     bool forceDialog = false,
   }) async {
-    if (kIsWeb) return;
+    // Android-only: in-app APK update (download + install) is a Play/sideload
+    // feature. iOS updates come from the App Store, and Apple PROHIBITS apps
+    // that download or install executables — so this is a no-op off Android.
+    if (kIsWeb || !Platform.isAndroid) return;
     final manual = isManual || showNoUpdateToast;
     if (_checking) return;
     _checking = true;

@@ -1,8 +1,10 @@
 // lib/features/calendar/calendar_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/auth/auth_notifier.dart';
+import '../../core/repositories/notification_repository.dart';
 import '../../core/constants/departments.dart';
 import '../../core/providers/locale_controller.dart';
 import '../../core/models/client_model.dart';
@@ -195,6 +197,23 @@ class CalendarScreen extends StatefulWidget {
   State<CalendarScreen> createState() => _CalendarScreenState();
 }
 
+// ── Department colours (shared Video Production + Marketing calendar) ─────────
+// Events are coloured by their owning team so the two shared calendars are easy
+// to tell apart. Other teams / client events keep the default colours.
+const String _kVideoProductionTeamId = '794f294c-77cc-4845-b8ba-b5fa9198fd55';
+const String _kMarketingTeamId = 'f398bbb2-f5c2-4a1c-852e-745c911c1264';
+const Color _kVideoProductionColor = Color(0xFF1E88E5); // blue
+const Color _kMarketingColor = Color(0xFFF57C00); // orange
+
+/// Colour for an event: team colour for the shared departments, else red for a
+/// client-linked event, else the app primary.
+Color _eventColor({String? teamId, String? clientId}) {
+  if (teamId == _kVideoProductionTeamId) return _kVideoProductionColor;
+  if (teamId == _kMarketingTeamId) return _kMarketingColor;
+  if (clientId != null) return const Color(0xFFBA1A1A);
+  return AppColors.primary;
+}
+
 class _CalendarScreenState extends State<CalendarScreen> {
   _CalView _view = _CalView.month;
   DateTime _focusedDate = DateTime.now();
@@ -207,10 +226,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
   // department drives the fetch, and RLS is the real isolation boundary.
   WorkspaceScopeNotifier? _scope;
 
+  // Unread notification count, for the AppBar bell badge.
+  int _unreadNotifs = 0;
+
   @override
   void initState() {
     super.initState();
     _loadEvents();
+    _loadUnread();
+  }
+
+  /// Count this user's unread notifications for the bell badge. Best-effort —
+  /// failures just leave the badge hidden.
+  Future<void> _loadUnread() async {
+    final profile = context.read<AuthNotifier>().profile;
+    if (profile == null) return;
+    try {
+      final list = await NotificationRepository.fetchForUser(profile.id);
+      if (mounted) {
+        setState(() => _unreadNotifs = list.where((n) => !n.isRead).length);
+      }
+    } catch (_) {
+      /* leave badge hidden */
+    }
   }
 
   @override
@@ -265,9 +303,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               title: e.title,
               start: e.start,
               end: e.end,
-              color: e.clientId != null
-                  ? const Color(0xFFBA1A1A)
-                  : AppColors.primary,
+              color: _eventColor(teamId: e.teamId, clientId: e.clientId),
               clientId: e.clientId,
               clientName: e.clientName,
               description: e.description,
@@ -335,6 +371,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       floatingActionButton: _buildFab(profile),
       body: Column(
         children: [
+          _buildTeamLegend(),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
@@ -372,6 +409,35 @@ class _CalendarScreenState extends State<CalendarScreen> {
       ),
       centerTitle: true,
       actions: [
+        // Notifications bell — opens the notifications list (new events land
+        // here). Red dot when there are unread ones. Reachable for everyone,
+        // including the Calendar-only Production department.
+        IconButton(
+          tooltip: 'Notifications',
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.notifications_outlined),
+              if (_unreadNotifs > 0)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.error,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          onPressed: () async {
+            await context.push('/notifications');
+            if (mounted) _loadUnread();
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.chevron_right),
           onPressed: () => _navigate(1),
@@ -424,6 +490,37 @@ class _CalendarScreenState extends State<CalendarScreen> {
       child: const Icon(Icons.add, color: AppColors.gold),
     );
   }
+
+  /// Colour key for the shared Video Production + Marketing calendar. Hidden
+  /// when the current events have neither team (nothing to disambiguate).
+  Widget _buildTeamLegend() {
+    final hasVp = _events.any((e) => e.teamId == _kVideoProductionTeamId);
+    final hasMktg = _events.any((e) => e.teamId == _kMarketingTeamId);
+    if (!hasVp && !hasMktg) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Row(
+        children: [
+          if (hasVp) _legendDot(_kVideoProductionColor, 'Video Production'),
+          if (hasVp && hasMktg) const SizedBox(width: 16),
+          if (hasMktg) _legendDot(_kMarketingColor, 'Marketing'),
+        ],
+      ),
+    );
+  }
+
+  Widget _legendDot(Color c, String label) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(label, style: AppTextStyles.bodySm),
+        ],
+      );
 
   Widget _buildBody() {
     switch (_view) {
@@ -809,6 +906,15 @@ class _MonthGrid extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 2),
+                          // Bounded + clipping so a full day's chips can never
+                          // overflow the fixed-height cell (RenderFlex bottom
+                          // overflow). Excess is clipped, not errored.
+                          Expanded(
+                            child: SingleChildScrollView(
+                              physics: const NeverScrollableScrollPhysics(),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                           ...dayEvents
                               .take(4)
                               .map(
@@ -851,6 +957,10 @@ class _MonthGrid extends StatelessWidget {
                                 ),
                               ),
                             ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1974,10 +2084,12 @@ class _AddEventSheetState extends State<_AddEventSheet> {
   final _descCtrl = TextEditingController();
   final _linkCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
+  // Shared by the Scrollbar + SingleChildScrollView so the scrollbar always
+  // has a ScrollPosition (fixes "ScrollController has no ScrollPosition").
+  final _scrollCtrl = ScrollController();
   // Chosen START-time reminder offsets (minutes before start). Phase 1.
   final Set<int> _reminderOffsets = {};
   // Dept-scoped attendees (Phase 2A).
-  List<Map<String, String>> _employees = [];
   final Set<String> _selectedEmployeeIds = {};
 
   // Department ownership (events.team_id) is DERIVED from the active workspace —
@@ -2006,40 +2118,6 @@ class _AddEventSheetState extends State<_AddEventSheet> {
     _endTime = DateTime(d.year, d.month, d.day, 11);
     _resolveTeam();
     _fetchClients();
-    _fetchEmployees();
-  }
-
-  /// Attendees = active, non-client members of the owning department team only
-  /// (profiles.team_id = [_teamId]). RLS also restricts the read.
-  Future<void> _fetchEmployees() async {
-    if (_teamId == null) {
-      if (mounted) setState(() => _employees = []);
-      return;
-    }
-    try {
-      final data = await SupabaseService.client
-          .from('profiles')
-          .select('id, full_name')
-          .eq('team_id', _teamId!)
-          .neq('role', 'client')
-          .eq('status', 'active')
-          .order('full_name');
-      final members = (data as List)
-          .map((m) => {
-                'id': m['id'] as String,
-                'name': m['full_name'] as String? ?? '',
-              })
-          .toList();
-      if (mounted) {
-        setState(() {
-          _employees = members;
-          final eligible = members.map((e) => e['id']).toSet();
-          _selectedEmployeeIds.removeWhere((id) => !eligible.contains(id));
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _employees = []);
-    }
   }
 
   Future<void> _pickDate(bool isStart) async {
@@ -2089,6 +2167,7 @@ class _AddEventSheetState extends State<_AddEventSheet> {
     _descCtrl.dispose();
     _linkCtrl.dispose();
     _locationCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -2225,8 +2304,10 @@ class _AddEventSheetState extends State<_AddEventSheet> {
           bottom: MediaQuery.of(context).viewInsets.bottom + 32,
         ),
         child: Scrollbar(
+          controller: _scrollCtrl,
           thumbVisibility: true,
           child: SingleChildScrollView(
+            controller: _scrollCtrl,
             physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2386,10 +2467,12 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                           color: AppColors.onSurfaceVariant,
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          'No clients — an admin must create clients first.',
-                          style: AppTextStyles.bodySm.copyWith(
-                            color: AppColors.onSurfaceVariant,
+                        Expanded(
+                          child: Text(
+                            'No clients — an admin must create clients first.',
+                            style: AppTextStyles.bodySm.copyWith(
+                              color: AppColors.onSurfaceVariant,
+                            ),
                           ),
                         ),
                       ],
@@ -2468,18 +2551,6 @@ class _AddEventSheetState extends State<_AddEventSheet> {
                 ),
                 const SizedBox(height: 12),
 
-                _AttendeePicker(
-                  members: _employees,
-                  selected: _selectedEmployeeIds,
-                  hasTeam: _teamId != null,
-                  onChanged: (s) => setState(() {
-                    _selectedEmployeeIds
-                      ..clear()
-                      ..addAll(s);
-                  }),
-                ),
-                const SizedBox(height: 12),
-
                 _ReminderOffsetPicker(
                   selected: _reminderOffsets,
                   onChanged: (s) => setState(() {
@@ -2544,8 +2615,9 @@ class _EditEventSheetState extends State<_EditEventSheet> {
   late final TextEditingController _descCtrl;
   late final TextEditingController _linkCtrl;
   late final TextEditingController _locationCtrl;
+  // Shared by the Scrollbar + SingleChildScrollView (see _AddEventSheetState).
+  final _scrollCtrl = ScrollController();
   // Dept-scoped attendees (Phase 2A), preloaded from the event.
-  List<Map<String, String>> _employees = [];
   final Set<String> _selectedEmployeeIds = {};
 
   List<ClientModel> _clients = [];
@@ -2576,7 +2648,6 @@ class _EditEventSheetState extends State<_EditEventSheet> {
     _endTime = e.end;
     _selectedEmployeeIds.addAll(e.attendeeIds);
     _loadReminders();
-    _fetchEmployees();
     // Resolve the event's own department client_type filter from its team_id.
     final scope = context.read<WorkspaceScopeNotifier>();
     final dept = scope.state.departmentForTeamId(e.teamId);
@@ -2592,38 +2663,8 @@ class _EditEventSheetState extends State<_EditEventSheet> {
     _descCtrl.dispose();
     _linkCtrl.dispose();
     _locationCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
-  }
-
-  /// Attendees = members of THIS EVENT's department team (events.team_id).
-  /// Legacy null-team events get an empty pool (existing attendees preserved).
-  Future<void> _fetchEmployees() async {
-    final teamId = widget.event.teamId;
-    if (teamId == null) {
-      if (mounted) setState(() => _employees = []);
-      return;
-    }
-    try {
-      final data = await SupabaseService.client
-          .from('profiles')
-          .select('id, full_name')
-          .eq('team_id', teamId)
-          .neq('role', 'client')
-          .eq('status', 'active')
-          .order('full_name');
-      if (mounted) {
-        setState(() {
-          _employees = (data as List)
-              .map((m) => {
-                    'id': m['id'] as String,
-                    'name': m['full_name'] as String? ?? '',
-                  })
-              .toList();
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _employees = []);
-    }
   }
 
   Future<void> _pickDate(bool isStart) async {
@@ -2824,8 +2865,10 @@ class _EditEventSheetState extends State<_EditEventSheet> {
           bottom: MediaQuery.of(context).viewInsets.bottom + 32,
         ),
         child: Scrollbar(
+          controller: _scrollCtrl,
           thumbVisibility: true,
           child: SingleChildScrollView(
+            controller: _scrollCtrl,
             physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -3029,18 +3072,6 @@ class _EditEventSheetState extends State<_EditEventSheet> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-
-                _AttendeePicker(
-                  members: _employees,
-                  selected: _selectedEmployeeIds,
-                  hasTeam: widget.event.teamId != null,
-                  onChanged: (s) => setState(() {
-                    _selectedEmployeeIds
-                      ..clear()
-                      ..addAll(s);
-                  }),
                 ),
                 const SizedBox(height: 12),
 
@@ -3565,72 +3596,6 @@ class _ReminderOffsetPicker extends StatelessWidget {
             );
           }).toList(),
         ),
-      ],
-    );
-  }
-}
-
-/// Multi-select attendee picker scoped to the event's department members.
-class _AttendeePicker extends StatelessWidget {
-  const _AttendeePicker({
-    required this.members,
-    required this.selected,
-    required this.hasTeam,
-    required this.onChanged,
-  });
-  final List<Map<String, String>> members;
-  final Set<String> selected;
-  final bool hasTeam;
-  final ValueChanged<Set<String>> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.group_outlined, size: 18, color: AppColors.gold),
-            const SizedBox(width: 6),
-            Text('Attendees', style: AppTextStyles.labelMd),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (members.isEmpty)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              hasTeam
-                  ? 'No members in this department yet.'
-                  : 'Pick a department first to choose attendees.',
-              style: AppTextStyles.bodySm.copyWith(
-                color: AppColors.onSurfaceVariant,
-              ),
-            ),
-          )
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: members.map((e) {
-              final sel = selected.contains(e['id']);
-              return FilterChip(
-                label: Text(e['name']!, style: AppTextStyles.bodySm),
-                selected: sel,
-                onSelected: (v) {
-                  final next = {...selected};
-                  if (v) {
-                    next.add(e['id']!);
-                  } else {
-                    next.remove(e['id']!);
-                  }
-                  onChanged(next);
-                },
-                selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                checkmarkColor: AppColors.primary,
-              );
-            }).toList(),
-          ),
       ],
     );
   }

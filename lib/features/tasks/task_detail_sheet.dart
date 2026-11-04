@@ -19,6 +19,7 @@ import '../../core/repositories/task_status_options_repository.dart';
 import '../../core/repositories/client_repository.dart';
 import '../../core/models/task_model.dart';
 import '../../core/models/profile_model.dart';
+import '../../core/utils/app_time.dart';
 import '../../core/models/task_status_option.dart';
 import '../../core/models/client_model.dart';
 import '../../core/models/team_model.dart';
@@ -152,7 +153,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       _costCtrl.text = task.cost != null ? task.cost!.toStringAsFixed(2) : '';
       _priority = task.priority;
       _status = task.status;
-      _dueDate = task.dueDate != null ? DateTime.tryParse(task.dueDate!) : null;
+      // Stored as a UTC instant; show the Egypt wall-clock in the picker so it
+      // round-trips through AppTime.fromCairoToUtc on save.
+      final parsedDue =
+          task.dueDate != null ? DateTime.tryParse(task.dueDate!) : null;
+      _dueDate = parsedDue != null ? AppTime.cairo(parsedDue) : null;
       _progress = task.completionPercentage.toDouble();
       _selectedAssigneeIds = task.assignees.map((a) => a.profileId).toList();
       _clientId = task.clientId;
@@ -326,7 +331,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             : _descCtrl.text.trim(),
         priority: _priority,
         status: _status,
-        dueDate: _dueDate?.toIso8601String().split('T').first,
+        dueDate: _dueDate == null
+            ? null
+            : AppTime.fromCairoToUtc(_dueDate!.year, _dueDate!.month,
+                    _dueDate!.day, _dueDate!.hour, _dueDate!.minute)
+                .toIso8601String(),
         completionPercentage: _progress.round(),
         cost: costVal,
         clientId: _clientId,
@@ -357,7 +366,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               taskTitle: _titleCtrl.text.trim(),
               newStatus: _status,
               priority: _priority,
-              dueDate: _dueDate?.toIso8601String().split('T').first,
+              dueDate: _dueDate?.toIso8601String(),
               completionPercentage: _progress.round(),
               description: _descCtrl.text.trim().isEmpty
                   ? null
@@ -389,6 +398,24 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         return;
       }
       _showSnack('Submitted for review');
+      widget.onUpdated?.call();
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _reviewing = false);
+    }
+  }
+
+  /// Employee pulls their own submission back out (while teammates have not
+  /// submitted yet, so the task has not reached review).
+  Future<void> _unsubmitForReview() async {
+    setState(() => _reviewing = true);
+    try {
+      final err = await TaskRepository.unsubmitForReview(widget.taskId);
+      if (err != null) {
+        _showSnack(err, isError: true);
+        return;
+      }
+      _showSnack('Submission undone');
       widget.onUpdated?.call();
       if (mounted) Navigator.pop(context);
     } finally {
@@ -2044,7 +2071,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       final pending = a?.response == 'pending';
       final s = _task?.status ?? '';
       final canStart = s == 'not_started';
-      final canSubmit = const {
+      // This employee already submitted their part — waiting on teammates.
+      final mineSubmitted = a?.submittedAt != null;
+      final canSubmit = !mineSubmitted && const {
         'not_started', 'in_progress', 'changes_requested', 'on_hold'
       }.contains(s);
       return Padding(
@@ -2116,6 +2145,49 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                         : const Icon(Icons.task_alt, size: 18, color: Colors.white),
                     label: const Text('Submit for Review',
                         style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              // Partial submit: I'm done but teammates are not, so the task has
+              // not gone to review yet. Show a waiting note + let me undo.
+              if (mineSubmitted && s != 'employee_done') ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.statusDone.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.hourglass_top,
+                          size: 18, color: AppColors.statusDone),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'You submitted your part — waiting for your '
+                          'teammate(s) to submit before it goes for review.',
+                          style: AppTextStyles.bodySm,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : _unsubmitForReview,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.statusInProgress,
+                      side: const BorderSide(color: AppColors.statusInProgress),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: _reviewing
+                        ? _Spinner(color: AppColors.statusInProgress)
+                        : const Icon(Icons.undo, size: 18),
+                    label: const Text('Undo my submission'),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -2617,7 +2689,18 @@ class _DatePickerRow extends StatelessWidget {
           firstDate: DateTime.now().subtract(const Duration(days: 365)),
           lastDate: DateTime.now().add(const Duration(days: 365)),
         );
-        if (d != null) onPick(d);
+        if (d == null) return;
+        if (!context.mounted) return;
+        // Then pick the time (hour + minute) so the deadline is exact.
+        final t = await showTimePicker(
+          context: context,
+          initialTime: TimeOfDay.fromDateTime(
+            date ?? DateTime(d.year, d.month, d.day, 17, 0),
+          ),
+        );
+        final h = t?.hour ?? date?.hour ?? 17;
+        final m = t?.minute ?? date?.minute ?? 0;
+        onPick(DateTime(d.year, d.month, d.day, h, m));
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -2638,8 +2721,10 @@ class _DatePickerRow extends StatelessWidget {
               date != null
                   ? '${date!.year}-'
                         '${date!.month.toString().padLeft(2, '0')}-'
-                        '${date!.day.toString().padLeft(2, '0')}'
-                  : 'Select date…',
+                        '${date!.day.toString().padLeft(2, '0')} '
+                        '${date!.hour.toString().padLeft(2, '0')}:'
+                        '${date!.minute.toString().padLeft(2, '0')}'
+                  : 'Select date & time…',
               style: AppTextStyles.bodyMd.copyWith(
                 color: date != null
                     ? AppColors.onSurface

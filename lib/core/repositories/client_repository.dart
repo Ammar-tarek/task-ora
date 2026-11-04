@@ -415,13 +415,31 @@ class ClientRepository {
           .select(
             '*, client:client_profiles(company_name), event_attendees(profile_id, profile:profiles(full_name))',
           );
+      // When narrowed to one team, expand to that team's CALENDAR GROUP so
+      // grouped departments (Video Production + Marketing) share one calendar
+      // even for an admin scoped to a single workspace. A team with no group
+      // just returns itself, so this stays a single-team filter otherwise.
       final query = scopedTeamId != null
-          ? base.eq('team_id', scopedTeamId)
+          ? base.inFilter('team_id', await _calendarGroupTeamIds(scopedTeamId))
           : base;
       final data = await query.order('start_time', ascending: true);
       return (data as List).map((m) => CalEventData.fromMap(m)).toList();
     } catch (_) {
       return [];
+    }
+  }
+
+  /// All team ids that share a calendar group with [teamId] (includes [teamId]
+  /// itself). Falls back to just [teamId] if the RPC is unavailable, so the
+  /// calendar still works before the shared-calendar SQL is applied.
+  static Future<List<String>> _calendarGroupTeamIds(String teamId) async {
+    try {
+      final rows =
+          await _db.rpc('calendar_group_team_ids', params: {'p_team': teamId});
+      final ids = (rows as List).map((e) => e.toString()).toList();
+      return ids.isEmpty ? [teamId] : ids;
+    } catch (_) {
+      return [teamId];
     }
   }
 

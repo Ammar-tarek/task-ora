@@ -3024,7 +3024,11 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
       description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
       createdBy: profile.id,
       teamId: teamId,
-      dueDate: _dueDate?.toIso8601String().split('T').first,
+      dueDate: _dueDate == null
+          ? null
+          : AppTime.fromCairoToUtc(_dueDate!.year, _dueDate!.month,
+                  _dueDate!.day, _dueDate!.hour, _dueDate!.minute)
+              .toIso8601String(),
     );
 
     // Insert failed (RLS / schema / network). Do NOT report success — surface
@@ -3303,7 +3307,20 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
                     firstDate: firstDate,
                     lastDate: lastDate,
                   );
-                  if (d != null) setState(() => _dueDate = d);
+                  if (d == null) return;
+                  if (!context.mounted) return;
+                  // Then pick the time (hour + minute) so the deadline is exact.
+                  final t = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.fromDateTime(
+                      _dueDate ?? DateTime(d.year, d.month, d.day, 17, 0),
+                    ),
+                  );
+                  final h = t?.hour ?? _dueDate?.hour ?? 17;
+                  final m = t?.minute ?? _dueDate?.minute ?? 0;
+                  setState(
+                    () => _dueDate = DateTime(d.year, d.month, d.day, h, m),
+                  );
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -3327,8 +3344,10 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
                         _dueDate != null
                             ? '${_dueDate!.year}-'
                                   '${_dueDate!.month.toString().padLeft(2, '0')}-'
-                                  '${_dueDate!.day.toString().padLeft(2, '0')}'
-                            : 'Select date…',
+                                  '${_dueDate!.day.toString().padLeft(2, '0')} '
+                                  '${_dueDate!.hour.toString().padLeft(2, '0')}:'
+                                  '${_dueDate!.minute.toString().padLeft(2, '0')}'
+                            : 'Select date & time…',
                         style: AppTextStyles.bodyMd.copyWith(
                           color: _dueDate != null
                               ? AppColors.onSurface

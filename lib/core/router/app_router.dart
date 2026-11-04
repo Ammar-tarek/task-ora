@@ -94,13 +94,18 @@ GoRouter makeRouter(AuthNotifier auth, WorkspaceScopeNotifier scope) {
       // Retry on failure). Runs BEFORE the production + role guards so a
       // Production user is never briefly exposed to the full app, and a lookup
       // failure never opens it. No loop: already-on-/resolving returns null.
+      final deptPending = auth.departmentGatePending;
       final deptGate = WorkspaceRouting.departmentGateRedirect(
         loc,
-        pending: auth.departmentGatePending,
+        pending: deptPending,
       );
       if (deptGate != null) return deptGate;
-      // Resolved / not-required users must never sit on /resolving.
-      if (loc == '/resolving') {
+      // Resolved / not-required users must never sit on /resolving. Guard on
+      // !deptPending: while STILL pending, departmentGateRedirect returns null
+      // for an already-on-/resolving user (stay put), so without this guard we
+      // would bounce them to their entry route → which re-triggers the gate →
+      // /resolving ⇄ /tasks redirect loop that flashes right after login.
+      if (!deptPending && loc == '/resolving') {
         return WorkspaceRouting.entryRouteFor(auth.profile);
       }
 

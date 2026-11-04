@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:140024409514:android:1011167db2ed3ec69c4fd3",
+        "android_client_info": {
+          "package_name": "com.cashback.taskora"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZCsd-frVD0GTSHYpMLR3cnhTM7M-t1Ic"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:140024409514:android:fcf60a381852c8929c4fd3",
         "android_client_info": {
           "package_name": "com.example.task_ora"

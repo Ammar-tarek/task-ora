@@ -4,6 +4,7 @@
 // and notification triggers.
 
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../firebase_options.dart';
@@ -100,12 +101,29 @@ class PushNotificationService {
       });
 
       // ── Notification Click (App opened from background) ─────────────────
+      // Deep-link to the referenced page instead of re-showing the alert.
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        LocalNotificationService.show(
-          title: message.notification?.title ?? 'Notification',
-          body: message.notification?.body ?? '',
+        LocalNotificationService.navigateToReference(
+          referenceType: message.data['reference_type'] as String?,
+          referenceId: message.data['reference_id'] as String?,
+          type: message.data['type'] as String?,
         );
       });
+
+      // ── Cold start: app launched from terminated by tapping a push ───────
+      final initialMessage =
+          await FirebaseMessaging.instance.getInitialMessage();
+      if (initialMessage != null) {
+        final data = initialMessage.data;
+        // Defer until the first frame so the router/widget tree exists.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          LocalNotificationService.navigateToReference(
+            referenceType: data['reference_type'] as String?,
+            referenceId: data['reference_id'] as String?,
+            type: data['type'] as String?,
+          );
+        });
+      }
 
       _initialized = true;
     } catch (e) {

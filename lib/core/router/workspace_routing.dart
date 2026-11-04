@@ -76,6 +76,21 @@ class WorkspaceRouting {
     if (location == '/settings' || location.startsWith('/settings/')) {
       return null;
     }
+    // Notifications stays reachable so Production can see their alerts (new
+    // events on their calendar). It shows only this user's own notifications.
+    if (location == '/notifications' ||
+        location.startsWith('/notifications/')) {
+      return null;
+    }
+    // Team-management pages reached from Settings (a Production MANAGER opens
+    // these). The screens themselves enforce role + RLS, so a non-manager who
+    // lands here still sees nothing they shouldn't.
+    if (location == '/users' ||
+        location.startsWith('/users/') ||
+        location == '/roles' ||
+        location.startsWith('/roles/')) {
+      return null;
+    }
     if (allowWorkspaces && location == AppRoutes.workspaces) return null;
     return AppRoutes.calendar;
   }

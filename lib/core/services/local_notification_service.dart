@@ -8,6 +8,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
+import 'notification_route.dart';
 import 'web_notification/web_notification.dart';
 
 class NotificationAlertPayload {
@@ -110,7 +111,42 @@ class LocalNotificationService {
 
   static void _onNotificationTap(NotificationResponse response) {
     if (_router == null) return;
-    _router!.push('/notifications');
+    final payload = response.payload;
+    // Payload is "<reference_type>:<reference_id>" (set in [show] from the push
+    // data); anything else (null, empty, 'notifications') opens the list.
+    if (payload == null || payload.isEmpty || payload == 'notifications') {
+      _router!.go('/notifications');
+      return;
+    }
+    final idx = payload.indexOf(':');
+    if (idx <= 0) {
+      _router!.go('/notifications');
+      return;
+    }
+    navigateToReference(
+      referenceType: payload.substring(0, idx),
+      referenceId: payload.substring(idx + 1),
+    );
+  }
+
+  /// Navigate to the page a notification references. [referenceType] /
+  /// [referenceId] come from the notifications row and the FCM data payload;
+  /// [type] is the fallback notification type. Opens the notifications list when
+  /// there is no specific in-app target. Shared by the local-notification tap
+  /// handler and the FCM background / terminated-launch handlers.
+  static void navigateToReference({
+    String? referenceType,
+    String? referenceId,
+    String? type,
+  }) {
+    final router = _router;
+    if (router == null) return;
+    final route = notificationRouteFor(
+      referenceType: referenceType,
+      type: type,
+      referenceId: referenceId,
+    );
+    router.go(route ?? '/notifications');
   }
 
   // ── Public API ────────────────────────────────────────────────────────────

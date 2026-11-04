@@ -11,7 +11,11 @@ import 'dart:math';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 
-/// One ledger row with its running balance filled in.
+/// One ledger row with its running balance filled in. A row is either a company
+/// EXPENSE (from company_ledger) or a DEPOSIT. Deposits represent collected
+/// DEPARTMENT REVENUE — ONE row per payment received (crm_payments), so a client
+/// paying in installments shows a separate transaction each time. Each carries
+/// the owning [department] and the admin who [recordedBy] that payment.
 class LedgerEntry {
   final String id;
   final String type; // 'deposit' | 'expense'
@@ -19,6 +23,11 @@ class LedgerEntry {
   final String date; // yyyy-MM-dd
   final String description;
   final String createdAt;
+
+  /// Deposit-only context (null for expenses): the owning department's name and
+  /// the full name of the admin who recorded the revenue.
+  final String? department;
+  final String? recordedBy;
 
   /// Balance AFTER this transaction, in chronological order. Filled by
   /// [CompanyLedgerRepository.withRunningBalance].
@@ -31,6 +40,8 @@ class LedgerEntry {
     required this.date,
     required this.description,
     required this.createdAt,
+    this.department,
+    this.recordedBy,
     this.balanceAfter = 0,
   });
 
@@ -43,9 +54,12 @@ class LedgerEntry {
         date: date,
         description: description,
         createdAt: createdAt,
+        department: department,
+        recordedBy: recordedBy,
         balanceAfter: b,
       );
 
+  /// A company_ledger row (expense, or any legacy deposit).
   factory LedgerEntry.fromMap(Map<String, dynamic> m) => LedgerEntry(
         id: m['id'] as String? ?? '',
         type: m['txn_type'] as String? ?? 'expense',
@@ -54,6 +68,60 @@ class LedgerEntry {
         description: m['description'] as String? ?? '',
         createdAt: m['created_at'] as String? ?? '',
       );
+
+  /// A deposit synthesized from a single collected payment (crm_payments row)
+  /// with its parent revenue embedded as `entry`. [recorderNames] maps a
+  /// profile id → full name. When the parent revenue has more than one payment,
+  /// [paymentIndex]/[paymentCount] label this installment (e.g. "· payment 2/2")
+  /// so two same-day collections are never mistaken for one — each new payment
+  /// reads as its own, clearly distinct transaction.
+  factory LedgerEntry.fromPayment(
+    Map<String, dynamic> m,
+    Map<String, String> recorderNames, {
+    int paymentIndex = 1,
+    int paymentCount = 1,
+  }) {
+    final createdAt = m['created_at'] as String? ?? '';
+    final payDate = m['payment_date'] as String?;
+    final date = (payDate != null && payDate.length >= 10)
+        ? payDate.substring(0, 10)
+        : (createdAt.length >= 10 ? createdAt.substring(0, 10) : createdAt);
+    final entry = m['entry'] as Map<String, dynamic>?;
+    final title = (entry?['title'] as String?)?.trim() ?? '';
+    final team = entry?['team'] as Map<String, dynamic>?;
+    final recordedBy = m['recorded_by'] as String?;
+    final base = title.isEmpty ? 'Department revenue' : title;
+    // Only tag installments when the revenue was actually split into several
+    // payments — a single full payment stays clean.
+    final label =
+        paymentCount > 1 ? '$base · payment $paymentIndex/$paymentCount' : base;
+    return LedgerEntry(
+      id: m['id'] as String? ?? '',
+      type: 'deposit',
+      amount: (m['amount_paid'] as num?)?.toDouble() ?? 0,
+      date: date,
+      description: label,
+      createdAt: createdAt,
+      department: team?['name'] as String?,
+      recordedBy: recordedBy == null ? null : recorderNames[recordedBy],
+    );
+  }
+
+  /// "HH:mm" (Egypt time) of when this transaction was recorded, from
+  /// [createdAt]. Empty when unparseable. Lets the ledger show the time so two
+  /// transactions on the same day are visibly distinct.
+  String get timeLabel {
+    try {
+      final utc = DateTime.parse(createdAt).toUtc();
+      // Egypt is UTC+2 (EET) / +3 (EEST); the ledger only needs HH:mm, and the
+      // 1h DST edge is immaterial here — use +2 like the rest of finance.
+      final c = utc.add(const Duration(hours: 2));
+      return '${c.hour.toString().padLeft(2, '0')}:'
+          '${c.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return '';
+    }
+  }
 }
 
 class CompanyLedgerRepository {
@@ -110,48 +178,105 @@ class CompanyLedgerRepository {
 
   // ── Reads ──────────────────────────────────────────────────────────────────
 
-  /// All ledger rows with running balances, oldest → newest. The UI reverses
-  /// for display (newest first) but balances stay correct because they are
-  /// computed chronologically here.
+  /// All ledger rows with running balances, oldest → newest. Combines company
+  /// EXPENSES (company_ledger) with DEPOSITS — one per collected payment
+  /// (crm_payments, active, whose manual parent revenue is not cancelled), so
+  /// each installment a client pays is its own transaction. The UI reverses for
+  /// display (newest first) but balances stay correct because they are computed
+  /// chronologically here. This mirrors the server-side company_cash_balance():
+  /// collected revenue − expenses.
   static Future<List<LedgerEntry>> fetchAll() async {
     try {
-      final data = await _client
-          .from('company_ledger')
-          .select()
-          .order('txn_date', ascending: true)
-          .order('created_at', ascending: true);
-      final rows = (data as List)
+      final results = await Future.wait([
+        // Company ledger: expenses (+ any legacy deposits).
+        _client
+            .from('company_ledger')
+            .select()
+            .order('txn_date', ascending: true)
+            .order('created_at', ascending: true),
+        // Collected department revenue → one deposit per active payment.
+        // Inner-join the parent revenue so we can drop cancelled/non-manual.
+        _client
+            .from('crm_payments')
+            .select('id, crm_entry_id, amount_paid, payment_date, created_at, '
+                'recorded_by, entry:crm_entries!inner(title, status, '
+                'source_type, team:teams(name))')
+            .eq('status', 'active'),
+      ]);
+
+      final ledgerRows = (results[0] as List)
           .map((m) => LedgerEntry.fromMap(m as Map<String, dynamic>))
           .toList();
-      return withRunningBalance(rows);
+
+      // Keep only payments whose parent is a non-cancelled manual revenue.
+      final paymentRaw = (results[1] as List)
+          .cast<Map<String, dynamic>>()
+          .where((m) {
+        final e = m['entry'] as Map<String, dynamic>?;
+        return e != null &&
+            e['source_type'] == 'manual' &&
+            e['status'] != 'cancelled';
+      }).toList();
+      // Resolve the recorder names (recorded_by → full_name) in one read.
+      final recorderNames = await _fetchRecorderNames(
+        paymentRaw
+            .map((m) => m['recorded_by'] as String?)
+            .whereType<String>()
+            .toSet(),
+      );
+      // Number installments PER parent revenue: group by crm_entry_id, order
+      // each group chronologically, then tag each payment i/n. This is what
+      // turns two same-day 500s into "payment 1/2" and "payment 2/2".
+      final byEntry = <String, List<Map<String, dynamic>>>{};
+      for (final m in paymentRaw) {
+        final eid = m['crm_entry_id'] as String? ?? m['id'] as String? ?? '';
+        byEntry.putIfAbsent(eid, () => []).add(m);
+      }
+      final revenueRows = <LedgerEntry>[];
+      for (final group in byEntry.values) {
+        group.sort((a, b) => (a['created_at'] as String? ?? '')
+            .compareTo(b['created_at'] as String? ?? ''));
+        for (var i = 0; i < group.length; i++) {
+          revenueRows.add(LedgerEntry.fromPayment(
+            group[i],
+            recorderNames,
+            paymentIndex: i + 1,
+            paymentCount: group.length,
+          ));
+        }
+      }
+
+      // Merge and order chronologically (date, then created_at) so running
+      // balances are correct regardless of source. ISO strings sort lexically.
+      final merged = [...ledgerRows, ...revenueRows]..sort((a, b) {
+          final d = a.date.compareTo(b.date);
+          return d != 0 ? d : a.createdAt.compareTo(b.createdAt);
+        });
+      return withRunningBalance(merged);
     } catch (_) {
       return [];
     }
   }
 
-  // ── Writes (atomic, admin-only, idempotent via client token) ──────────────
-
-  /// Record a deposit. Returns null on success, else an error message.
-  static Future<String?> addFunds({
-    required double amount,
-    required String date,
-    String? description,
-    required String clientToken,
-  }) async {
+  /// Map profile id → full name for the given recorder ids (admin-readable).
+  static Future<Map<String, String>> _fetchRecorderNames(
+      Set<String> ids) async {
+    if (ids.isEmpty) return {};
     try {
-      await _client.rpc('company_add_funds', params: {
-        'p_amount': amount,
-        'p_date': date,
-        'p_description': description,
-        'p_client_token': clientToken,
-      });
-      return null;
-    } on PostgrestException catch (e) {
-      return e.message;
-    } catch (e) {
-      return e.toString();
+      final rows = await _client
+          .from('profiles')
+          .select('id, full_name')
+          .inFilter('id', ids.toList());
+      return {
+        for (final r in rows as List)
+          (r['id'] as String): (r['full_name'] as String? ?? ''),
+      };
+    } catch (_) {
+      return {};
     }
   }
+
+  // ── Writes (atomic, admin-only, idempotent via client token) ──────────────
 
   /// Record a company expense. Server rejects invalid amounts and overspend.
   /// Returns null on success, else an error message.
